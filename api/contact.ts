@@ -1,4 +1,4 @@
-import { parseContactRequestBody, submitContactForm } from '../src/server/contact'
+import { parseContactRequestBody, submitContactForm } from '../src/server/contact.js'
 
 export default async function handler(
   req: { method?: string; body?: unknown },

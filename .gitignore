@@ -22,3 +22,10 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Local tooling
+.claude/
+.codex-runtime/
+test-results/
+
+.vercel

@@ -1,5 +1,5 @@
 import { Resend } from 'resend'
-import type { ContactPayload } from '../data/types'
+import type { ContactPayload } from '../data/types.js'
 
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 

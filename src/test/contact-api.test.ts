@@ -1,6 +1,6 @@
 // @vitest-environment node
 
-import { submitContactForm } from '../src/server/contact'
+import { submitContactForm } from '../server/contact.js'
 
 describe('submitContactForm', () => {
   it('silently ignores honeypot submissions', async () => {
