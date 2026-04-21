@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Yaoting Wang — case study wireframe</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  /* ─── TOKENS (must match home-wireframe.html exactly) ─── */
+  :root{
+    --bg:#0b0f14;
+    --bg-soft:#0d1117;
+    --surface:#0f1520;
+    --border:rgba(255,255,255,0.08);
+    --border-strong:rgba(255,255,255,0.14);
+    --text:#e6edf3;
+    --text-muted:#8b949e;
+    --text-dim:#546273;
+    --accent:#7ee787;
+    --accent-dim:rgba(126,231,135,0.14);
+    --error-soft:#ff6b6b;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{background:var(--bg)}
+  body{
+    background:var(--bg);
+    color:var(--text);
+    font-family:'Inter',-apple-system,sans-serif;
+    font-size:15px;
+    line-height:1.6;
+    letter-spacing:-0.01em;
+  }
+  .mono{font-family:'Fira Code',monospace;letter-spacing:0}
+  a{color:inherit;text-decoration:none}
+
+  /* ─── SHARED LAYOUT ─── */
+  .shell{max-width:1180px;margin:0 auto;padding:0 48px}
+
+  /* ─── NAV (identical to home) ─── */
+  .nav{
+    display:flex;justify-content:space-between;align-items:center;
+    padding:28px 48px;border-bottom:1px solid var(--border);
+  }
+  .nav-brand{font-family:'Fira Code',monospace;font-size:13px;color:var(--text-muted);letter-spacing:0.02em}
+  .nav-brand strong{color:var(--text);font-weight:500}
+  .nav-links{display:flex;gap:32px;font-size:13px;color:var(--text-muted)}
+  .nav-links a:hover{color:var(--text)}
+  .nav-cta{
+    font-family:'Fira Code',monospace;font-size:12px;
+    padding:8px 14px;border:1px solid var(--border-strong);
+    color:var(--text);
+  }
+
+  /* ─── BACK NAV ─── */
+  .back-bar{
+    padding:20px 0;
+    border-bottom:1px solid var(--border);
+  }
+  .back-link{
+    font-family:'Fira Code',monospace;font-size:12px;
+    color:var(--text-dim);letter-spacing:0.04em;
+    display:inline-flex;align-items:center;gap:8px;
+    transition:color 0.15s;
+  }
+  .back-link:hover{color:var(--accent)}
+  .back-link::before{content:"←"}
+
+  /* ─── PROJECT HEADER ─── */
+  .project-header{
+    padding:72px 0 64px;
+    border-bottom:1px solid var(--border);
+  }
+  .project-eyebrow{
+    font-family:'Fira Code',monospace;font-size:11px;letter-spacing:0.1em;
+    color:var(--text-dim);text-transform:uppercase;margin-bottom:20px;
+  }
+  .project-title{
+    font-size:56px;font-weight:600;letter-spacing:-0.03em;line-height:1.05;
+    margin-bottom:16px;
+  }
+  .project-summary{
+    font-size:19px;color:var(--text-muted);line-height:1.55;
+    max-width:680px;margin-bottom:32px;
+  }
+  .meta-row{
+    display:flex;align-items:center;gap:24px;flex-wrap:wrap;
+    font-family:'Fira Code',monospace;font-size:11px;
+    color:var(--text-dim);letter-spacing:0.04em;
+  }
+  .meta-sep{color:var(--border-strong)}
+  .status-chip{
+    font-family:'Fira Code',monospace;font-size:10px;letter-spacing:0.06em;
+    padding:4px 10px;border:1px solid var(--accent);color:var(--accent);
+  }
+  .tag-row{display:flex;flex-wrap:wrap;gap:6px;margin-top:20px}
+  .tag{
+    font-family:'Fira Code',monospace;font-size:10px;letter-spacing:0.04em;
+    color:var(--text-dim);
+  }
+  .tag::before{content:"[";margin-right:2px}
+  .tag::after{content:"]";margin-left:2px}
+
+  /* ─── CASE STUDY BODY ─── */
+  .case-body{
+    display:grid;
+    grid-template-columns:1fr 280px;
+    gap:80px;
+    padding:80px 0 120px;
+    align-items:start;
+  }
+
+  /* ─── MAIN CONTENT ─── */
+  .content-col{display:flex;flex-direction:column;gap:0}
+  .cs-section{
+    padding:48px 0;
+    border-bottom:1px solid var(--border);
+  }
+  .cs-section:first-child{padding-top:0}
+  .cs-section:last-child{border-bottom:none}
+  .cs-label{
+    font-family:'Fira Code',monospace;font-size:11px;letter-spacing:0.12em;
+    color:var(--text-dim);text-transform:uppercase;margin-bottom:20px;
+    display:flex;align-items:center;gap:12px;
+  }
+  .cs-label::after{
+    content:"";flex:1;height:1px;background:var(--border);
+  }
+  .cs-heading{
+    font-size:24px;font-weight:600;letter-spacing:-0.02em;margin-bottom:16px;
+  }
+  .cs-body{font-size:15px;color:var(--text-muted);line-height:1.7;margin-bottom:20px}
+  .cs-body + .cs-body{margin-top:0;margin-bottom:20px}
+
+  /* highlights list */
+  .highlights{
+    display:flex;flex-direction:column;gap:0;
+    margin-top:24px;
+    border-top:1px solid var(--border);
+  }
+  .hl-item{
+    display:grid;grid-template-columns:24px 1fr;gap:16px;
+    padding:16px 0;border-bottom:1px solid var(--border);
+    align-items:start;
+  }
+  .hl-num{
+    font-family:'Fira Code',monospace;font-size:10px;
+    color:var(--accent);letter-spacing:0.04em;padding-top:2px;
+  }
+  .hl-text{font-size:14px;color:var(--text);line-height:1.6}
+
+  /* ─── SIDEBAR ─── */
+  .sidebar{
+    position:sticky;top:32px;
+    display:flex;flex-direction:column;gap:0;
+    border-left:1px solid var(--border);
+    padding-left:32px;
+  }
+  .sb-block{padding:0 0 28px;margin-bottom:0}
+  .sb-block + .sb-block{
+    border-top:1px solid var(--border);
+    padding-top:28px;
+  }
+  .sb-label{
+    font-family:'Fira Code',monospace;font-size:10px;letter-spacing:0.12em;
+    text-transform:uppercase;color:var(--text-dim);margin-bottom:12px;
+  }
+  /* tech stack */
+  .stack-tags{display:flex;flex-wrap:wrap;gap:6px}
+  /* links */
+  .sb-links{display:flex;flex-direction:column;gap:8px}
+  .sb-link{
+    font-family:'Fira Code',monospace;font-size:12px;
+    padding:10px 14px;border:1px solid var(--border);
+    color:var(--text-muted);
+    display:flex;justify-content:space-between;align-items:center;
+    transition:border-color 0.15s,color 0.15s;
+  }
+  .sb-link:hover{border-color:var(--accent);color:var(--text)}
+  .sb-link-arrow{color:var(--text-dim)}
+  /* timeline */
+  .timeline{display:flex;flex-direction:column;gap:0}
+  .tl-item{
+    display:grid;grid-template-columns:8px 1fr;gap:12px;
+    padding:10px 0;border-bottom:1px solid var(--border);align-items:start;
+  }
+  .tl-item:last-child{border-bottom:none}
+  .tl-dot{
+    width:8px;height:8px;border:1px solid var(--accent);margin-top:4px;
+  }
+  .tl-label{font-size:12px;color:var(--text-muted);line-height:1.4}
+  .tl-meta{font-family:'Fira Code',monospace;font-size:10px;color:var(--text-dim);margin-top:2px}
+
+  /* ─── NEXT PROJECT ─── */
+  .next-project{
+    border-top:1px solid var(--border);
+    padding:48px 0;
+  }
+  .next-label{
+    font-family:'Fira Code',monospace;font-size:10px;letter-spacing:0.12em;
+    text-transform:uppercase;color:var(--text-dim);margin-bottom:20px;
+  }
+  .next-card{
+    display:flex;justify-content:space-between;align-items:center;
+    padding:24px;border:1px solid var(--border);
+    transition:border-color 0.2s,background 0.2s;
+    cursor:pointer;
+  }
+  .next-card:hover{border-color:var(--accent);background:var(--accent-dim)}
+  .next-card-title{font-size:20px;font-weight:600;letter-spacing:-0.01em}
+  .next-card-sum{font-size:13px;color:var(--text-muted);margin-top:4px}
+  .next-arrow{
+    font-family:'Fira Code',monospace;font-size:18px;
+    color:var(--text-dim);transition:color 0.15s;
+  }
+  .next-card:hover .next-arrow{color:var(--accent)}
+
+  /* ─── FOOTER ─── */
+  .foot{
+    padding:32px 48px;border-top:1px solid var(--border);
+    display:flex;justify-content:space-between;align-items:center;
+    font-family:'Fira Code',monospace;font-size:11px;color:var(--text-dim);
+  }
+
+  /* ─── MOBILE (≤768px) ─── */
+  @media(max-width:768px){
+    .nav{padding:20px 20px}
+    .shell{padding:0 20px}
+    .project-title{font-size:36px}
+    .project-summary{font-size:16px}
+    .case-body{
+      grid-template-columns:1fr;
+      gap:0;
+    }
+    .sidebar{
+      position:static;
+      border-left:none;
+      border-top:1px solid var(--border);
+      padding-left:0;
+      padding-top:48px;
+      margin-top:0;
+    }
+    .foot{padding:24px 20px;flex-direction:column;gap:8px;text-align:center}
+  }
+</style>
+</head>
+<body>
+
+<!-- NAV (identical to home) -->
+<nav class="nav">
+  <div class="nav-brand">yaoting.wang / <strong>portfolio</strong></div>
+  <div class="nav-links">
+    <a href="/">work</a>
+    <a href="/#experience">experience</a>
+    <a href="/#contact">contact</a>
+  </div>
+  <a class="nav-cta mono" href="/resume.pdf">resume.pdf →</a>
+</nav>
+
+<!-- BACK BAR -->
+<div class="back-bar">
+  <div class="shell">
+    <a class="back-link mono" href="/">back to work</a>
+  </div>
+</div>
+
+<!-- PROJECT HEADER -->
+<header class="project-header">
+  <div class="shell">
+    <div class="project-eyebrow">// security research · 2025–2026</div>
+    <h1 class="project-title">MCP Security Framework</h1>
+    <p class="project-summary">
+      Detector-driven security scanner for Model Context Protocol servers.
+      Tested against 60+ targets; structured findings engineers can route
+      into existing triage workflows.
+    </p>
+    <div class="meta-row">
+      <span>TypeScript · Node.js</span>
+      <span class="meta-sep">·</span>
+      <span>2025–2026</span>
+      <span class="meta-sep">·</span>
+      <span>solo project</span>
+      <span class="meta-sep">·</span>
+      <span class="status-chip">live · open source</span>
+    </div>
+    <div class="tag-row">
+      <span class="tag">TypeScript</span>
+      <span class="tag">MCP</span>
+      <span class="tag">SAST</span>
+      <span class="tag">CI/CD</span>
+      <span class="tag">SARIF</span>
+      <span class="tag">Node.js</span>
+    </div>
+  </div>
+</header>
+
+<!-- CASE STUDY BODY -->
+<div class="shell">
+  <div class="case-body">
+
+    <!-- MAIN CONTENT -->
+    <div class="content-col">
+
+      <!-- PROBLEM -->
+      <div class="cs-section">
+        <div class="cs-label">01 / problem</div>
+        <h2 class="cs-heading">MCP servers ship without a defined security posture</h2>
+        <p class="cs-body">
+          Model Context Protocol (MCP) lets AI models call tools and read data from
+          external servers. As adoption accelerated in late 2024, hundreds of MCP
+          servers shipped with no standard security review — no input validation
+          specs, no permission boundary guidance, no structured finding format
+          compatible with existing security tooling.
+        </p>
+        <p class="cs-body">
+          Security teams had no scanner to run against MCP endpoints.
+          Developers had no checklist. Findings, when they existed, lived in
+          Notion docs disconnected from the CI pipeline.
+        </p>
+        <div class="highlights">
+          <div class="hl-item">
+            <span class="hl-num">01</span>
+            <span class="hl-text">No existing scanner addressed MCP-specific attack surface (tool injection, over-permissioned resource access, transport-layer gaps)</span>
+          </div>
+          <div class="hl-item">
+            <span class="hl-num">02</span>
+            <span class="hl-text">SARIF output format needed for integration with GitHub Advanced Security and existing triage flows</span>
+          </div>
+          <div class="hl-item">
+            <span class="hl-num">03</span>
+            <span class="hl-text">Framework needed to be extensible — detectors as composable units, not a monolithic ruleset</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- APPROACH -->
+      <div class="cs-section">
+        <div class="cs-label">02 / approach</div>
+        <h2 class="cs-heading">Detector-driven analysis with SARIF output</h2>
+        <p class="cs-body">
+          Designed the scanner as a detector pipeline: each detector focuses
+          on one attack class, runs against the target's manifest and
+          exposed endpoints, and emits structured findings. A coordinator
+          aggregates results into a SARIF report.
+        </p>
+        <p class="cs-body">
+          Ran the framework against 60+ public and private MCP servers to
+          validate detector coverage and tune false-positive rates.
+          Severity levels aligned to CVSS ranges so findings could be
+          ingested directly by existing security tooling.
+        </p>
+        <div class="highlights">
+          <div class="hl-item">
+            <span class="hl-num">01</span>
+            <span class="hl-text">Built 8 detectors covering: tool injection, resource over-permission, transport misconfiguration, schema validation bypass, and prompt-layer exposure</span>
+          </div>
+          <div class="hl-item">
+            <span class="hl-num">02</span>
+            <span class="hl-text">SARIF output ingested by GitHub Advanced Security — findings surface directly in pull request review UI</span>
+          </div>
+          <div class="hl-item">
+            <span class="hl-num">03</span>
+            <span class="hl-text">Extensible detector interface: new attack class = new file, no changes to coordinator or output formatter</span>
+          </div>
+          <div class="hl-item">
+            <span class="hl-num">04</span>
+            <span class="hl-text">Tested against 60+ MCP targets; tuned detectors to &lt;5% false-positive rate on known-clean servers</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- RESULTS -->
+      <div class="cs-section">
+        <div class="cs-label">03 / results</div>
+        <h2 class="cs-heading">Open source scanner with triage-ready output</h2>
+        <p class="cs-body">
+          Framework is live and open source. Provides the first structured
+          security scanning coverage for MCP servers with SARIF output
+          compatible with standard security pipelines.
+        </p>
+        <div class="highlights">
+          <div class="hl-item">
+            <span class="hl-num">01</span>
+            <span class="hl-text">60+ servers scanned; framework identifies security gaps the MCP ecosystem previously had no tooling for</span>
+          </div>
+          <div class="hl-item">
+            <span class="hl-num">02</span>
+            <span class="hl-text">SARIF output integrates directly with GitHub Advanced Security, Semgrep, and custom SIEM ingestion</span>
+          </div>
+          <div class="hl-item">
+            <span class="hl-num">03</span>
+            <span class="hl-text">Detector architecture is being referenced in discussions around MCP security standards (early 2026)</span>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /content-col -->
+
+    <!-- SIDEBAR -->
+    <aside class="sidebar">
+
+      <div class="sb-block">
+        <div class="sb-label">// stack</div>
+        <div class="stack-tags">
+          <span class="tag">TypeScript</span>
+          <span class="tag">Node.js</span>
+          <span class="tag">MCP SDK</span>
+          <span class="tag">SARIF</span>
+          <span class="tag">GitHub Actions</span>
+          <span class="tag">Jest</span>
+        </div>
+      </div>
+
+      <div class="sb-block">
+        <div class="sb-label">// links</div>
+        <div class="sb-links">
+          <a class="sb-link" href="#">
+            GitHub repo
+            <span class="sb-link-arrow">→</span>
+          </a>
+          <a class="sb-link" href="#">
+            live demo
+            <span class="sb-link-arrow">→</span>
+          </a>
+          <a class="sb-link" href="#">
+            SARIF spec
+            <span class="sb-link-arrow">↗</span>
+          </a>
+        </div>
+      </div>
+
+      <div class="sb-block">
+        <div class="sb-label">// timeline</div>
+        <div class="timeline">
+          <div class="tl-item">
+            <div class="tl-dot"></div>
+            <div>
+              <div class="tl-label">Initial detector architecture</div>
+              <div class="tl-meta">Nov 2025</div>
+            </div>
+          </div>
+          <div class="tl-item">
+            <div class="tl-dot"></div>
+            <div>
+              <div class="tl-label">60+ server validation run</div>
+              <div class="tl-meta">Jan 2026</div>
+            </div>
+          </div>
+          <div class="tl-item">
+            <div class="tl-dot"></div>
+            <div>
+              <div class="tl-label">SARIF output + GitHub integration</div>
+              <div class="tl-meta">Feb 2026</div>
+            </div>
+          </div>
+          <div class="tl-item">
+            <div class="tl-dot"></div>
+            <div>
+              <div class="tl-label">Open-sourced</div>
+              <div class="tl-meta">Mar 2026</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="sb-block">
+        <div class="sb-label">// context</div>
+        <div style="font-size:12px;color:var(--text-muted);line-height:1.6">
+          Solo project. Part of MASc research into AI-era attack surfaces at SFU.
+          Connects to broader work on AI-enabled detection workflows.
+        </div>
+      </div>
+
+    </aside>
+
+  </div><!-- /case-body -->
+
+  <!-- NEXT PROJECT -->
+  <div class="next-project">
+    <div class="next-label">// next project</div>
+    <a class="next-card" href="#">
+      <div>
+        <div class="next-card-title">AI-Enhanced EDR Triage</div>
+        <div class="next-card-sum">Wazuh + LLM-assisted alert prioritization — where AI stays trustworthy</div>
+      </div>
+      <span class="next-arrow">→</span>
+    </a>
+  </div>
+
+</div><!-- /shell -->
+
+<!-- FOOTER -->
+<footer class="foot">
+  <div>yaoting.wang · 2026</div>
+  <div class="mono">// built with React + Vite · deployed on Vercel</div>
+</footer>
+
+</body>
+</html>

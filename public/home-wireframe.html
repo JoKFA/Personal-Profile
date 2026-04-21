@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Yaoting Wang — wireframe</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0b0f14;
+    --bg-soft:#0d1117;
+    --surface:#0f1520;
+    --border:rgba(255,255,255,0.08);
+    --border-strong:rgba(255,255,255,0.14);
+    --text:#e6edf3;
+    --text-muted:#8b949e;
+    --text-dim:#546273;
+    --accent:#7ee787;
+    --accent-dim:rgba(126,231,135,0.14);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{background:var(--bg)}
+  body{
+    background:var(--bg);
+    color:var(--text);
+    font-family:'Inter',-apple-system,sans-serif;
+    font-size:15px;
+    line-height:1.6;
+    letter-spacing:-0.01em;
+  }
+  .mono{font-family:'Fira Code',monospace;letter-spacing:0}
+  a{color:inherit;text-decoration:none}
+
+  /* LAYOUT */
+  .shell{max-width:1180px;margin:0 auto;padding:0 48px}
+  .row{display:flex;gap:32px}
+
+  /* TOP BAR */
+  .nav{
+    display:flex;justify-content:space-between;align-items:center;
+    padding:28px 48px;border-bottom:1px solid var(--border);
+  }
+  .nav-brand{font-family:'Fira Code',monospace;font-size:13px;color:var(--text-muted);letter-spacing:0.02em}
+  .nav-brand strong{color:var(--text);font-weight:500}
+  .nav-links{display:flex;gap:32px;font-size:13px;color:var(--text-muted)}
+  .nav-links a:hover{color:var(--text)}
+  .nav-cta{
+    font-family:'Fira Code',monospace;font-size:12px;
+    padding:8px 14px;border:1px solid var(--border-strong);
+    color:var(--text);
+  }
+
+  /* HERO */
+  .hero{padding:120px 0 96px;position:relative}
+  .hero-grid{display:grid;grid-template-columns:1.6fr 1fr;gap:80px;align-items:end}
+  .hero-eyebrow{
+    font-family:'Fira Code',monospace;font-size:12px;
+    color:var(--accent);letter-spacing:0.08em;margin-bottom:28px;
+  }
+  .hero-name{
+    font-size:88px;line-height:0.95;font-weight:600;letter-spacing:-0.04em;
+    margin-bottom:20px;
+  }
+  .hero-name .last{color:var(--text-muted);font-weight:400}
+  .hero-positioning{
+    font-size:22px;line-height:1.4;color:var(--text-muted);max-width:520px;
+    font-weight:400;margin-bottom:40px;
+  }
+  .hero-positioning strong{color:var(--text);font-weight:500}
+  .chips{display:flex;flex-wrap:wrap;gap:8px}
+  .chip{
+    font-family:'Fira Code',monospace;font-size:11px;letter-spacing:0.02em;
+    padding:6px 12px;border:1px solid var(--border);color:var(--text-muted);
+  }
+  .hero-side{
+    border-left:1px solid var(--border);padding-left:32px;
+    display:flex;flex-direction:column;gap:28px;
+  }
+  .signal-label{
+    font-family:'Fira Code',monospace;font-size:10px;letter-spacing:0.12em;
+    color:var(--text-dim);text-transform:uppercase;margin-bottom:6px;
+  }
+  .signal-value{font-size:14px;color:var(--text);font-weight:500;margin-bottom:4px}
+  .signal-note{font-size:12px;color:var(--text-muted);line-height:1.5}
+
+  /* SECTION MARKER */
+  .section{padding:80px 0;border-top:1px solid var(--border)}
+  .section-head{
+    display:flex;justify-content:space-between;align-items:baseline;margin-bottom:48px;
+  }
+  .section-num{font-family:'Fira Code',monospace;font-size:12px;color:var(--text-dim);letter-spacing:0.1em}
+  .section-title{font-size:32px;font-weight:600;letter-spacing:-0.02em}
+  .section-meta{font-family:'Fira Code',monospace;font-size:11px;color:var(--text-muted)}
+
+  /* PROJECT GALLERY — asymmetric grid */
+  .gallery{display:grid;grid-template-columns:1fr 1fr 1fr;gap:1px;background:var(--border)}
+  .project{
+    background:var(--bg);padding:36px 32px 32px;
+    display:flex;flex-direction:column;gap:16px;min-height:280px;position:relative;
+    transition:background 0.2s;
+  }
+  .project:hover{background:var(--bg-soft)}
+  .project.feat{grid-column:span 2;background:var(--bg-soft)}
+  .project-meta{
+    display:flex;justify-content:space-between;align-items:center;
+    font-family:'Fira Code',monospace;font-size:11px;color:var(--text-dim);
+  }
+  .project-num{color:var(--accent)}
+  .project-title{font-size:20px;font-weight:600;letter-spacing:-0.01em;margin-top:auto}
+  .project.feat .project-title{font-size:28px}
+  .project-sum{font-size:14px;color:var(--text-muted);line-height:1.55}
+  .project-tags{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+  .tag{
+    font-family:'Fira Code',monospace;font-size:10px;letter-spacing:0.04em;
+    color:var(--text-dim);
+  }
+  .tag::before{content:"[";margin-right:2px}
+  .tag::after{content:"]";margin-left:2px}
+
+  /* EXPERIENCE */
+  .exp-list{display:flex;flex-direction:column}
+  .exp-row{
+    display:grid;grid-template-columns:180px 1fr 120px;gap:32px;
+    padding:28px 0;border-top:1px solid var(--border);align-items:baseline;
+  }
+  .exp-row:first-child{border-top:none;padding-top:0}
+  .exp-org{
+    font-family:'Fira Code',monospace;font-size:12px;color:var(--text-muted);
+    letter-spacing:0.02em;
+  }
+  .exp-body h3{font-size:17px;font-weight:500;margin-bottom:6px}
+  .exp-body p{font-size:14px;color:var(--text-muted);line-height:1.55}
+  .exp-period{
+    font-family:'Fira Code',monospace;font-size:11px;color:var(--text-dim);
+    text-align:right;
+  }
+
+  /* CONTACT */
+  .contact{padding:100px 0 120px;border-top:1px solid var(--border)}
+  .contact-grid{display:grid;grid-template-columns:1.2fr 1fr;gap:80px;align-items:center}
+  .contact h2{font-size:56px;font-weight:600;letter-spacing:-0.03em;line-height:1.05;margin-bottom:20px}
+  .contact p{font-size:17px;color:var(--text-muted);max-width:460px}
+  .contact-channels{display:flex;flex-direction:column;gap:14px}
+  .channel{
+    display:flex;justify-content:space-between;align-items:center;
+    padding:16px 0;border-bottom:1px solid var(--border);
+    font-family:'Fira Code',monospace;font-size:13px;
+  }
+  .channel:first-child{border-top:1px solid var(--border)}
+  .channel-label{color:var(--text-dim);letter-spacing:0.1em;font-size:10px;text-transform:uppercase}
+  .channel-value{color:var(--text)}
+
+  /* FOOTER */
+  .foot{
+    padding:32px 48px;border-top:1px solid var(--border);
+    display:flex;justify-content:space-between;align-items:center;
+    font-family:'Fira Code',monospace;font-size:11px;color:var(--text-dim);
+  }
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav class="nav">
+  <div class="nav-brand">yaoting.wang / <strong>portfolio</strong></div>
+  <div class="nav-links">
+    <a href="#work">work</a>
+    <a href="#experience">experience</a>
+    <a href="#contact">contact</a>
+  </div>
+  <a class="nav-cta mono" href="/resume.pdf">resume.pdf →</a>
+</nav>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="shell">
+    <div class="hero-grid">
+      <div>
+        <div class="hero-eyebrow">// security engineer · candidate · 2026</div>
+        <h1 class="hero-name">Yaoting<br><span class="last">Wang.</span></h1>
+        <p class="hero-positioning">
+          MASc Cybersecurity at SFU. Working at the intersection of
+          <strong>AppSec, DevSecOps,</strong> and <strong>AI-security</strong>
+          — building CI/CD guardrails, validating real attack paths, and studying
+          how AI reshapes both offense and defense.
+        </p>
+        <div class="chips">
+          <span class="chip">SFU · MASc</span>
+          <span class="chip">BCIT · Digital Forensics</span>
+          <span class="chip">CCNA · Security+ · OSCP (WIP)</span>
+          <span class="chip">Vancouver, BC</span>
+        </div>
+      </div>
+      <div class="hero-side">
+        <div>
+          <div class="signal-label">// now</div>
+          <div class="signal-value">MCP security workflows</div>
+          <div class="signal-note">detector-driven scans, structured findings</div>
+        </div>
+        <div>
+          <div class="signal-label">// recent</div>
+          <div class="signal-value">14 findings · internal pentest</div>
+          <div class="signal-note">grey-box, remediation-ready reporting</div>
+        </div>
+        <div>
+          <div class="signal-label">// studying</div>
+          <div class="signal-value">AI-enabled attack surfaces</div>
+          <div class="signal-note">transport, permission, prompt-layer risk</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- PROJECTS -->
+<section class="section" id="work">
+  <div class="shell">
+    <div class="section-head">
+      <div>
+        <div class="section-num">01 / work</div>
+        <div class="section-title">Selected projects</div>
+      </div>
+      <div class="section-meta">6 shipped · 2026</div>
+    </div>
+
+    <div class="gallery">
+      <!-- featured project spans 2 -->
+      <article class="project feat">
+        <div class="project-meta">
+          <span class="project-num">→ 001</span>
+          <span>live · open source</span>
+        </div>
+        <div>
+          <h3 class="project-title">MCP Security Framework</h3>
+          <p class="project-sum">
+            Detector-driven security scanning for Model Context Protocol servers.
+            Tested against 60+ targets, produces structured findings engineers
+            can route into existing triage flows.
+          </p>
+          <div class="project-tags">
+            <span class="tag">TypeScript</span>
+            <span class="tag">MCP</span>
+            <span class="tag">SAST</span>
+            <span class="tag">CI/CD</span>
+          </div>
+        </div>
+      </article>
+
+      <article class="project">
+        <div class="project-meta"><span class="project-num">→ 002</span><span>case study</span></div>
+        <div>
+          <h3 class="project-title">Internal pentest</h3>
+          <p class="project-sum">Grey-box engagement; 14 validated findings with reproducible PoCs.</p>
+          <div class="project-tags"><span class="tag">Burp</span><span class="tag">Threat modeling</span></div>
+        </div>
+      </article>
+
+      <article class="project">
+        <div class="project-meta"><span class="project-num">→ 003</span><span>case study</span></div>
+        <div>
+          <h3 class="project-title">AI-enhanced EDR triage</h3>
+          <p class="project-sum">Model-assisted alert prioritization — where AI stays trustworthy vs. theater.</p>
+          <div class="project-tags"><span class="tag">Wazuh</span><span class="tag">LLM</span></div>
+        </div>
+      </article>
+
+      <article class="project">
+        <div class="project-meta"><span class="project-num">→ 004</span><span>case study</span></div>
+        <div>
+          <h3 class="project-title">CI/CD guardrails</h3>
+          <p class="project-sum">Trivy + GitGuardian + Terraform checks across 10+ PRs before merge.</p>
+          <div class="project-tags"><span class="tag">GitHub Actions</span><span class="tag">AWS</span></div>
+        </div>
+      </article>
+
+      <article class="project">
+        <div class="project-meta"><span class="project-num">→ 005</span><span>case study</span></div>
+        <div>
+          <h3 class="project-title">IR playbooks · BCIT SOC</h3>
+          <p class="project-sum">4 response playbooks used in live investigations; virtual IR lab.</p>
+          <div class="project-tags"><span class="tag">IR</span><span class="tag">MITRE</span></div>
+        </div>
+      </article>
+
+      <article class="project">
+        <div class="project-meta"><span class="project-num">→ 006</span><span>case study</span></div>
+        <div>
+          <h3 class="project-title">Phishing awareness · 1K staff</h3>
+          <p class="project-sum">Delivered training; reported incidents dropped 15% the next quarter.</p>
+          <div class="project-tags"><span class="tag">Awareness</span><span class="tag">Ops</span></div>
+        </div>
+      </article>
+    </div>
+  </div>
+</section>
+
+<!-- EXPERIENCE -->
+<section class="section" id="experience">
+  <div class="shell">
+    <div class="section-head">
+      <div>
+        <div class="section-num">02 / experience</div>
+        <div class="section-title">Where I've worked</div>
+      </div>
+      <a class="section-meta" href="/resume.pdf">full resume · PDF ↗</a>
+    </div>
+
+    <div class="exp-list">
+      <div class="exp-row">
+        <div class="exp-org">VibesMeet LLC</div>
+        <div class="exp-body">
+          <h3>Cybersecurity &amp; DevSecOps Engineer Intern</h3>
+          <p>Release-time security and AWS hardening. Integrated Trivy/GitGuardian/Terraform scanning across 10+ PRs; enforced least-privilege IAM; drafted release checks adopted by engineering.</p>
+        </div>
+        <div class="exp-period">Feb — Jul 2025</div>
+      </div>
+      <div class="exp-row">
+        <div class="exp-org">BCIT Cyber Security Office</div>
+        <div class="exp-body">
+          <h3>Cybersecurity Analyst Intern</h3>
+          <p>SOC operations, awareness, and policy work. Built virtual IR environment; 4 playbooks used in live investigations; 1,000+ staff trained; 20+ standards revised to NIST/ISO 27001.</p>
+        </div>
+        <div class="exp-period">May — Aug 2024</div>
+      </div>
+      <div class="exp-row">
+        <div class="exp-org">VIVA · Vancouver</div>
+        <div class="exp-body">
+          <h3>Freelance IT &amp; Security Coordinator</h3>
+          <p>Sole IT contact for 500+ staff and volunteers. M365, DNS, SSL, device access. Zero cert-expiry incidents across 3+ public services.</p>
+        </div>
+        <div class="exp-period">Oct 2024 —</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CONTACT -->
+<section class="contact" id="contact">
+  <div class="shell">
+    <div class="contact-grid">
+      <div>
+        <div class="section-num" style="margin-bottom:20px">03 / contact</div>
+        <h2>Happy to<br>talk shop.</h2>
+        <p>Looking for AppSec / DevSecOps / Security Engineering roles. Fastest reply is email.</p>
+      </div>
+      <div class="contact-channels">
+        <a class="channel" href="mailto:felixwang1222@gmail.com">
+          <span class="channel-label">// email</span>
+          <span class="channel-value">felixwang1222@gmail.com ↗</span>
+        </a>
+        <a class="channel" href="https://linkedin.com/in/yaoting-wang">
+          <span class="channel-label">// linkedin</span>
+          <span class="channel-value">in/yaoting-wang ↗</span>
+        </a>
+        <a class="channel" href="https://github.com/JoKFA">
+          <span class="channel-label">// github</span>
+          <span class="channel-value">@JoKFA ↗</span>
+        </a>
+        <a class="channel" href="/resume.pdf">
+          <span class="channel-label">// resume</span>
+          <span class="channel-value">resume.pdf ↗</span>
+        </a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer class="foot">
+  <span>yaoting wang · portfolio · 2026</span>
+  <span>built with react · vite · vercel</span>
+</footer>
+
+</body>
+</html>

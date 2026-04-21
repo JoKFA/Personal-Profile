@@ -1,0 +1,86 @@
+{
+  "nav": {
+    "home": "#home",
+    "projects": "#projects",
+    "ctf": "#ctf-lab",
+    "certifications": "#certifications",
+    "contact": "#contact",
+    "resume": "#resume",
+    "menu": "menu",
+    "close": "close"
+  },
+  "common": {
+    "live": "<~> Live",
+    "viewCaseStudy": "-> View case study",
+    "requestDetails": "-> Request details",
+    "backToHome": "< back to home",
+    "backToProjects": "< back to projects",
+    "status": "ACTIVE"
+  },
+  "hero": {
+    "label": "// builder mode: job hunt ready",
+    "primaryCta": "-> Explore projects",
+    "secondaryCta": "-> Open resume"
+  },
+  "briefing": {
+    "label": "#briefing",
+    "intro": "Choose the lens you want. The same work, framed for the audience in front of you.",
+    "pillPrefix": "[ BRIEFING:"
+  },
+  "projects": {
+    "label": "#projects",
+    "intro": "Five real projects, reframed per audience without flattening the technical depth."
+  },
+  "ctf": {
+    "label": "#ctf-lab",
+    "intro": "A small terminal lab that proves practical security instincts through a working challenge.",
+    "launch": "-> Launch terminal",
+    "fallback": "Terminal unavailable. Challenge notes are still visible below.",
+    "registry": "> Available challenges:",
+    "commandLabel": "// command",
+    "commandPlaceholder": "start 1",
+    "commandButton": "run"
+  },
+  "certifications": {
+    "label": "#certifications",
+    "intro": "> Certifications & credentials",
+    "expiry": "exp"
+  },
+  "contact": {
+    "label": "#contact",
+    "intro": "Reach out directly or send a note through the terminal-style form.",
+    "formTitle": "// secure contact channel",
+    "name": "Name",
+    "email": "Email",
+    "message": "Message",
+    "company": "Company",
+    "submit": "> send message",
+    "sending": "> sending...",
+    "successLineOne": "> Message sent. I'll get back to you.",
+    "successLineTwo": "> - Yaoting",
+    "errorFallback": "Failed to send. Try emailing directly at felixwang1222@gmail.com.",
+    "validationRequired": "This field is required.",
+    "validationEmail": "Enter a valid email address.",
+    "validationMessage": "Message must be at least 10 characters."
+  },
+  "resume": {
+    "label": "// web resume",
+    "download": "-> Download PDF",
+    "experience": "> Experience",
+    "education": "> Education",
+    "projects": "> Projects",
+    "skills": "> Skills",
+    "certifications": "> Certifications",
+    "contact": "> Contact"
+  },
+  "caseStudy": {
+    "rolePrefix": "#role:",
+    "stack": "> Tech stack",
+    "metrics": "> Key metrics",
+    "related": "> Related links",
+    "problem": "> Problem",
+    "approach": "> Approach",
+    "results": "> Results / Impact",
+    "framing": "> Role-adaptive framing"
+  }
+}
