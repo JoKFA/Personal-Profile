@@ -2,6 +2,7 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { useEffect } from 'react'
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import { NavBar } from './components/NavBar'
+import { StatusStrip } from './components/StatusStrip'
 import { HomePage } from './pages/Home'
 import { ProjectCaseStudyPage } from './pages/ProjectCaseStudy'
 
@@ -66,6 +67,7 @@ function AppFrame() {
           </motion.div>
         </AnimatePresence>
       </main>
+      <StatusStrip />
     </>
   )
 }
