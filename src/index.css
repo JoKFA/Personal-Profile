@@ -1846,6 +1846,53 @@ ul { list-style: none; }
   gap: 8px;
 }
 
+.rt-post-flag {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 14px 18px;
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
+  border-radius: 6px;
+}
+
+.rt-post-flag-label {
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.rt-post-flag-value {
+  font-family: var(--font-mono);
+  font-size: 15px;
+  color: var(--accent);
+  word-break: break-all;
+}
+
+.rt-post-exploit {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 14px 18px;
+  background: var(--surface);
+  border-radius: 6px;
+}
+
+.rt-post-exploit-label {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+.rt-post-exploit-text {
+  font-family: var(--font-body);
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: var(--text);
+  margin: 0;
+}
+
 .rt-post-actions {
   display: flex;
   gap: 12px;
