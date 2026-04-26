@@ -434,7 +434,7 @@ export function RedTeamLab({ onEnterPortfolio }: { onEnterPortfolio: () => void 
           <div className="rt-post-eyebrow">SENTINEL-1 OFFLINE</div>
           <h2 className="rt-post-title">The guard isn't wired up yet.</h2>
           <p className="rt-post-lead">
-            The portfolio owner hasn't configured <code>ANTHROPIC_API_KEY</code> on this deployment.
+            The portfolio owner hasn't configured <code>DEEPSEEK_API_KEY</code> on this deployment.
             The UI and rate-limit layers still work; the LLM call just returns a 503. This is by design:
             no key in the repo, no key in the client bundle.
           </p>

@@ -6,7 +6,7 @@ export function ProjectCaseStudyPage() {
   const project = slug ? projectLookup.get(slug) : undefined
 
   if (!project) {
-    return <Navigate to="/" replace />
+    return <Navigate to="/portfolio" replace />
   }
 
   const idx = projects.findIndex((p) => p.slug === slug)
@@ -14,14 +14,12 @@ export function ProjectCaseStudyPage() {
 
   return (
     <>
-      {/* ── Back bar ── */}
       <div className="case-back-bar">
         <div className="site-shell">
-          <a className="case-back-link" href="/#work">← back to work</a>
+          <a className="case-back-link" href="/portfolio#work">back to work</a>
         </div>
       </div>
 
-      {/* ── Project header ── */}
       <header className="case-header">
         <div className="site-shell">
           <p className="case-eyebrow" aria-hidden="true">{project.eyebrow}</p>
@@ -38,7 +36,6 @@ export function ProjectCaseStudyPage() {
         </div>
       </header>
 
-      {/* ── Body: content + sidebar ── */}
       <div className="site-shell case-body">
         <main className="case-content">
           <section aria-label="problem">
@@ -70,7 +67,6 @@ export function ProjectCaseStudyPage() {
           </section>
         </main>
 
-        {/* ── Sidebar ── */}
         <aside className="case-sidebar" aria-label="project details">
           <div>
             <p className="sidebar-label" aria-hidden="true">// stack</p>
@@ -108,7 +104,6 @@ export function ProjectCaseStudyPage() {
         </aside>
       </div>
 
-      {/* ── Next project ── */}
       {nextProject && (
         <section className="next-project-section" aria-label="next project">
           <div className="site-shell">
@@ -121,11 +116,10 @@ export function ProjectCaseStudyPage() {
         </section>
       )}
 
-      {/* ── Footer ── */}
       <footer className="site-footer">
         <div className="site-shell footer-row">
-          <p className="footer-copy" aria-hidden="true">// yaoting.wang · {new Date().getFullYear()}</p>
-          <a className="ghost-button" href="/#contact">get in touch</a>
+          <p className="footer-copy" aria-hidden="true">// yaoting.wang / {new Date().getFullYear()}</p>
+          <a className="ghost-button" href="/portfolio#contact">get in touch</a>
         </div>
       </footer>
     </>

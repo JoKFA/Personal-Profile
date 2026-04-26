@@ -10,14 +10,14 @@ test('submits the contact form successfully', async ({ page }) => {
     })
   })
 
-  await page.goto('/#contact')
+  await page.goto('/portfolio#contact')
 
-  await page.getByLabel('Name').fill('Yaoting Wang')
-  await page.getByLabel('Email').fill('felixwang1222@gmail.com')
-  await page.getByLabel('Message').fill('Hello there, I would like to discuss a security role.')
+  await page.getByLabel(/name/i).fill('Yaoting Wang')
+  await page.getByLabel(/email/i).fill('felixwang1222@gmail.com')
+  await page.getByLabel(/message/i).fill('Hello there, I would like to discuss a security role.')
   await page.getByRole('button', { name: /send message/i }).click()
 
-  await expect(page.getByText(/message sent/i)).toBeVisible()
+  await expect(page.getByText(/message received/i)).toBeVisible()
 })
 
 test('shows the fallback error when the API fails', async ({ page }) => {
@@ -31,11 +31,11 @@ test('shows the fallback error when the API fails', async ({ page }) => {
     })
   })
 
-  await page.goto('/#contact')
+  await page.goto('/portfolio#contact')
 
-  await page.getByLabel('Name').fill('Yaoting Wang')
-  await page.getByLabel('Email').fill('felixwang1222@gmail.com')
-  await page.getByLabel('Message').fill('Hello there, I would like to discuss a security role.')
+  await page.getByLabel(/name/i).fill('Yaoting Wang')
+  await page.getByLabel(/email/i).fill('felixwang1222@gmail.com')
+  await page.getByLabel(/message/i).fill('Hello there, I would like to discuss a security role.')
   await page.getByRole('button', { name: /send message/i }).click()
 
   await expect(page.getByText(/Try emailing directly/i)).toBeVisible()

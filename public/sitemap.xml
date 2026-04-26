@@ -1,21 +1,24 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
-    <loc>https://example.com/</loc>
+    <loc>https://personal-profile-alpha-cyan.vercel.app/</loc>
   </url>
   <url>
-    <loc>https://example.com/projects/mcp-security-framework</loc>
+    <loc>https://personal-profile-alpha-cyan.vercel.app/portfolio</loc>
   </url>
   <url>
-    <loc>https://example.com/projects/ai-enhanced-edr-triage</loc>
+    <loc>https://personal-profile-alpha-cyan.vercel.app/projects/mcp-security-framework</loc>
   </url>
   <url>
-    <loc>https://example.com/projects/internal-pentest</loc>
+    <loc>https://personal-profile-alpha-cyan.vercel.app/projects/ai-enhanced-edr-triage</loc>
   </url>
   <url>
-    <loc>https://example.com/projects/telus-ai-hackathon</loc>
+    <loc>https://personal-profile-alpha-cyan.vercel.app/projects/internal-pentest</loc>
   </url>
   <url>
-    <loc>https://example.com/projects/threat-modelling-viva</loc>
+    <loc>https://personal-profile-alpha-cyan.vercel.app/projects/telus-ai-hackathon</loc>
+  </url>
+  <url>
+    <loc>https://personal-profile-alpha-cyan.vercel.app/projects/threat-modelling-viva</loc>
   </url>
 </urlset>
