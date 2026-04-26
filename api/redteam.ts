@@ -1,4 +1,4 @@
-import { parseRequestPayload, runRedteamTurn } from '../src/server/redteam.ts'
+import { parseRequestPayload, runRedteamTurn } from '../src/server/redteam.js'
 
 interface VercelRequest {
   method?: string
