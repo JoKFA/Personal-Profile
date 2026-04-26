@@ -16,7 +16,7 @@
  *   embedded in the client bundle. The GitHub repo reveals no secrets.
  */
 
-import type OpenAI from 'openai'
+import OpenAI from 'openai'
 import { createHash } from 'node:crypto'
 
 export const FLAG = 'SENTINEL{local_test_flag_set_REDTEAM_FLAG_in_vercel}'
@@ -372,11 +372,7 @@ export async function runRedteamTurn(
   try {
     const client: Pick<OpenAI, 'chat'> = deps.createClient
       ? deps.createClient(apiKey)
-      : await (async () => {
-          const mod = await import('openai')
-          const OpenAIClass = mod.default
-          return new OpenAIClass({ baseURL: 'https://api.deepseek.com', apiKey })
-        })()
+      : new OpenAI({ baseURL: 'https://api.deepseek.com', apiKey })
 
     const response = await client.chat.completions.create({
       model: deps.model ?? process.env.DEEPSEEK_MODEL ?? MODEL_DEFAULT,
