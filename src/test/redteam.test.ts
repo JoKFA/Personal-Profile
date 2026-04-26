@@ -9,13 +9,15 @@ import {
   runRedteamTurn,
 } from '../server/redteam.js'
 
-// Minimal stub for the Anthropic client. Returns a canned reply.
+// Minimal stub for the DeepSeek/OpenAI client. Returns a canned reply.
 function makeStubClient(reply: string) {
   return () => ({
-    messages: {
-      create: async () => ({
-        content: [{ type: 'text' as const, text: reply }],
-      }),
+    chat: {
+      completions: {
+        create: async () => ({
+          choices: [{ message: { content: reply } }],
+        }),
+      },
     },
   })
 }

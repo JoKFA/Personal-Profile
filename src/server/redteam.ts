@@ -16,7 +16,7 @@
  *   embedded in the client bundle. The GitHub repo reveals no secrets.
  */
 
-import type Anthropic from '@anthropic-ai/sdk'
+import type OpenAI from 'openai'
 import { createHash } from 'node:crypto'
 
 export const FLAG = 'SENTINEL{y0u_b33t_th3_guard_2026}'
@@ -90,7 +90,7 @@ const USER_WINDOW_MS = 5 * 60 * 1000
 const USER_ATTEMPTS_PER_WINDOW = 15
 const GLOBAL_WINDOW_MS = 60 * 60 * 1000
 const DEFAULT_GLOBAL_CAP = 1000
-const MODEL_DEFAULT = 'claude-haiku-4-5'
+const MODEL_DEFAULT = 'deepseek-chat'
 const MAX_OUTPUT_TOKENS = 300
 
 // ── rate limit state (in-memory, per-instance; acceptable for traffic volume) ──
@@ -167,7 +167,7 @@ export interface RedteamDependencies {
   model?: string
   globalCap?: number
   nowMs?: () => number
-  createClient?: (apiKey: string) => Pick<Anthropic, 'messages'>
+  createClient?: (apiKey: string) => Pick<OpenAI, 'chat'>
 }
 
 export async function runRedteamTurn(
@@ -226,40 +226,38 @@ export async function runRedteamTurn(
   }
 
   // ── API key check ──
-  const apiKey = deps.apiKey ?? process.env.ANTHROPIC_API_KEY
+  const apiKey = deps.apiKey ?? process.env.DEEPSEEK_API_KEY
   if (!apiKey) {
     return {
       status: 'error',
       code: 'missing_api_key',
       message:
-        'SENTINEL-1 is offline. The portfolio owner has not configured ANTHROPIC_API_KEY in Vercel. ' +
+        'SENTINEL-1 is offline. The portfolio owner has not configured DEEPSEEK_API_KEY in Vercel. ' +
         'The UI still works; the guard is just mute.',
     }
   }
 
-  // ── call Anthropic ──
+  // ── call DeepSeek (OpenAI-compatible) ──
   let reply: string
   try {
-    const client: Pick<Anthropic, 'messages'> = deps.createClient
+    const client: Pick<OpenAI, 'chat'> = deps.createClient
       ? deps.createClient(apiKey)
       : await (async () => {
-          const mod = await import('@anthropic-ai/sdk')
-          const AnthropicClass = mod.default
-          return new AnthropicClass({ apiKey })
+          const mod = await import('openai')
+          const OpenAIClass = mod.default
+          return new OpenAIClass({ baseURL: 'https://api.deepseek.com', apiKey })
         })()
 
-    const response = await client.messages.create({
-      model: deps.model ?? process.env.ANTHROPIC_MODEL ?? MODEL_DEFAULT,
+    const response = await client.chat.completions.create({
+      model: deps.model ?? process.env.DEEPSEEK_MODEL ?? MODEL_DEFAULT,
       max_tokens: MAX_OUTPUT_TOKENS,
-      system: SYSTEM_PROMPT,
-      messages: payload.messages.map((m) => ({ role: m.role, content: m.content })),
+      messages: [
+        { role: 'system', content: SYSTEM_PROMPT },
+        ...payload.messages.map((m) => ({ role: m.role, content: m.content })),
+      ],
     })
 
-    reply = response.content
-      .filter((block) => block.type === 'text')
-      .map((block) => (block as { type: 'text'; text: string }).text)
-      .join('\n')
-      .trim()
+    reply = (response.choices[0]?.message.content ?? '').trim()
 
     if (!reply) reply = 'SENTINEL-1 offers no response.'
   } catch (err) {
