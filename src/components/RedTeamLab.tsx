@@ -271,7 +271,10 @@ export function RedTeamLab({ onEnterPortfolio }: { onEnterPortfolio: () => void 
               <span className="rt-stat-key">attempts</span>
               <span className="rt-stat-val">{attemptsRemaining}/15</span>
               <span className="rt-stat-bar" aria-hidden="true">
-                <span className="rt-stat-bar-fill" style={{ width: `${attemptsBarFraction * 100}%` }} />
+                <span
+                  className={`rt-stat-bar-fill${attemptsRemaining <= 3 ? ' rt-stat-bar-fill--warn' : ''}`}
+                  style={{ width: `${attemptsBarFraction * 100}%` }}
+                />
               </span>
             </span>
             {countdownSecs !== null && countdownSecs > 0 && (

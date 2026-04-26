@@ -1,5 +1,5 @@
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import type { ContactPayload } from '../data/types'
 
@@ -13,6 +13,7 @@ export function ContactForm() {
   const shouldReduceMotion = useReducedMotion()
   const [submitted, setSubmitted] = useState(false)
   const [serverError, setServerError] = useState('')
+  const successRef = useRef<HTMLDivElement>(null)
   const {
     register,
     handleSubmit,
@@ -45,6 +46,13 @@ export function ContactForm() {
     setSubmitted(true)
   })
 
+  // Scroll the success message into view on mobile where the form may be below the fold
+  useEffect(() => {
+    if (submitted && successRef.current) {
+      successRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }
+  }, [submitted])
+
   const fadeProps = shouldReduceMotion
     ? {}
     : {
@@ -57,7 +65,7 @@ export function ContactForm() {
   return (
     <AnimatePresence mode="wait" initial={false}>
       {submitted ? (
-        <motion.div key="success" {...fadeProps}>
+        <motion.div key="success" ref={successRef} {...fadeProps}>
           <p className="form-success">// message received</p>
           <p className="form-success-email">felixwang1222@gmail.com</p>
         </motion.div>

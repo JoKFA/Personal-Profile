@@ -159,6 +159,11 @@ ul { list-style: none; }
   background: var(--accent-dim);
 }
 
+.ghost-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 /* ── hamburger ── */
 .hamburger-button {
   display: none;
@@ -217,6 +222,7 @@ ul { list-style: none; }
   display: flex;
   flex-direction: column;
   padding: 24px;
+  padding-top: max(24px, env(safe-area-inset-top)); /* notch / Dynamic Island */
   transform: translateX(100%);
   transition: transform 0.2s ease;
 }
@@ -485,7 +491,7 @@ ul { list-style: none; }
 .exp-org {
   font-family: var(--font-code);
   font-size: 12px;
-  color: var(--text-dim);
+  color: var(--text-muted);
   letter-spacing: 0.04em;
   padding-top: 2px;
   line-height: 1.4;
@@ -578,7 +584,7 @@ ul { list-style: none; }
 .field-block {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 10px;
 }
 
 .field-label {
@@ -593,15 +599,20 @@ ul { list-style: none; }
   border: 1px solid var(--border);
   color: var(--text);
   font-family: var(--font-body);
-  font-size: 14px;
-  padding: 10px 12px;
+  font-size: 16px; /* 16px prevents iOS auto-zoom on focus */
+  padding: 12px;
+  min-height: 44px; /* WCAG 2.5.5 minimum touch target */
   outline: none;
   transition: border-color 0.15s ease;
   width: 100%;
   resize: none;
 }
 
-.field-input:focus { border-color: var(--border-strong); }
+.field-input:focus {
+  border-color: var(--accent);
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
 .field-input.field-error-state { border-color: var(--error-soft); }
 .field-textarea { min-height: 120px; }
 
@@ -1093,9 +1104,46 @@ ul { list-style: none; }
   position: absolute;
   inset: 0;
   pointer-events: none;
-  /* scanlines removed — they span full-width and look wrong beside narrow content */
   background: radial-gradient(1400px 700px at 50% -5%, rgba(126,231,135,0.07), transparent 55%);
   z-index: 0;
+  /* breathing glow — slow inhale/exhale of the ambient green light */
+  animation: rt-glow-breathe 7s ease-in-out infinite;
+}
+
+@keyframes rt-glow-breathe {
+  0%, 100% { opacity: 0.7; }
+  50%       { opacity: 1;   }
+}
+
+/* scanner line: single translucent beam sweeps top→bottom, repeats every 12s */
+.rt-shell::after {
+  content: "";
+  position: absolute;
+  left: 0; right: 0;
+  top: -2px;
+  height: 2px;
+  background: linear-gradient(90deg,
+    transparent 0%,
+    rgba(126,231,135,0.08) 20%,
+    rgba(126,231,135,0.22) 50%,
+    rgba(126,231,135,0.08) 80%,
+    transparent 100%
+  );
+  pointer-events: none;
+  z-index: 2;
+  animation: rt-scan 12s linear infinite;
+}
+
+@keyframes rt-scan {
+  0%   { transform: translateY(0); opacity: 0; }
+  4%   { opacity: 1; }
+  96%  { opacity: 1; }
+  100% { transform: translateY(100vh); opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rt-shell::before { animation: none; }
+  .rt-shell::after  { display: none; }
 }
 
 .rt-shell > * { position: relative; z-index: 1; }
@@ -1294,7 +1342,10 @@ ul { list-style: none; }
 .rt-stat-bar-fill {
   display: block; height: 100%;
   background: var(--accent);
-  transition: width 240ms ease;
+  transition: width 240ms ease, background 240ms ease;
+}
+.rt-stat-bar-fill--warn {
+  background: var(--error-soft); /* ≤3 attempts remaining */
 }
 
 .rt-term-body {
@@ -1368,8 +1419,10 @@ ul { list-style: none; }
   font-size: 14px;
   padding: 4px 0;
   caret-color: var(--accent);
+  word-break: break-word;
 }
 .rt-input::placeholder { color: var(--text-dim); }
+.rt-input:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .rt-caret {
   width: 8px; height: 16px;
