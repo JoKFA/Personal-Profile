@@ -178,12 +178,40 @@ FOOTER
 
 ## Motion
 
+Motion is allowed where it reinforces identity or adds function. The only hard rules
+are performance and accessibility — everything else is a judgement call.
+
+### Rules (non-negotiable)
+
+- Wrap all Framer Motion / JS-driven animations in `prefers-reduced-motion` check
+- Animate only `transform`, `opacity`, `filter`, `clip-path`, `outline` — never `width`,
+  `height`, `top`, `left`, `margin`, `box-shadow` (layout / paint thrash)
+- No animation longer than 600ms on first paint; no looping animation that runs forever
+  without purpose (the status-strip pulse is the ceiling — one tiny dot, 2.4s)
+- No simultaneous animations at first load — pick ONE signature moment, stagger everything else
+- Intersection-observer gated: off-screen elements must not animate
+- Must hit 60fps on mid-tier mobile (Moto G / iPhone 11 baseline). Use DevTools paint flashing
+  to verify. If it paints a large area continuously, it's out.
+- Total animated JS payload (framer-motion + anything custom) stays under 40KB gzipped
+
+### Defaults
+
 - **Scroll reveal:** opacity 0 → 1, translateY 12px → 0, 400ms ease-out
-- Wrap all Framer Motion animations in `prefers-reduced-motion` media query check
-- No typewriter effects, no Matrix rain, no terminal cursor blinking
-- Card hover transitions: 0.2s ease
-- Link hover transitions: 0.15s ease
-- No entrance animations on nav or hero — immediate render
+- **Card hover:** 0.2s ease, transform + outline only
+- **Link hover:** 0.15s ease, color / opacity only
+- **Signature moment (max one per session):** e.g., name scramble on first load, 80-150ms total
+
+### What's encouraged
+
+- Interactive surfaces that respond to input (terminal REPL, command palette, hover reveals)
+- Micro-motion that signals state (focus rings, pulsing "live" dot, accent appearing on hover)
+- Canvas or WebGL is fine IF it's gated to user interaction (not always-on backgrounds)
+
+### What to avoid
+
+- Matrix rain, cursor trails, particle backgrounds that run forever
+- Typewriter effect on static body copy (it's slower to read than just showing the text)
+- Entrance animations on every section (a signature moment is fine; a carnival isn't)
 
 ---
 

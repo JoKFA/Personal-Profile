@@ -7,6 +7,12 @@ const indexPath = path.join(distDir, 'index.html')
 const routeMeta = [
   {
     route: '/',
+    title: 'Yaoting Wang | Prompt-Injection Lab',
+    description:
+      'Before the resume — break the guard. A live prompt-injection challenge against an LLM that hides a flag. Beat it or skip to the portfolio.',
+  },
+  {
+    route: '/portfolio',
     title: 'Yaoting Wang | Security Builder',
     description:
       'MASc Cybersecurity student at SFU. Building security systems, validating real attack paths, and working at the intersection of AI and security.',

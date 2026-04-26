@@ -3,9 +3,9 @@ import { Link } from 'react-router-dom'
 import { profile } from '../data/profile'
 
 const navLinks = [
-  { label: 'work', href: '/#work' },
-  { label: 'experience', href: '/#experience' },
-  { label: 'contact', href: '/#contact' },
+  { label: 'work', href: '/portfolio#work' },
+  { label: 'experience', href: '/portfolio#experience' },
+  { label: 'contact', href: '/portfolio#contact' },
 ]
 
 export function NavBar() {
@@ -40,7 +40,7 @@ export function NavBar() {
   return (
     <header className="nav-shell">
       <div className="site-shell nav-row">
-        <Link className="brand-link" to="/">
+        <Link className="brand-link" to="/portfolio">
           <span>yaoting.wang</span>
           <span className="brand-slash">/</span>
           <span>portfolio</span>
