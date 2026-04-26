@@ -1080,10 +1080,15 @@ ul { list-style: none; }
 
 .page-frame--landing {
   padding: 0;
+  /* Force every animated wrapper Framer Motion inserts to fill the viewport.
+     flex+row was the old approach; block+height on children is simpler and
+     avoids the "motion.div only as wide as its content" failure mode. */
+}
+
+.page-frame--landing > * {
+  display: block;
+  width: 100%;
   min-height: 100vh;
-  display: flex;
-  align-items: stretch;
-  justify-content: stretch;
 }
 
 .rt-shell {
@@ -1138,7 +1143,7 @@ ul { list-style: none; }
   0%   { transform: translateY(0); opacity: 0; }
   4%   { opacity: 1; }
   96%  { opacity: 1; }
-  100% { transform: translateY(100vh); opacity: 0; }
+  100% { transform: translateY(100%); opacity: 0; }
 }
 
 @media (prefers-reduced-motion: reduce) {
