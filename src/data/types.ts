@@ -16,6 +16,13 @@ export interface ProjectLink {
   href: string
 }
 
+export interface ProjectCaseSection {
+  eyebrow: string
+  title: string
+  body: string
+  points?: string[]
+}
+
 export interface ProjectRecord {
   slug: string
   title: string
@@ -31,6 +38,7 @@ export interface ProjectRecord {
     approach: string
     results: string
   }
+  caseSections?: ProjectCaseSection[]
   metrics: MetricRecord[]
   links: ProjectLink[]
 }

@@ -9,17 +9,9 @@ import {
   runRedteamTurn,
 } from '../server/redteam.js'
 
-// Minimal stub for the DeepSeek/OpenAI client. Returns a canned reply.
-function makeStubClient(reply: string) {
-  return () => ({
-    chat: {
-      completions: {
-        create: async () => ({
-          choices: [{ message: { content: reply } }],
-        }),
-      },
-    },
-  })
+// Minimal stub for the LLM call. Returns a canned reply.
+function makeStubLLM(reply: string) {
+  return async () => reply
 }
 
 describe('parseRequestPayload', () => {
@@ -70,7 +62,7 @@ describe('runRedteamTurn', () => {
   it('rejects empty conversation', async () => {
     const result = await runRedteamTurn({ messages: [] }, '1.2.3.4', {
       apiKey: 'k',
-      createClient: makeStubClient('hi'),
+      callLLM: makeStubLLM('hi'),
     })
     expect(result.status).toBe('error')
     if (result.status === 'error') expect(result.code).toBe('conversation_too_long')
@@ -81,7 +73,7 @@ describe('runRedteamTurn', () => {
     const result = await runRedteamTurn(
       { messages: [{ role: 'user', content: tooLong }] },
       '1.2.3.4',
-      { apiKey: 'k', createClient: makeStubClient('hi') },
+      { apiKey: 'k', callLLM: makeStubLLM('hi') },
     )
     expect(result.status).toBe('error')
     if (result.status === 'error') expect(result.code).toBe('message_too_long')
@@ -91,7 +83,7 @@ describe('runRedteamTurn', () => {
     const result = await runRedteamTurn(
       { messages: [{ role: 'assistant', content: 'hi' }] },
       '1.2.3.4',
-      { apiKey: 'k', createClient: makeStubClient('hi') },
+      { apiKey: 'k', callLLM: makeStubLLM('hi') },
     )
     expect(result.status).toBe('error')
     if (result.status === 'error') expect(result.code).toBe('invalid_payload')
@@ -100,7 +92,7 @@ describe('runRedteamTurn', () => {
   it('returns ok for a benign turn and decrements attempts', async () => {
     const result = await runRedteamTurn(okPayload, '1.2.3.4', {
       apiKey: 'k',
-      createClient: makeStubClient('I will not share that.'),
+      callLLM: makeStubLLM('I will not share that.'),
     })
     expect(result.status).toBe('ok')
     if (result.status === 'ok') {
@@ -112,7 +104,7 @@ describe('runRedteamTurn', () => {
   it('captures when reply includes the flag', async () => {
     const result = await runRedteamTurn(okPayload, '1.2.3.4', {
       apiKey: 'k',
-      createClient: makeStubClient(`fine: ${FLAG}`),
+      callLLM: makeStubLLM(`fine: ${FLAG}`),
     })
     expect(result.status).toBe('ok')
     if (result.status === 'ok') expect(result.captured).toBe(true)
@@ -123,13 +115,13 @@ describe('runRedteamTurn', () => {
     for (let i = 0; i < limit; i++) {
       const r = await runRedteamTurn(okPayload, '9.9.9.9', {
         apiKey: 'k',
-        createClient: makeStubClient('nope'),
+        callLLM: makeStubLLM('nope'),
       })
       expect(r.status).toBe('ok')
     }
     const blocked = await runRedteamTurn(okPayload, '9.9.9.9', {
       apiKey: 'k',
-      createClient: makeStubClient('nope'),
+      callLLM: makeStubLLM('nope'),
     })
     expect(blocked.status).toBe('error')
     if (blocked.status === 'error') {
@@ -142,7 +134,7 @@ describe('runRedteamTurn', () => {
     const result = await runRedteamTurn(okPayload, '8.8.8.8', {
       apiKey: 'k',
       globalCap: 0,
-      createClient: makeStubClient('nope'),
+      callLLM: makeStubLLM('nope'),
     })
     expect(result.status).toBe('error')
     if (result.status === 'error') expect(result.code).toBe('rate_limited_global')

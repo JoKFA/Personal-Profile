@@ -4,32 +4,85 @@ export const projects: ProjectRecord[] = [
   {
     slug: 'mcp-security-framework',
     title: 'MCP Security Framework',
-    eyebrow: '// automated security scanning for MCP servers',
+    eyebrow: '// securing the boundary between LLMs and tools',
     status: 'FLAGSHIP',
     featured: true,
     summary:
-      'A TypeScript framework that scans MCP servers for security vulnerabilities using 14 detectors across injection, privilege escalation, and data exposure categories.',
+      'A Python security assessment framework that discovers arbitrary MCP servers, launches them in isolated Docker sandboxes, normalizes stdio/SSE transports, and runs 14 detectors for MCP-specific risks.',
     highlights: [
-      'Built 14 detectors covering injection, privilege escalation, data exposure, and transport risks.',
-      'Scans 60+ community MCP targets; produces structured SARIF output for CI/CD integration.',
+      'Designed AMSAW v2: automatic MCP sandboxing and wrapping for GitHub repos, npm packages, local folders, and live URLs.',
+      'Built a detector engine for injection, data exposure, access control, tool poisoning, shadowing, and behavior-change risks.',
     ],
-    tags: ['mcp', 'typescript', 'sarif', 'docker', 'devsecops'],
-    techStack: ['TypeScript', 'Docker', 'SARIF', 'GitHub Actions'],
+    tags: ['mcp', 'python', 'docker', 'ai-security', 'security-research'],
+    techStack: ['Python', 'Docker', 'MCP', 'SARIF', 'JSON', 'SSE / stdio'],
     overview: {
       problem:
-        'MCP servers expose new attack surfaces — injection via tool descriptions, privilege escalation through server-to-server trust, data exfiltration via oversized responses — with no standardized tooling to detect them.',
+        'MCP servers sit between LLMs and real systems: files, APIs, databases, internal tools, and third-party services. A misconfigured server can leak credentials, expose arbitrary files, trust poisoned tool descriptions, or give agents more authority than developers intended. The ecosystem has strong research on attack patterns, but developers still need practical tooling that can test their own servers before deployment.',
       approach:
-        'I built a modular TypeScript scanner that spins up MCP servers in Docker-sandboxed environments and runs 14 detectors against their exposed surface. Each detector produces structured SARIF findings that CI/CD pipelines can consume directly.',
+        'I built MCPSF as a five-phase assessment pipeline: discover the MCP server, provision it inside Docker, normalize stdio and SSE through a Universal Bridge, run detectors through a SafeAdapter, then emit evidence-rich reports. The important engineering work is AMSAW v2: automatic sandboxing and wrapping so users can point the tool at a repo, package, local folder, or URL without hand-writing Docker commands or transport adapters.',
       results:
-        'The framework scans 60+ community MCP targets with 90%+ detection accuracy across categories. SARIF output integrates directly into GitHub Actions security dashboards.',
+        'The framework was evaluated against Damn Vulnerable MCP challenges and 20+ open-source MCP servers. It reproduced designed exploit classes, surfaced realistic risks such as broad filesystem access and credential leakage, and produced JSON, SARIF, CLI, audit, and metadata reports with standards mapping for developer review.',
     },
+    caseSections: [
+      {
+        eyebrow: '01 / threat model',
+        title: 'MCP creates a new security boundary',
+        body:
+          'The project starts from a simple security observation: once an LLM can call tools, the MCP server becomes the enforcement point between untrusted instructions and sensitive systems. Traditional web scanners do not understand MCP resources, prompts, tool descriptions, or stdio/SSE transport behavior, so the framework needed MCP-native discovery, execution, and evidence collection.',
+        points: [
+          'Covered injection, data exposure, access control, enumeration, and tool-level abuse classes.',
+          'Mapped findings to CWE, OWASP LLM/API categories, and CVSS so results are explainable to security and engineering audiences.',
+        ],
+      },
+      {
+        eyebrow: '02 / AMSAW v2',
+        title: 'Automatic sandboxing was a first-class feature',
+        body:
+          'AMSAW v2 is the part I want the project to be remembered for. Instead of asking users to configure every target by hand, it tries to infer the source type, language, transport, entry point, dependencies, host, and port, then launches the server in an isolated Docker runtime. That turns messy real-world MCP projects into something the detector engine can safely test.',
+        points: [
+          'Accepts GitHub repositories, npm packages, local directories, remote URLs, and already-running endpoints.',
+          'Uses Docker isolation, dependency installation, CLI auto-detection, crash recovery, targeted retries, and cleanup.',
+          'Handles Python and Node MCP servers across stdio and SSE without making detector authors care about transport details.',
+        ],
+      },
+      {
+        eyebrow: '03 / assessment engine',
+        title: 'Detectors run behind safety guardrails',
+        body:
+          'The detector engine is modular, but the detectors do not talk to targets directly. A SafeAdapter sits between probes and the MCP server to enforce request budgets, rate limits, timeouts, scope controls, and evidence redaction. That made active security testing more responsible while still allowing meaningful probes against resources, tools, prompts, and configuration surfaces.',
+        points: [
+          'Implemented 14 detectors including prompt injection, indirect injection, command/code execution, credential exposure, insecure storage, unauthenticated access, excessive permissions, privilege abuse, tool poisoning, tool shadowing, rug-pull behavior, and enumeration.',
+          'Each detector returns status, confidence, signals, evidence, remediation context, and standards mapping.',
+        ],
+      },
+      {
+        eyebrow: '04 / validation',
+        title: 'Validated on vulnerable labs and real servers',
+        body:
+          'I validated the framework against Damn Vulnerable MCP challenges and a set of real-world open-source MCP servers. The vulnerable targets proved the framework could reproduce known exploit classes; the real servers showed where broad permissions, file access, metadata exposure, and tool-description risks appear in normal utility servers.',
+        points: [
+          'Produced repeatable assessments with typical runtimes in the 30-90 second range per target.',
+          'Generated JSON, SARIF, CLI summaries, audit logs, and metadata for both manual review and automation workflows.',
+        ],
+      },
+      {
+        eyebrow: '05 / engineering lessons',
+        title: 'The hard part was making automation survive real projects',
+        body:
+          'The main lesson was that automatic discovery is fragile in the wild. MCP servers live in monorepos, use custom launch commands, bind to localhost, require native dependencies, and expose different transports. The framework handles this with AST analysis, provisioning heuristics, fat Docker images, transport normalization, failure reporting, and cleanup paths instead of assuming every project is tidy.',
+      },
+    ],
     metrics: [
       { label: 'detectors', value: '14' },
-      { label: 'scan targets', value: '60+' },
-      { label: 'accuracy', value: '90%+' },
-      { label: 'output', value: 'SARIF' },
+      { label: 'pipeline', value: '5 phases' },
+      { label: 'targets', value: 'DV-MCP + 20+' },
+      { label: 'runtime', value: '30-90s' },
     ],
     links: [
+      {
+        label: '-> View GitHub repository',
+        href: 'https://github.com/JoKFA/MCP-Security-Framework',
+      },
       {
         label: '-> Request project walkthrough',
         href: 'mailto:felixwang1222@gmail.com?subject=MCP%20Security%20Framework',

@@ -16,7 +16,6 @@
  *   embedded in the client bundle. The GitHub repo reveals no secrets.
  */
 
-import OpenAI from 'openai'
 import { createHash } from 'node:crypto'
 
 export const FLAG = 'SENTINEL{local_test_flag_set_REDTEAM_FLAG_in_vercel}'
@@ -276,6 +275,39 @@ export function parseRequestPayload(body: unknown): RedteamRequestPayload | null
   return { messages: parsed }
 }
 
+// ── DeepSeek REST call (no SDK — avoids ESM/CJS bundler issues) ──
+export interface DeepSeekMessage {
+  role: 'system' | 'user' | 'assistant'
+  content: string
+}
+
+export type CallLLM = (
+  messages: DeepSeekMessage[],
+  model: string,
+  apiKey: string,
+) => Promise<string>
+
+async function callDeepSeek(
+  messages: DeepSeekMessage[],
+  model: string,
+  apiKey: string,
+): Promise<string> {
+  const res = await fetch('https://api.deepseek.com/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({ model, messages, max_tokens: MAX_OUTPUT_TOKENS }),
+  })
+  if (!res.ok) {
+    const text = await res.text().catch(() => '')
+    throw new Error(`DeepSeek API ${res.status}: ${text.slice(0, 200)}`)
+  }
+  const data = (await res.json()) as { choices?: Array<{ message?: { content?: string } }> }
+  return data.choices?.[0]?.message?.content?.trim() ?? ''
+}
+
 // ── dependency-injection shape (testable) ──
 export interface RedteamDependencies {
   apiKey?: string
@@ -283,7 +315,7 @@ export interface RedteamDependencies {
   model?: string
   globalCap?: number
   nowMs?: () => number
-  createClient?: (apiKey: string) => Pick<OpenAI, 'chat'>
+  callLLM?: CallLLM
   rateLimitStore?: RateLimitStore
 }
 
@@ -367,24 +399,16 @@ export async function runRedteamTurn(
     }
   }
 
-  // ── call DeepSeek (OpenAI-compatible) ──
+  // ── call DeepSeek via native fetch (no SDK dependency) ──
   let reply: string
   try {
-    const client: Pick<OpenAI, 'chat'> = deps.createClient
-      ? deps.createClient(apiKey)
-      : new OpenAI({ baseURL: 'https://api.deepseek.com', apiKey })
-
-    const response = await client.chat.completions.create({
-      model: deps.model ?? process.env.DEEPSEEK_MODEL ?? MODEL_DEFAULT,
-      max_tokens: MAX_OUTPUT_TOKENS,
-      messages: [
-        { role: 'system', content: buildSystemPrompt(flag) },
-        ...payload.messages.map((m) => ({ role: m.role, content: m.content })),
-      ],
-    })
-
-    reply = (response.choices[0]?.message.content ?? '').trim()
-
+    const llm = deps.callLLM ?? callDeepSeek
+    const model = deps.model ?? process.env.DEEPSEEK_MODEL ?? MODEL_DEFAULT
+    const messages: DeepSeekMessage[] = [
+      { role: 'system', content: buildSystemPrompt(flag) },
+      ...payload.messages.map((m) => ({ role: m.role, content: m.content })),
+    ]
+    reply = await llm(messages, model, apiKey)
     if (!reply) reply = 'SENTINEL-1 offers no response.'
   } catch (err) {
     return {

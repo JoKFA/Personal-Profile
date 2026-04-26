@@ -21,7 +21,7 @@ const routeMeta = [
     route: '/projects/mcp-security-framework',
     title: 'Yaoting Wang | MCP Security Framework',
     description:
-      'A TypeScript framework that scans MCP servers for security vulnerabilities using 14 detectors. Structured SARIF output for CI/CD.',
+      'A Python security assessment framework that discovers, sandboxes, normalizes, and tests MCP servers with 14 detectors for AI security risks.',
   },
   {
     route: '/projects/ai-enhanced-edr-triage',
