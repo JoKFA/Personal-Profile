@@ -8,14 +8,8 @@ export const profile = {
   linkedinUrl: 'https://www.linkedin.com/in/yaoting-wang/',
   resumePath: '/resume.pdf',
   positioning:
-    'MASc Cybersecurity student at SFU. I build security systems, test real attack paths, and work at the intersection of AI and security.',
+    'MASc cybersecurity student building practical security controls for AI systems, cloud workflows, and security operations. I turn security ideas into working projects: sandboxed AI tooling, DevSecOps automation, threat analysis, operational controls, and clear risk communication.',
 }
-
-export const heroSignals = [
-  { label: '// now', value: 'DevSecOps intern + MCP security framework' },
-  { label: '// recent', value: '14 pentest findings · 60+ MCP scan targets' },
-  { label: '// studying', value: 'AI security patterns + secure system design' },
-]
 
 export const experienceSnapshot: ExperienceRecord[] = [
   {

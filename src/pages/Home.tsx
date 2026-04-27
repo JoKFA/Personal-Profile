@@ -1,31 +1,14 @@
 import { ContactForm } from '../components/ContactForm'
+import { HeroConsole } from '../components/HeroConsole'
 import { ScrollReveal } from '../components/ScrollReveal'
-import { heroSignals, experienceSnapshot, socialLinks, profile } from '../data/profile'
+import { experienceSnapshot, socialLinks, profile } from '../data/profile'
 import { projects } from '../data/projects'
 
 export function HomePage() {
   return (
     <>
-      {/* ── Hero ── */}
-      <section className="hero-section" aria-label="introduction">
-        <div className="site-shell">
-          <div className="hero-grid">
-            <div className="hero-copy">
-              <p className="hero-eyebrow" aria-hidden="true">// MASc Cybersecurity · SFU · 2026</p>
-              <h1 className="hero-name">{profile.name}</h1>
-              <p className="hero-positioning">{profile.positioning}</p>
-            </div>
-            <div className="hero-signals" aria-label="current focus">
-              {heroSignals.map((signal) => (
-                <div key={signal.label} className="hero-signal">
-                  <span className="signal-label" aria-hidden="true">{signal.label}</span>
-                  <span className="signal-value">{signal.value}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      </section>
+      {/* ── Hero (Console) ── */}
+      <HeroConsole />
 
       <div className="section-divider" />
 
