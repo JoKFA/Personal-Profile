@@ -97,4 +97,31 @@ describe('submitContactForm', () => {
     expect(result.httpStatus).toBe(502)
     expect(result.body.status).toBe('error')
   })
+
+  it('normalizes quoted sender env values before sending', async () => {
+    const send = vi.fn().mockResolvedValue({ data: { id: 'email_123' } })
+    const result = await submitContactForm(
+      {
+        name: 'Yaoting Wang',
+        email: 'felixwang1222@gmail.com',
+        message: 'Hello there, I would like to discuss a security role.',
+      },
+      {
+        apiKey: 're_test',
+        fromEmail: '"Yaoting Wang <contact@yaotingw.com>"',
+        createClient: () => ({
+          emails: {
+            send,
+          },
+        }),
+      },
+    )
+
+    expect(result.httpStatus).toBe(200)
+    expect(send).toHaveBeenCalledWith(
+      expect.objectContaining({
+        from: 'Yaoting Wang <contact@yaotingw.com>',
+      }),
+    )
+  })
 })

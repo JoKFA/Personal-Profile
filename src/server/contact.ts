@@ -67,8 +67,8 @@ export async function submitContactForm(
   }
 
   const apiKey = dependencies.apiKey ?? process.env.RESEND_API_KEY
-  const fromEmail = dependencies.fromEmail ?? process.env.CONTACT_FROM_EMAIL
-  const toEmail = dependencies.toEmail ?? process.env.CONTACT_TO_EMAIL ?? directEmail
+  const fromEmail = normalizeEnvValue(dependencies.fromEmail ?? process.env.CONTACT_FROM_EMAIL)
+  const toEmail = normalizeEnvValue(dependencies.toEmail ?? process.env.CONTACT_TO_EMAIL) ?? directEmail
 
   if (!apiKey || !fromEmail) {
     return {
@@ -141,6 +141,18 @@ function escapeHtml(value: string) {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;')
+}
+
+function normalizeEnvValue(value: string | undefined) {
+  const trimmed = value?.trim()
+  if (!trimmed) return undefined
+  if (
+    (trimmed.startsWith('"') && trimmed.endsWith('"')) ||
+    (trimmed.startsWith("'") && trimmed.endsWith("'"))
+  ) {
+    return trimmed.slice(1, -1).trim()
+  }
+  return trimmed
 }
 
 export function parseContactRequestBody(body: unknown): ContactPayload | null {
