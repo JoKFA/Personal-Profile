@@ -9,6 +9,8 @@ interface ContactResponse {
   fieldErrors?: Partial<Record<keyof ContactPayload, string>>
 }
 
+const fallbackMessage = '// submission failed - try felixwang1222@gmail.com'
+
 export function ContactForm() {
   const shouldReduceMotion = useReducedMotion()
   const [submitted, setSubmitted] = useState(false)
@@ -25,28 +27,36 @@ export function ContactForm() {
 
   const onSubmit = handleSubmit(async (values) => {
     setServerError('')
-    const response = await fetch('/api/contact', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(values),
-    })
 
-    const result = (await response.json()) as ContactResponse
+    try {
+      const response = await fetch('/api/contact', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(values),
+      })
 
-    if (!response.ok || result.status !== 'success') {
-      if (result.fieldErrors) {
-        Object.entries(result.fieldErrors).forEach(([field, message]) => {
-          if (message) setError(field as keyof ContactPayload, { message })
-        })
+      const result = (await response.json().catch(() => ({
+        status: 'error',
+        message: fallbackMessage,
+      }))) as ContactResponse
+
+      if (!response.ok || result.status !== 'success') {
+        if (result.fieldErrors) {
+          Object.entries(result.fieldErrors).forEach(([field, message]) => {
+            if (message) setError(field as keyof ContactPayload, { message })
+          })
+        }
+        setServerError(result.message || fallbackMessage)
+        return
       }
-      setServerError(result.message || '// submission failed — try felixwang1222@gmail.com')
-      return
-    }
 
-    setSubmitted(true)
+      setSubmitted(true)
+    } catch {
+      setServerError('// network error - try felixwang1222@gmail.com')
+    }
   })
 
-  // Scroll the success message into view on mobile where the form may be below the fold
+  // Scroll the success message into view on mobile where the form may be below the fold.
   useEffect(() => {
     if (submitted && successRef.current) {
       successRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' })
