@@ -148,12 +148,14 @@ function prefersReducedMotion(): boolean {
 }
 
 export function HeroConsole() {
+  // reduced motion: everything is visible from the first render (no setState inside the effect)
+  const [reduced] = useState(prefersReducedMotion)
   // boot-sequence visibility: blocks 2-4 reveal in order
-  const [block2, setBlock2] = useState(false)
-  const [block3, setBlock3] = useState(false)
-  const [block4, setBlock4] = useState(false)
-  const [coreReady, setCoreReady] = useState(false)
-  const [showDirCursor, setShowDirCursor] = useState(true)
+  const [block2, setBlock2] = useState(reduced)
+  const [block3, setBlock3] = useState(reduced)
+  const [block4, setBlock4] = useState(reduced)
+  const [coreReady, setCoreReady] = useState(reduced)
+  const [showDirCursor, setShowDirCursor] = useState(!reduced)
 
   // domain interaction
   const [previewDomain, setPreviewDomain] = useState<DomainKey | null>(null)
@@ -168,7 +170,6 @@ export function HeroConsole() {
 
   // ── boot sequence ──
   useEffect(() => {
-    const reduced = prefersReducedMotion()
     const ascii = asciiRef.current
     const block1 = block1Ref.current
     const corePanel = corePanelRef.current
@@ -235,11 +236,6 @@ export function HeroConsole() {
       ascii.textContent = ASCII_BANNER
       block1.style.opacity = '1'
       corePanel.style.opacity = '1'
-      setShowDirCursor(false)
-      setBlock2(true)
-      setBlock3(true)
-      setBlock4(true)
-      setCoreReady(true)
       // paint directive after block3 mounts
       whenRef(
         () => directiveRef.current,
@@ -298,7 +294,7 @@ export function HeroConsole() {
       cancelled = true
       timers.forEach((t) => window.clearTimeout(t))
     }
-  }, [])
+  }, [reduced])
 
   // ── domain interactions ──
   const domainByKey = useMemo(() => new Map(DOMAINS.map((domain) => [domain.key, domain])), [])
