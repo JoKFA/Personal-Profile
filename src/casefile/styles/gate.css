@@ -43,10 +43,16 @@
 .g-fp path { fill: none; stroke: var(--card-ink); stroke-width: 1.3; stroke-linecap: round; }
 .g-fp-h { display: flex; flex-direction: column; gap: 5px; }
 .g-fp-h b { font: 500 16px/1 var(--mono); letter-spacing: .08em; color: var(--ink); text-transform: none; }
-.g-sealed { display: flex; align-items: center; gap: 14px; margin-top: 14px; visibility: hidden; opacity: 0; }
+.g-sealed { display: none; align-items: center; gap: 14px; margin-top: 14px; visibility: hidden; opacity: 0; }
 .g-sealed > div { display: flex; flex-direction: column; gap: 6px; }
 .g-sealed b { font: 700 17px/1.2 var(--sans); } .g-sealed .lbl { color: var(--ink2); }
 .g-sealed i { width: 26px; height: 3px; border-radius: 2px; background: var(--acc); box-shadow: 0 0 8px rgba(155, 176, 58, .6); flex: none; }
+
+/* reduced motion: a single still page */
+.gate.still .g-line, .gate.still .g-links { display: none; }
+.gate.still .g-p1 { margin-top: 0; }
+.gate.still .g-d { position: static; margin-top: 1.1em; }
+.gate.still .g-mark path { visibility: visible; }
 
 .g-title { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); visibility: hidden; font: 300 clamp(24px, 3vw, 42px)/1 var(--sans); letter-spacing: .12em; padding: 6px 10px; white-space: nowrap; }
 .g-title b { font-weight: 800; }

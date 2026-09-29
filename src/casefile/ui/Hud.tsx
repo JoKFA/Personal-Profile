@@ -89,7 +89,7 @@ export function Hud({ statusLine, hidden, offer, onOfferDone }: { statusLine: { 
           ) : e ? (
             <>
               <h2 className="panel-title muted">Sealed</h2>
-              <p className="panel-sum">Not part of the {lensName} file.</p>
+              <p className="panel-sum">{s.lens === 'all' ? 'Decrypting…' : `Not part of the ${lensName} file.`}</p>
               <dl className="policy">
                 <dt className="lbl">Access</dt><dd>{e.roles === 'all' ? 'Everyone' : e.roles.map((r) => roleById(r).name).join(' · ')}</dd>
                 <dt className="lbl">Least privilege</dt><dd>You&rsquo;re viewing as {lensName}</dd>

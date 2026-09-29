@@ -13,6 +13,8 @@ async function enter(page: Page, path = '/?intro') {
   await page.goto(path)
   await page.getByRole('button', { name: /Skip|Continue/ }).click({ timeout: 3000 }).catch(() => { /* reduced motion: the entry already finished */ })
   await page.waitForFunction(() => (window as unknown as Win).__cf?.getSnapshot().mode === 'archive', null, { timeout: 30_000 })
+  // the HUD and the scene appear together once the first frame is on screen
+  await page.waitForSelector('.cf-scene.on', { timeout: 30_000 }).catch(() => { /* no WebGL: the index page */ })
   await page.waitForTimeout(1500)
 }
 async function openDrive(page: Page, id: string) {

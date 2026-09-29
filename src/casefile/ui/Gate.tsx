@@ -162,7 +162,8 @@ export function Gate({ visitor, reduced, sceneReady, onTitle, onDone }: { visito
       .to(q('.g-card-h span'), { duration: 0.35, scrambleText: { text: 'SEALED PROFILE', chars: HEX } }, '<')
       .fromTo(q('.m-y'), { drawSVG: '0%', visibility: 'visible' }, { drawSVG: '100%', duration: 0.4, immediateRender: false }, '<')
       .to(q('.g-card-body'), { height: 0, autoAlpha: 0, duration: 0.45, ease: 'power3.inOut' }, '<0.25')
-      .fromTo(q('.g-sealed'), { autoAlpha: 0 }, { autoAlpha: 1, duration: 0.3 }, '-=0.15')
+      .set(q('.g-sealed'), { display: 'flex' }, '-=0.15')
+      .fromTo(q('.g-sealed'), { autoAlpha: 0 }, { autoAlpha: 1, duration: 0.3 }, '<')
       .fromTo(q('.m-w'), { drawSVG: '0%', visibility: 'visible' }, { drawSVG: '100%', duration: 0.45, immediateRender: false }, '<-0.05')
       .fromTo(q('.m-trace'), { drawSVG: '0%', visibility: 'visible' }, { drawSVG: '100%', duration: 0.3, ease: 'power1.in', immediateRender: false }, '-=0.05')
       .fromTo(q('.m-via'), { scale: 0, transformOrigin: '50% 50%' }, { scale: 1, duration: 0.2, ease: 'back.out(3)' })
@@ -184,8 +185,11 @@ export function Gate({ visitor, reduced, sceneReady, onTitle, onDone }: { visito
       gsap.set(r, { autoAlpha: 1 }); skipBtn.current?.focus({ preventScroll: true })
       qa<HTMLElement>('.g-line b, .g-f b').forEach((b) => { b.textContent = b.dataset.v! })
       qa<HTMLElement>('.g-note').forEach((n) => { n.querySelector('span')!.textContent = n.dataset.v! })
-      gsap.set([...qa('.g-line'), ...qa('.g-f'), ...qa('.g-note'), q('.g-card-h'), q('.g-p1'), q('.g-p2'), q('.g-d')], { autoAlpha: 1 })
+      // one still page: the profile card carries the facts; the left column reads as the argument
+      r.classList.add('still'); r.style.setProperty('--card-ink', 'var(--alert)')
+      gsap.set([...qa('.g-f'), ...qa('.g-note'), q('.g-card-h'), q('.g-fp'), q('.g-p1'), q('.g-p2'), q('.g-d')], { autoAlpha: 1 })
       q('.g-card-h span').textContent = 'ATTACK PROFILE'; q('.g-count').textContent = `${visitor.ms} ms`
+      q('.g-fp-h b').textContent = fp; q('.g-sig b').textContent = 'YAOTING WANG'; q('.g-read').textContent = 'WHAT YOUR BROWSER TOLD THIS PAGE'
       gsap.set(qa('.g-card-frame path, .g-fp path, .g-rule, .g-links path'), { drawSVG: '100%' })
     }
     // skipping jumps to the still title frame and leaves as soon as the archive is ready

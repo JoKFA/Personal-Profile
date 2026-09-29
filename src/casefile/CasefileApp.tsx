@@ -178,7 +178,8 @@ export default function CasefileApp() {
 
   // reconcile the scene with the URL whenever either settles
   useEffect(() => {
-    if (!archive || gate || busy.current || (mode !== 'archive' && mode !== 'file')) return
+    // a deep link opens only once the scene can move (its first frame is on screen)
+    if (!archive || gate || !sceneReady || busy.current || (mode !== 'archive' && mode !== 'file')) return
     const slug = slugFromPath(location.pathname)
     const want = slug ? entryBySlug.get(slug) ?? null : null
     if (slug && (!want || !routed(want))) { navigate('/', { replace: true }); return }
@@ -191,7 +192,7 @@ export default function CasefileApp() {
       const t = setTimeout(() => void openEntry(want), here || reduced ? 0 : 900)
       return () => clearTimeout(t)
     }
-  }, [archive, gate, mode, settled, location.pathname, file, closeFile, openEntry, navigate, reduced])
+  }, [archive, gate, sceneReady, mode, settled, location.pathname, file, closeFile, openEntry, navigate, reduced])
 
   // keyboard
   useEffect(() => {
@@ -214,12 +215,14 @@ export default function CasefileApp() {
   if (noGL) return <NoWebGL visitor={visitor} />
   return (
     <div className={`cf ${file ? 'cf--file' : ''}`}>
-      <canvas ref={canvasRef} className={`cf-scene ${gate ? '' : 'on'}`} aria-label="An archive of encrypted drives. Use the index to browse them as a list."
+      <canvas ref={canvasRef} className={`cf-scene ${!gate && sceneReady ? 'on' : ''}`} aria-label="An archive of encrypted drives. Use the index to browse them as a list."
         onClick={() => { if (archive?.click() === 'hero') open() }} />
       <div className="cf-grain" aria-hidden="true" />
+      {/* return visits: the archive prepares its shaders for a moment; say so instead of a blank page */}
+      {!gate && !sceneReady && <div className="cf-boot lbl" role="status">Decrypting the archive</div>}
       {archive && (
         <ArchiveContext.Provider value={ctx as Ctx}>
-          <Hud statusLine={statusLine} hidden={gate} offer={offer} onOfferDone={endOffer} />
+          <Hud statusLine={statusLine} hidden={gate || !sceneReady} offer={offer} onOfferDone={endOffer} />
           {verify && <Verify hash={verify.hash} restricted={verify.restricted} />}
           {file && <Suspense fallback={null}><FileView entry={file} key={file.id} /></Suspense>}
         </ArchiveContext.Provider>

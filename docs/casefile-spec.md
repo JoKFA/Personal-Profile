@@ -560,3 +560,11 @@ verify 通过；Playwright 桌面 + 手机全绿，新增：打开/关闭过程�
 - **`/.well-known/security.txt`**（RFC 9116）：Contact、Expires 2027-09-29、Preferred-Languages、Canonical。
 - **页脚实时统计**：第三方请求数和 Cookie 数在页面里实时计算（Resource Timing + `document.cookie`），旁边的 “headers ↗” 链接到 Mozilla Observatory 对本站的扫描。键盘提示挪到左下角；HUD 重叠测试加入 `.hud-hint`。
 - **本地 `/api`**：preview 代理到线上（环境变量 `API_ORIGIN` 可覆盖），本地也能直接试 SENTINEL；DeepSeek 密钥只在 Vercel 的环境变量里。
+
+## 20. 全站收尾（2026-09-29，SENTINEL 暂缓）
+逐项检查全站界面：无 WebGL 回退、无 JS 的预渲染页、减少动画模式、未知路由、手机端 Index 和 Contact、900 / 1100 宽、低画质档、访客档案、主档案、悬停标签。修复如下：
+- **预渲染页没被用上**：`/projects/<slug>` 不带斜杠时拿到的是首页的 app shell，爬虫和链接预览读到的是错的标题。现在预渲染输出 `projects/<slug>.html`，`vercel.json` 开启 `cleanUrls`。smoke 新增检查：每个路由返回的页面标题必须是它自己的（先在修复前确认这条检查会失败，修复后通过）。
+- **减少动画模式的 intro**：防守方那句叠在事实上。改为一张静态页：左侧是转折句和防守方那句，右侧是攻击画像卡加批注和指纹。封存行在出现前不再占位。
+- **回访的空白**：HUD 比场景早约 2 秒出现在空白背景上。现在 HUD 与场景一起在首帧后出现，加载期间居中显示 “Decrypting the archive”；深链接要等场景就绪才开始打开；任意角色视角下面板文案改为 “Decrypting…”。
+- 访客档案的标签从 “Case file” 更正为 “Visitor file”；底部加一道渐变雾（≥900 宽），让角色栏和页脚的小字不再压在绿灯上。
+- 验证：verify 通过；E2E 24 条通过、1 条跳过（桌面 + 手机 + WebKit，在真实 CSP 下）。

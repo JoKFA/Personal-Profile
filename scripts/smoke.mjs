@@ -15,7 +15,7 @@ if (routes.length < 2) fail(`sitemap lists ${routes.length} routes`)
 const titles = new Map()
 const assets = new Set()
 for (const route of routes) {
-  const file = route === '/' ? path.join(dist, 'index.html') : path.join(dist, route, 'index.html')
+  const file = route === '/' ? path.join(dist, 'index.html') : path.join(dist, `${route}.html`)
   if (!fs.existsSync(file)) { fail(`${route}: no prerendered ${path.relative(dist, file)}`); continue }
   const html = fs.readFileSync(file, 'utf8')
   const title = (html.match(/<title>([^<]*)<\/title>/) || [])[1]
@@ -32,7 +32,13 @@ const server = await preview({ preview: { port: 4179, strictPort: true, open: fa
 try {
   for (const url of [...routes, ...assets]) {
     const res = await fetch(`http://localhost:4179${url}`)
-    if (res.status !== 200) fail(`GET ${url} -> ${res.status}`)
+    if (res.status !== 200) { fail(`GET ${url} -> ${res.status}`); continue }
+    // a route must be served its own page (crawlers and link previews read it), not the app shell
+    if (routes.includes(url)) {
+      const served = ((await res.text()).match(/<title>([^<]*)<\/title>/) || [])[1]
+      const own = [...titles].find(([, r]) => r === url)?.[0]
+      if (served !== own) fail(`GET ${url} served "${served}", expected its own page "${own}"`)
+    }
   }
 } finally {
   await server.close()

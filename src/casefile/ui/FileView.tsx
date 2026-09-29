@@ -105,7 +105,7 @@ export function FileView({ entry: e }: { entry: Entry }) {
       )}
       {e.demoNote && <div className="file-demonote lbl"><span>{e.demoNote[0]}</span><span>{e.demoNote[1]}</span></div>}
 
-      <div className="file-no"><div className="n">{e.id}</div><div className="lbl">{e.kind === 'service' ? 'Service record' : e.kind === 'subject' ? 'Subject file' : e.kind === 'restricted' ? 'Restricted' : 'Case file'}{e.year ? ` · ${e.year}` : ''}</div></div>
+      <div className="file-no"><div className="n">{e.id}</div><div className="lbl">{({ service: 'Service record', subject: 'Subject file', restricted: 'Restricted', visitor: 'Visitor file', case: 'Case file', skill: 'Skill', credential: 'Credential' } as const)[e.kind]}{e.year ? ` · ${e.year}` : ''}</div></div>
 
       <article className="file-meta">
         {shredStep !== null && (

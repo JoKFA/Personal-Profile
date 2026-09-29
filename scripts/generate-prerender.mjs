@@ -60,8 +60,10 @@ const sourceHtml = fs.readFileSync(indexPath, 'utf8')
 
 for (const entry of routeMeta) {
   const routeHtml = withMeta(sourceHtml, entry).replace('<div id="root"></div>', `<div id="root">${staticBody(entry.entry)}</div>`)
+  // /projects/<slug>.html: served at /projects/<slug> (no trailing slash) by Vercel's cleanUrls and by
+  // vite preview, so every route gets its own prerendered page rather than the app shell
   const outputPath =
-    entry.route === '/' ? indexPath : path.join(distDir, entry.route.replace(/^\//, ''), 'index.html')
+    entry.route === '/' ? indexPath : path.join(distDir, `${entry.route.replace(/^\//, '')}.html`)
   fs.mkdirSync(path.dirname(outputPath), { recursive: true })
   fs.writeFileSync(outputPath, routeHtml, 'utf8')
 }
