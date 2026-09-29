@@ -1,22 +1,11 @@
 import fs from 'node:fs'
 import path from 'node:path'
+import { routes as pages, SITE_URL } from './site-routes.mjs'
 
 const publicDir = path.resolve(process.cwd(), 'public')
-const siteUrl = (
-  process.env.VITE_SITE_URL ||
-  process.env.SITE_URL ||
-  'https://personal-profile-alpha-cyan.vercel.app'
-).replace(/\/$/, '')
+const siteUrl = SITE_URL
 
-const projectSlugs = [
-  'mcp-security-framework',
-  'ai-enhanced-edr-triage',
-  'internal-pentest',
-  'telus-ai-hackathon',
-  'threat-modelling-viva',
-]
-
-const routes = ['/', '/portfolio', ...projectSlugs.map((slug) => `/projects/${slug}`)]
+const routes = pages.map((p) => p.route)
 
 const sitemap = `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">

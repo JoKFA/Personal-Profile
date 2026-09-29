@@ -1,59 +1,28 @@
 import fs from 'node:fs'
 import path from 'node:path'
+import { OG_IMAGE, routes as routeMeta, SITE_URL } from './site-routes.mjs'
 
 const distDir = path.resolve(process.cwd(), 'dist')
 const indexPath = path.join(distDir, 'index.html')
 
-const routeMeta = [
-  {
-    route: '/',
-    title: 'Yaoting Wang | Prompt-Injection Lab',
-    description:
-      'Before the resume — break the guard. A live prompt-injection challenge against an LLM that hides a flag. Beat it or skip to the portfolio.',
-  },
-  {
-    route: '/portfolio',
-    title: 'Yaoting Wang | Security Builder',
-    description:
-      'MASc Cybersecurity student at SFU. Building security systems, validating real attack paths, and working at the intersection of AI and security.',
-  },
-  {
-    route: '/projects/mcp-security-framework',
-    title: 'Yaoting Wang | MCP Security Framework',
-    description:
-      'A Python security assessment framework that discovers, sandboxes, normalizes, and tests MCP servers with 14 detectors for AI security risks.',
-  },
-  {
-    route: '/projects/ai-enhanced-edr-triage',
-    title: 'Yaoting Wang | AI-Enhanced EDR Triage',
-    description:
-      'LLM-assisted triage pipeline on Wazuh EDR telemetry. Classifies alerts and surfaces analyst-readable context with severity scoring.',
-  },
-  {
-    route: '/projects/internal-pentest',
-    title: 'Yaoting Wang | Internal Pentest',
-    description:
-      'Grey-box assessment across authentication, session handling, and authorization boundaries. 14 validated findings with remediation guidance.',
-  },
-  {
-    route: '/projects/telus-ai-hackathon',
-    title: 'Yaoting Wang | TELUS AI Hackathon',
-    description:
-      'AI-assisted AppSec MVP using Semgrep output and LLM triage to make SAST findings more actionable for developers.',
-  },
-  {
-    route: '/projects/threat-modelling-viva',
-    title: 'Yaoting Wang | Threat Modelling (VIVA)',
-    description:
-      'STRIDE-based threat-modeling exercise mapping trust boundaries, prioritizing controls, and closing 12 identified threats.',
-  },
-]
+const esc = (v) => String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+
+// Plain-text version of each file inside #root: readable by crawlers and without JavaScript.
+// React replaces it on load.
+function staticBody(e) {
+  const head = e.kind === 'service' ? `${e.title} · ${e.org} · ${e.dates}` : e.kicker
+  const facts = e.facts.map(([k, v]) => `<li><b>${esc(k)}</b> ${esc(v)}</li>`).join('')
+  const sections = (e.sections || []).map((s) => `<h2>${esc(s.title)}</h2><p>${esc(s.body)}</p>${(s.points || []).map((p) => `<p>${esc(p)}</p>`).join('')}`).join('')
+  const nav = routeMeta.filter((r) => r.entry !== e).map((r) => `<a href="${r.route}">${esc(r.entry.kind === 'service' ? r.entry.org : r.entry.title)}</a>`).join(' · ')
+  return `<main class="prerender"><h1>${esc(e.kind === 'service' ? e.org : e.title)}</h1><p>${esc(head)}</p><p>${esc(e.summary)}</p><ul>${facts}</ul>${sections}<nav>${nav}</nav></main>`
+}
 
 function upsertTag(html, pattern, tag) {
   return pattern.test(html) ? html.replace(pattern, tag) : html.replace('</head>', `  ${tag}\n</head>`)
 }
 
-function withMeta(html, { title, description }) {
+function withMeta(html, meta) {
+  const title = esc(meta.title), description = esc(meta.description)
   let nextHtml = upsertTag(html, /<title>.*<\/title>/, `<title>${title}</title>`)
   nextHtml = upsertTag(
     nextHtml,
@@ -73,8 +42,12 @@ function withMeta(html, { title, description }) {
   nextHtml = upsertTag(
     nextHtml,
     /<meta property="og:image" content=".*?">/,
-    '<meta property="og:image" content="/og-card.svg">',
+    `<meta property="og:image" content="${SITE_URL}${OG_IMAGE.path}">`,
   )
+  nextHtml = upsertTag(nextHtml, /<meta property="og:image:width" content=".*?">/, `<meta property="og:image:width" content="${OG_IMAGE.width}">`)
+  nextHtml = upsertTag(nextHtml, /<meta property="og:image:height" content=".*?">/, `<meta property="og:image:height" content="${OG_IMAGE.height}">`)
+  nextHtml = upsertTag(nextHtml, /<meta property="og:url" content=".*?">/, `<meta property="og:url" content="${SITE_URL}${meta.route === '/' ? '/' : meta.route}">`)
+  nextHtml = upsertTag(nextHtml, /<meta name="twitter:image" content=".*?">/, `<meta name="twitter:image" content="${SITE_URL}${OG_IMAGE.path}">`)
   nextHtml = upsertTag(
     nextHtml,
     /<meta name="twitter:card" content=".*?">/,
@@ -86,7 +59,7 @@ function withMeta(html, { title, description }) {
 const sourceHtml = fs.readFileSync(indexPath, 'utf8')
 
 for (const entry of routeMeta) {
-  const routeHtml = withMeta(sourceHtml, entry)
+  const routeHtml = withMeta(sourceHtml, entry).replace('<div id="root"></div>', `<div id="root">${staticBody(entry.entry)}</div>`)
   const outputPath =
     entry.route === '/' ? indexPath : path.join(distDir, entry.route.replace(/^\//, ''), 'index.html')
   fs.mkdirSync(path.dirname(outputPath), { recursive: true })

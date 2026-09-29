@@ -1,0 +1,6 @@
+# Security contact for this site (RFC 9116). Reports about the site itself or the SENTINEL
+# labs are welcome; the labs are meant to be broken, the infrastructure behind them is not.
+Contact: mailto:felixwang1222@gmail.com
+Expires: 2027-09-29T00:00:00.000Z
+Preferred-Languages: en, zh
+Canonical: https://personal-profile-alpha-cyan.vercel.app/.well-known/security.txt

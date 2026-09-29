@@ -1,0 +1,69 @@
+/* Entry: reverse recon (spec §17.3). Loaded with the Gate chunk; `.gate` itself lives in archive.css. */
+.gate { --card-ink: var(--ink); }
+.g-top { position: absolute; left: var(--g); right: var(--g); top: 38px; height: 30px; }
+.g-read { position: absolute; left: 0; top: 0; color: var(--ink2); }
+.g-count { position: absolute; right: 0; top: 0; color: var(--ink2); }
+.g-rule-svg { position: absolute; left: 0; right: 0; top: 22px; width: 100%; height: 2px; overflow: visible; }
+.g-rule { fill: none; stroke: var(--ink); stroke-width: 1; vector-effect: non-scaling-stroke; }
+
+.g-links { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; }
+.g-links path { fill: none; stroke: var(--ink3); stroke-width: 1; }
+
+.g-stage { position: absolute; left: max(var(--g), 6vw); right: var(--g); top: 17vh; bottom: 12vh;
+  display: grid; grid-template-columns: minmax(0, 1fr) min(400px, 31vw); column-gap: 8vw; align-items: center; }
+.g-lines { position: relative; }
+.g-line, .g-p1, .g-p2, .g-d { font: 500 clamp(26px, 2.75vw, 46px)/1.16 var(--sans); letter-spacing: -.022em; color: var(--ink); margin: 0 0 .42em; visibility: hidden; opacity: 0; }
+.g-line b, .g-p1 b { font-weight: 800; font-variant-numeric: tabular-nums; }
+.g-p1 { margin-top: .9em; }
+.g-p2 em { font-style: normal; font-weight: 800; color: var(--alert); }
+/* the defender line takes the place of the recon */
+.g-d { position: absolute; left: 0; top: 0; font-weight: 700; }
+.g-sig { display: flex; align-items: center; gap: 18px; margin-top: 30px; }
+.g-sig .lbl { font-size: 12px; color: var(--ink2); } .g-sig .lbl b { color: var(--ink); font: 800 clamp(15px, 1.3vw, 19px)/1 var(--sans); letter-spacing: .3em; }
+.g-mark { width: 120px; height: auto; overflow: visible; flex: none; }
+.g-mark path { fill: none; stroke: var(--ink); stroke-width: 9; stroke-linecap: round; stroke-linejoin: round; visibility: hidden; }
+.g-mark .m-trace { stroke-width: 3; stroke-linecap: square; stroke: var(--ink2); }
+.g-mark .m-via { fill: var(--bg); stroke: var(--acc); stroke-width: 3; }
+
+/* the profile card: four drawn corners, no box */
+.g-card { position: relative; padding: 20px 22px 18px; color: var(--ink); }
+.g-card-frame { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.g-card-frame path { fill: none; stroke: var(--card-ink); stroke-width: 1.5; vector-effect: non-scaling-stroke; }
+.g-card-h { display: flex; justify-content: space-between; gap: 12px; padding-bottom: 10px; border-bottom: 1px solid var(--card-ink); color: var(--card-ink); visibility: hidden; opacity: 0; }
+.g-card-h { font-size: 12px; } .g-card-h span { font-weight: 700; } .g-card-h em { font-style: normal; }
+.g-card-body { overflow: hidden; }
+.g-card dl { margin: 4px 0 0; }
+.g-f { display: grid; grid-template-columns: 92px minmax(0, 1fr); align-items: baseline; column-gap: 12px; padding: 7px 0; border-bottom: 1px solid var(--hair); visibility: hidden; opacity: 0; }
+.g-f dt { font-size: 10px; } .g-f dd { margin: 0; min-width: 0; }
+.g-f dd b { font: 600 16px/1.3 var(--sans); overflow-wrap: anywhere; }
+.g-note { grid-column: 2; display: flex; align-items: center; gap: 8px; margin-top: 5px; min-height: 18px; font: 700 clamp(14px, 1.1vw, 16px)/1.2 var(--sans); color: var(--alert); }
+.g-note i { width: 18px; height: 1.5px; background: var(--alert); transform: scaleX(0); transform-origin: left; flex: none; }
+.g-fp { display: flex; align-items: center; gap: 16px; margin-top: 14px; visibility: hidden; opacity: 0; }
+.g-fp svg { width: 78px; height: 78px; overflow: visible; flex: none; }
+.g-fp path { fill: none; stroke: var(--card-ink); stroke-width: 1.3; stroke-linecap: round; }
+.g-fp-h { display: flex; flex-direction: column; gap: 5px; }
+.g-fp-h b { font: 500 16px/1 var(--mono); letter-spacing: .08em; color: var(--ink); text-transform: none; }
+.g-sealed { display: flex; align-items: center; gap: 14px; margin-top: 14px; visibility: hidden; opacity: 0; }
+.g-sealed > div { display: flex; flex-direction: column; gap: 6px; }
+.g-sealed b { font: 700 17px/1.2 var(--sans); } .g-sealed .lbl { color: var(--ink2); }
+.g-sealed i { width: 26px; height: 3px; border-radius: 2px; background: var(--acc); box-shadow: 0 0 8px rgba(155, 176, 58, .6); flex: none; }
+
+.g-title { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); visibility: hidden; font: 300 clamp(24px, 3vw, 42px)/1 var(--sans); letter-spacing: .12em; padding: 6px 10px; white-space: nowrap; }
+.g-title b { font-weight: 800; }
+.g-title span { visibility: hidden; }
+.g-title i { position: absolute; inset: 0; background: var(--ink); }
+.g-open { position: absolute; left: 50%; top: calc(100% + 18px); transform: translateX(-50%); white-space: nowrap; min-height: 12px; }
+.g-open::after { content: ""; display: inline-block; width: 6px; height: 10px; margin-left: 6px; vertical-align: -1px; background: var(--label); animation: blink 1s steps(1) infinite; }
+
+@media (max-width: 899px) {
+  .g-top { top: 22px; }
+  .g-stage { top: 72px; bottom: 70px; left: var(--g); grid-template-columns: 1fr; grid-template-rows: auto auto; row-gap: 18px; align-content: start; }
+  .g-line, .g-p1, .g-p2, .g-d { font-size: clamp(20px, 5.4vw, 26px); }
+  .g-p1 { margin-top: .5em; }
+  .g-card { padding: 12px 14px; }
+  .g-f { grid-template-columns: 78px minmax(0, 1fr); padding: 4px 0; }
+  .g-f dd b { font-size: 13.5px; }
+  .g-f[data-k="browser"], .g-f[data-k="screen"], .g-fp svg { display: none; }
+  .g-fp { margin-top: 8px; }
+  .g-mark { width: 76px; }
+}
