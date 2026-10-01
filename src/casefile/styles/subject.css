@@ -8,10 +8,10 @@
 .chapter-h h3 { margin: 0; font-size: 17px; font-weight: 800; color: var(--ink); display: inline-block; }
 .chapter > p { margin: 6px 0 8px; }
 .chapter ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
-.chapter li button { display: grid; grid-template-columns: 112px 1fr; gap: 12px; width: 100%; text-align: left; padding: 6px 0; font-size: 13.5px; line-height: 1.4; color: var(--ink); border-left: 1.5px solid transparent; transition: border-color .2s ease, padding .2s ease; }
+.chapter li button { display: grid; grid-template-columns: 132px 1fr; gap: 12px; width: 100%; text-align: left; padding: 6px 0; font-size: 13.5px; line-height: 1.4; color: var(--ink); border-left: 1.5px solid transparent; transition: border-color .2s ease, padding .2s ease; }
 .chapter li button:not(:disabled):hover { border-color: var(--glow); padding-left: 8px; }
 .chapter li button:disabled { cursor: default; }
-.chapter li .lbl { color: var(--acc-text); }
+.chapter li .st-meta { color: var(--label); }
 .principles section { padding: 12px 0; border-bottom: 1px solid var(--hair); }
 .principles h3 { margin: 0 0 4px; font-size: 16px; font-weight: 800; color: var(--ink); display: inline-block; }
 .principles p { margin: 0; }
@@ -24,3 +24,19 @@
 .cap-h b { color: var(--ink); }
 .cap p { margin: 4px 0 6px; font-size: 13px; }
 @media (max-width: 899px) { .keynums { grid-template-columns: 1fr; } .chapter li button { grid-template-columns: 1fr; gap: 2px; } }
+
+.st-meta { display: flex; flex-direction: column; gap: 3px; }
+.st-meta em { font: 600 11.5px/1.2 var(--sans); font-style: normal; letter-spacing: 0; text-transform: none; color: var(--acc-text); }
+.chapter-more { margin: 4px 0 2px 132px; padding: 4px 0; color: var(--label); border-bottom: 1px solid var(--hair2); }
+.chapter-more:hover { color: var(--ink); border-bottom-color: var(--ink); }
+@media (max-width: 899px) { .chapter-more { margin-left: 0; } .st-meta { flex-direction: row; gap: 10px; align-items: baseline; } }
+
+/* education: courses and what came out of them */
+.courses { display: grid; }
+.course { display: grid; grid-template-columns: 110px minmax(0, 1fr); gap: 2px 14px; padding: 10px 0; border-bottom: 1px solid var(--hair); }
+.course b { font: 700 14px/1.35 var(--sans); color: var(--ink); }
+.course-out { grid-column: 2; font-size: 13px; color: var(--ink2); }
+.course-out button { text-align: left; font: inherit; color: inherit; display: inline-flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; }
+.course-out em { font: 600 12px/1.2 var(--sans); font-style: normal; color: var(--acc-text); border-bottom: 1px solid var(--acc); }
+.course-out button:hover em { color: var(--ink); }
+@media (max-width: 899px) { .course { grid-template-columns: 1fr; } .course-out { grid-column: 1; } }

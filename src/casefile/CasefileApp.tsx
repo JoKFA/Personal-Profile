@@ -24,7 +24,7 @@ const sha256 = async (s: string) => {
 }
 const slugFromPath = (p: string) => p.match(/^\/projects\/([^/]+)/)?.[1] ?? null
 /** Files with their own URL; the subject and visitor files open in place at "/". */
-const routed = (e: Entry) => e.kind === 'case' || e.kind === 'service' || e.kind === 'restricted'
+const routed = (e: Entry) => e.kind === 'case' || e.kind === 'service' || e.kind === 'education' || e.kind === 'restricted'
 const noSubscribe = () => () => {}
 
 export default function CasefileApp() {
@@ -39,6 +39,8 @@ export default function CasefileApp() {
   })
   const [file, setFile] = useState<Entry | null>(null)
   const [sceneReady, setSceneReady] = useState(false)
+  /** the entrance whip: the file panel waits until the camera has settled (after the PV) */
+  const [arriving, setArriving] = useState(true)
   // first visit: build the scene only once the entry reaches its still title frame, so
   // initialisation never freezes the animation. Return visits build it at once.
   const [loadScene, setLoadScene] = useState(() => !gate)
@@ -52,6 +54,8 @@ export default function CasefileApp() {
   const busy = useRef(false)
   const firstVisit = useRef(gate)
   const pendingSlug = useRef(slugFromPath(location.pathname))
+  /** Esc pressed while a file is still opening: honoured the moment it is open (slow devices) */
+  const escQueued = useRef(false)
 
   const status = useCallback((html: string, ms = 3600) => {
     const key = Date.now(); setStatusLine({ html, key })
@@ -173,6 +177,12 @@ export default function CasefileApp() {
     if (!target && firstVisit.current) setOffer(true)
     pendingSlug.current = null
   }, [archive])
+  // the entrance plays from the moment the archive is first visible
+  const entranceStarted = useRef(false)
+  useEffect(() => {
+    if (!archive || gate || !sceneReady || entranceStarted.current) return
+    entranceStarted.current = true; archive.startEntrance()
+  }, [archive, gate, sceneReady])
   // return visitors skip the gate: enter as soon as the controller exists
   useEffect(() => { if (archive && !gate && archive.getSnapshot().mode === 'entry') onEntered() }, [archive, gate, onEntered])
 
@@ -201,6 +211,7 @@ export default function CasefileApp() {
       if (ev.target instanceof HTMLInputElement || ev.target instanceof HTMLTextAreaElement) return
       const mode = archive.getSnapshot().mode
       if (mode === 'file') { if (ev.key === 'Escape') void close(); return }
+      if (mode === 'opening') { if (ev.key === 'Escape') escQueued.current = true; return }
       if (mode !== 'archive') return
       const m = ({ ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] } as Record<string, [number, number]>)[ev.key]
       if (m) { ev.preventDefault(); archive.move(...m) }
@@ -210,16 +221,28 @@ export default function CasefileApp() {
     return () => removeEventListener('keydown', onKey)
   }, [archive, close, open])
 
+  useEffect(() => {
+    if (mode === 'file' && escQueued.current) { escQueued.current = false; void close() }
+    else if (mode !== 'opening') escQueued.current = false
+  }, [mode, close])
+
+  useEffect(() => {
+    if (gate || !sceneReady || !arriving) return
+    const t = setTimeout(() => setArriving(false), reduced ? 0 : 2700)
+    return () => clearTimeout(t)
+  }, [gate, sceneReady, arriving, reduced])
+
   const ctx = useMemo<Ctx | null>(() => (archive ? { archive, visitor, reduced, status, open, close, auditLog, record: audit, exitRef } : null), [archive, visitor, reduced, status, open, close, auditLog, audit])
 
   if (noGL) return <NoWebGL visitor={visitor} />
   return (
-    <div className={`cf ${file ? 'cf--file' : ''}`}>
+    <div className={`cf ${file ? 'cf--file' : ''} ${arriving && !gate && sceneReady ? 'cf--arriving' : ''}`}>
       <canvas ref={canvasRef} className={`cf-scene ${!gate && sceneReady ? 'on' : ''}`} aria-label="An archive of encrypted drives. Use the index to browse them as a list."
         onClick={() => { if (archive?.click() === 'hero') open() }} />
       <div className="cf-grain" aria-hidden="true" />
       {/* return visits: the archive prepares its shaders for a moment; say so instead of a blank page */}
-      {!gate && !sceneReady && <div className="cf-boot lbl" role="status">Decrypting the archive</div>}
+      {!gate && !sceneReady && <div className="cf-boot lbl" role="status">Decrypting the portfolio</div>}
+      {arriving && !gate && sceneReady && <div className="cf-arrive" aria-hidden="true"><span>Selecting files</span></div>}
       {archive && (
         <ArchiveContext.Provider value={ctx as Ctx}>
           <Hud statusLine={statusLine} hidden={gate || !sceneReady} offer={offer} onOfferDone={endOffer} />

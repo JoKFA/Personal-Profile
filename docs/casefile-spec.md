@@ -568,3 +568,107 @@ verify 通过；Playwright 桌面 + 手机全绿，新增：打开/关闭过程�
 - **回访的空白**：HUD 比场景早约 2 秒出现在空白背景上。现在 HUD 与场景一起在首帧后出现，加载期间居中显示 “Decrypting the archive”；深链接要等场景就绪才开始打开；任意角色视角下面板文案改为 “Decrypting…”。
 - 访客档案的标签从 “Case file” 更正为 “Visitor file”；底部加一道渐变雾（≥900 宽），让角色栏和页脚的小字不再压在绿灯上。
 - 验证：verify 通过；E2E 24 条通过、1 条跳过（桌面 + 手机 + WebKit，在真实 CSP 下）。
+
+## 21. 主档案 YW-000 打磨（2026-09-29）
+- **资料来源**：简历系统的 `experience_db.yaml`（事实与措辞边界）、`golden_bullet_bank.md`、Obsidian `能力画像.md`（可入职时间：2027-02 之后；目标方向）、`career-system/OBJECTIVE.md`。工作许可、语言按用户要求不放。
+- **定位与状态**：kicker 为 “Security analyst & engineer · risk, cloud and AI security”；事实栏为 Available（Full-time from Feb 2027）、Looking for（Security analyst · GRC · cloud and AI security）、Now、Based（Vancouver · open to relocating in Canada）。
+- **关键数字**：换成三个来自实际工作的结果，每个证明一个不同方向：50+ 次安全风险评估（Coast Capital，另有 20+ 次第三方审查）· ~15% 钓鱼成功率下降（BCIT）· ~30% AWS 月成本下降（VibesMeet，同时清理多余 IAM 权限）。去掉了 60+ MCP servers 和 1,000+ 人。
+- **硬盘演示**：折线时间线换成 **Defence in depth** 同心环：8 层（风险治理、人、第三方、网络、云与身份、交付流水线、应用、AI agent）围绕 DATA，从外向内扫一遍并点亮；每层对应右侧一行实证与来源档案，引线在该行的高度离开圆环；扫完后停在完成态，悬停可以重读某一层。数据在 `story.ts` 的 `DEPTH`。
+- **Story**：各章按真实发生的事重写（不照搬简历 bullet），每章只显示 2–3 条重点，其余用 “+N more” 展开；每条步骤显示档案短名（如 “Campus network”），不再只有编号。
+- **Where I fit / 各处证据链接**：显示短名（`shortName()`），编号放在悬停提示里。手机上标签栏不换行、可以横向滑动，切换后自动滚到内容。
+- **校验**：`numbers.test.ts` 之前没有扫描 `story.ts`，现在纳入 HEADLINE、CHAPTERS、PRINCIPLES、KEY_NUMBERS、DEPTH，所有数字都有出处。verify 通过，E2E 24 条通过、1 条跳过。
+
+## 22. 网站名称、学历档案（2026-09-29）
+- **名称**：网站改名为 **Security Portfolio**（不再叫 Encrypted Archive）。左上角三行为 YAOTING WANG / ANALYST & ENGINEER · VANCOUVER, BC / SECURITY **PORTFOLIO**；intro 标题、加载提示、SEO 标题、分享图同步更新；档案页返回按钮改为 “All files”。主档案 kicker 与 Looking for 改为首字母大写（Security Analyst & Engineer · Risk, Cloud & AI Security）。
+- **更正**：SFU 的学位正式名称是 **Master of Cybersecurity**（成绩单与 SFU Graduate Calendar 一致），不是 MASc；全站已更正。⚠️ 简历系统（能力画像、main.tex 等）也写成了 MASc，需要用户同步修改；SENTINEL 后端的系统提示同样如此，按用户要求暂不动。
+- **学历档案**：ED-01..03 从 “只会跳回主档案的小 credential 盘” 升级为新的 `education` 类型：有独立路由和预渲染页（sitemap 共 18 个路由）、三个标签页（What it trains / Courses / Access log）；硬盘上的新演示 “transcript → evidence” 把课程逐行打出，每门课连到它产出的档案或训练的能力。主档案 Where I fit 的学历行可以点击进入。数据在 `data/education.ts`，来源：SFU 成绩单（只列课程，不放成绩）、SFU Graduate Calendar（CMPT 782/783 描述）、BCIT 两个项目的官方页面。
+- **待用户确认**（未确认的一律没写成事实）：
+  1. X-003 Internal Penetration Test 是否来自 CMPT 782 Cybersecurity Lab I？
+  2. X-001 MCP Security Framework、X-002 EDR Triage、X-006 Splunk Lab 分别在哪段学历期间、是否属于某门课？
+  3. X-008 四站点网络是否是 CISA 文凭的 capstone？（现在写的是 “Project”，时间 2022 落在文凭期间）
+  4. BTech 选了哪些专业课（例如 Incident Response、Cloud Forensics、Network Exploits and Vulnerabilities）；有没有 capstone 或获奖？
+  5. CMPT 789 Applied Cryptography 有没有值得展示的作业或项目？
+  6. 文凭期间是否有 co-op 或其他值得写的项目？
+  7. 是否展示 GPA？建议不展示。
+
+## 23. 学历档案重做：盘面上的标本（2026-09-29，用户：“设计平庸，不要偷懒”）
+
+### 23.1 用户确认的事实
+- X-003 渗透测试、X-001 MCP 扫描器来自 “CMPT 781”。⚠️ 成绩单上没有 781，只有 CMPT 782 Cybersecurity Lab I（2025 年秋季，官方描述为训练渗透测试），因此按 782 处理，仍需用户确认。
+- X-006 Splunk Lab 是自学项目，不属于任何课程。
+- X-008 四站点网络是 CISA 文凭的毕业项目；这份档案要重写并重新设计（放在项目档案轮次）。
+- BTech 的毕业项目就是 X-002 EDR AI。论文题目 “Improving Endpoint Security: Automation and Usability Through AI Integration”，课程 FSCT 8611 Graduation Project。系统名为 SecureInsight（Wazuh + DeepSeek + SQLite 缓存 + React UI）。论文 Table 3 的数据：冗余率 65% → 12%，每小时处理的高 / 中危告警 120 → 240，每小时处理的告警总数 15 → 150。
+- CMPT 789 Applied Cryptography 的项目是 CryptoLab SecurePWMSystem（github.com/JoKFA/CryptoLab-SecurePWMSystem）：纯客户端密码库，scrypt、AES-256-GCM 加关联数据、HMAC 链式审计日志、Shamir k-of-n 恢复份额、HKDF。
+- 文凭期间没有 co-op。BCIT Cyber Security Office 和 VibesMeet 两段实习都在 BTech 期间。不展示 GPA。
+
+### 23.2 设计方向（用户否决了“立体标本”方案；要学的是 Rhine 的焦点与虚化，并且不大改已确认的设计）
+参考：rhine.lubeiluchen.cc 的实机截图、《明日方舟》UI/UX 分析（gameinstitute.qq.com/article/10027：背景虚化突出前景、前景边缘失焦做纵深、晕影聚焦中心、层级对比度）、Dribbble 上 Poulsën 的 Rhine Lab 海报（焦点人物锐利、背景去饱和并虚化、四周压暗）。
+- **全站景深**：场景加入 BokehPass。对焦距离取相机到选中硬盘中心的距离；光圈随推镜程度加深：档案墙上是浅的对焦带，打开档案时背景明显失焦。实现中发现对焦的盘本身也糊，原因是近 / 远裁剪面 5 / 400 让半精度深度只有约 2 个单位的分辨率；收紧到 40 / 220 后约为 0.2 个单位，被选中的盘清晰锐利。另加一层很淡的暖色晕影（`.cf::after`）。低画质档关闭景深。
+- **学历盘面：目录卡 + 拉焦**：一次只把一门课拉进焦点：大号细体课程编号（逐位滚动，参考 Rhine 的滚动时钟）、课程名、一段金色细线、它训练了什么或产出了什么，以及链接到的档案；右侧成绩单列表保持可读，但除当前课外都虚化、变淡；底部是 Rhine 式刻度指示条和计数；悬停某门课即对焦到它。
+- 学历档案的右栏结构不变。
+
+### 23.3 验收
+verify 与 E2E 全绿；1440 与 390@3x ≥ 57 fps；截图确认选中的盘和打开的档案清晰锐利、背景失焦。
+
+## 24. 第五轮：盘面演示重做 + 场景质感改造（2026-09-29 – 30）
+
+### 24.1 已上线的盘面（用户已认可概念）
+- X-008 "Blast Radius"：扁平 / 分段两种模式切换，计数是图中主机数（按 BFS 统计），删掉了编造的数字。档案文案按实际经历重写成三段。
+- ED-03 "Bottom-Up"：一张样本工单沿课程组成的层塔逐层排查。AD 那层改为 "Active Directory · cloud IAM"，Linux 那层改为 "Linux & Windows Server"（用户确认）。
+- ED-02 "The Case"：一个样本案件，从告警走到法庭。证据保管链常驻屏幕，每一步标出教这一步的课程；可以点"跳过一步"，看到同一份证据被排除。
+- X-002 标题改为 "SecureInsight · EDR + AI"。
+
+### 24.2 用户确认的课程事实（2026-09-30）
+- **Lab I (CMPT 782)**：
+  - 深度渗透实验，难度接近 OSCP：nmap、Burp、提权、各类脚本、OWASP Top 10、URL 攻击、XSS、AD 攻击、Metasploit；
+  - 系统与云，包括 IAM、IaC、CI/CD 的管理与防御；
+  - 攻击和渗透都尽可能结合 AI。
+- **Lab II (CMPT 783)**：网络，以及汇编的原理、攻击与分析。
+- **另外两门课**：密码学 (CMPT 789)、云与分布式系统 (CMPT 756)。
+- 用户要求：不要被课程的划分所局限。
+
+### 24.3 设计原则（用户的否决与认可总结）
+- **形式本身必须是一个真实的安全机制。** 不要用比喻物，例如层板、硬币。
+- **普通人能看懂，同时要高级。**
+- **最终画面常驻**，不做轮播。
+- **不要把硬盘这半边当成平面海报。** 硬盘和档案场本身就是 3D 媒介。
+
+### 24.4 场景质感改造（进行中）
+- 硬盘造型：圆角半径 R 0.17 → 0.045，厚度 T 0.38 → 0.46。
+- 材质：透射 0.6 → 0.12，底色偏暖 #f8f1e7。
+- 主光移到场景上方偏后，让朝向镜头的面处在阴影里，形成三种明度的面。
+- 打开档案时补一盏"阅读灯"（fill 光的强度随 detail 升高）。
+- 熄灭的 LED 槽和小凸片改为与机身同色。
+- GTAO（环境光遮蔽）强度 0.6 → 0.85。
+
+### 24.5 后续
+1. 场景改造收尾：绿色 LED 只留给选中和相关的硬盘，精简 HUD，测帧率。
+2. 主档案 "The Archive Is the Defence"：一条 ATT&CK 攻击链在档案场里穿行，每个阶段由对应经历的硬盘升起挡住。
+3. SFU 新方案，待定。
+
+### 24.6 Scene rebuild, as built (2026-09-30 – 10-01)
+- **Model:** `art/build_drive.py` (Blender 5.2, headless) builds `public/assets/drive-module.glb`. It has a frosted shell, ivory end caps, a warm diffuser board, titanium fasteners, a champagne inlay, and a secure element with a guard ring, an anti-tamper mesh and engraving. `scene/model.ts` loads it. The field instances five groups; the selected drive carries every group.
+- **Lighting after the Rhine PV (5–40 s):**
+  - Key light behind the field.
+  - A translucency term on the shell.
+  - A low warm side light along the lanes.
+  - The selection light: two thin RectAreaLight strips in the slots either side of the selected drive. It fades rather than slides, and it is off for the black drive.
+  - ACES tone mapping and SMAA. No indicator LEDs.
+- **Relevance shown by light (user's pick: A + D + E):**
+  - Records glow from inside: diffuser, shell and slots, per instance via `aLamp`.
+  - Empty drives sit in warm shade.
+  - A lens adds a light sweep out from the selection; the drives that role picks glow fully and the other records go to shade.
+  - All light values are eased per entry.
+- **Layout:** each drawer's records form one contiguous run, and the drawers' centres step down the field on a diagonal (`entries.ts` `layout`). X-000 sits just beyond its drawer's run.
+- **Entrance:** starts when the scene is first visible. The camera whips in from 26 rows away and decelerates over about 3 s while the view turns 17° back to the archive angle. Swells and ripples ease out with it. A screen-space motion-blur pass follows the camera. "Selecting files" types in, and the file panel waits until the camera settles (`cf--arriving`).
+- **Focus:** a screen-space pass centred on the selected drive (eased). The home view stays sharp; an open file blurs its surroundings.
+- **Open:** the shell clears ("decrypted"). The read flash is warm.
+- **X-000:** slate dark register, matte, solid.
+- **HUD:** the footer is trimmed to `risk · trackers · cookies · headers · ↺` at half opacity.
+- **Demos built this round:** X-008 Blast Radius, ED-02 The Case, ED-03 Bottom-Up, ED-01 Quorum (interim), YW-000 Six Ways In (interim).
+
+### 24.7 Next (a new session)
+1. **YW-000 "The Archive Is the Defence"** (approved concept). When the subject file opens, the camera rises over the field. An ATT&CK attack path crosses it, and at each stage the drive of the real work that stopped it rises. The approved form is "light, not height", so revisit how the drives "rise". Its final frame stays on screen.
+2. **ED-01 "Powers of Ten"** (approved in principle). One continuous zoom, from an instruction to a host, a domain, an app, a network, a pipeline and cloud, across zones, and out to a financial institution. Use the confirmed course facts in §24.2 without splitting them by course.
+3. Interim demos to replace: `WaysIn.tsx` (YW-000) and `Quorum.tsx` (ED-01).
+4. Later: the case-file polish round, X-SITE content (user to provide), SENTINEL labs (postponed), and a real iPhone check (user).

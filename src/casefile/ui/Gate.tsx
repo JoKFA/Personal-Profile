@@ -175,7 +175,7 @@ export function Gate({ visitor, reduced, sceneReady, onTitle, onDone }: { visito
       .set(q('.g-title span'), { autoAlpha: 1 })
       .to(q('.g-title i'), { scaleX: 0, transformOrigin: 'right center', duration: 0.36, ease: 'power3.out' })
       .call(onTitle)                          // (idempotent) in case the film was skipped before the hold
-      .to(q('.g-open'), { duration: 0.45, text: { value: 'OPENING THE ARCHIVE', delimiter: '' }, ease: 'none' })
+      .to(q('.g-open'), { duration: 0.45, text: { value: 'OPENING THE PORTFOLIO', delimiter: '' }, ease: 'none' })
       .to({}, { duration: 0.4 })
 
     // reduced motion: no film. The turn is shown as one still page (recon, profile, notes), and the
@@ -211,7 +211,7 @@ export function Gate({ visitor, reduced, sceneReady, onTitle, onDone }: { visito
       <p className="sr-only">
         In {visitor.ms} milliseconds this page read your device ({visitor.os}, {visitor.browser}), your local time and city ({visitor.time}, {visitor.city}), your language and your hardware, without asking.
         Put together, that is an attack profile: enough to match an exploit, time a phishing email and write it in your language.
-        Nothing left your browser. This archive belongs to Yaoting Wang, security engineering.
+        Nothing left your browser. This is the security portfolio of Yaoting Wang, security analyst and engineer.
       </p>
       <div className="g-top" aria-hidden="true">
         <div className="g-read lbl" />
@@ -257,10 +257,10 @@ export function Gate({ visitor, reduced, sceneReady, onTitle, onDone }: { visito
               <div className="g-fp-h lbl">Fingerprint<b>{'0'.repeat(8)}</b><span>no cookie needed</span></div>
             </div>
           </div>
-          <div className="g-sealed"><i /><div><b>Never left your browser.</b><span className="lbl">Filed in the archive as {visitor.id}</span></div></div>
+          <div className="g-sealed"><i /><div><b>Never left your browser.</b><span className="lbl">Filed in this portfolio as {visitor.id}</span></div></div>
         </div>
       </div>
-      <div className="g-title" aria-hidden="true"><i /><span>ENCRYPTED <b>ARCHIVE</b></span><div className="g-open lbl" /></div>
+      <div className="g-title" aria-hidden="true"><i /><span>SECURITY <b>PORTFOLIO</b></span><div className="g-open lbl" /></div>
       <button ref={skipBtn} className="gate-skip lbl" onClick={() => skipRef.current()}>{reduced ? 'Continue ↵' : 'Skip ↵'}</button>
     </div>
   )

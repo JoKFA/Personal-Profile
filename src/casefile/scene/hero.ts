@@ -1,17 +1,19 @@
 // The selected drive, as real meshes so it can glow, lift and decrypt on its own.
 import * as THREE from 'three'
-import { bodyMaterial, CARD, driveParts, etchMaterial, etchUniforms, hardwareMaterials, LED } from './drive'
+import { bodyMaterial, CARD, driveParts, etchMaterial, etchUniforms, frameMaterial, hardwareMaterials, LED } from './drive'
+import type { DriveModel } from './model'
 
 export function createHero(transmission: boolean) {
   const P = driveParts(), HW = hardwareMaterials()
   const group = new THREE.Group()
   const mk = (geo: THREE.BufferGeometry, mat: THREE.Material, shadow = true) => { const m = new THREE.Mesh(geo, mat); m.castShadow = shadow; m.receiveShadow = true; group.add(m); return m }
   const skins = {
-    white: { body: bodyMaterial(), face: etchMaterial({ part: 'face' }), top: etchMaterial({ part: 'top' }) },
-    black: { body: bodyMaterial(true), face: etchMaterial({ part: 'face', dark: true }), top: etchMaterial({ part: 'top', dark: true }) },
+    white: { body: frameMaterial(), glass: bodyMaterial(), face: etchMaterial({ part: 'face' }), top: etchMaterial({ part: 'top' }) },
+    black: { body: frameMaterial(true), glass: bodyMaterial(true), face: etchMaterial({ part: 'face', dark: true }), top: etchMaterial({ part: 'top', dark: true }) },
   }
-  if (!transmission) for (const s of Object.values(skins)) s.body.transmission = 0
-  const core = mk(P.core, HW.core, false), body = mk(P.body, skins.white.body)
+  if (!transmission) for (const s of Object.values(skins)) s.glass.transmission = 0
+  const core = mk(P.core, HW.core, false), body = mk(P.caps, skins.white.body), glass = mk(P.body, skins.white.glass)
+  const screws = mk(P.screws, HW.metal, false), inlay = mk(P.inlay, HW.gold, false)
   const face = mk(P.face, skins.white.face, false), top = mk(P.top, skins.white.top, false)
   mk(P.tab, HW.tab); for (const g of P.grips) mk(g, HW.grip)
   const ledMat = new THREE.MeshBasicMaterial({ color: LED.off.clone(), toneMapped: false })
@@ -27,13 +29,25 @@ export function createHero(transmission: boolean) {
   return {
     group, labelCanvas, labelTex,
     /** materials not on screen at first (the black skin) with the geometry they go on, for precompiling */
-    spare: [[P.body, skins.black.body], [P.face, skins.black.face], [P.top, skins.black.top], [P.core, HW.coreDark]] as [THREE.BufferGeometry, THREE.Material][],
+    spare: [[P.caps, skins.black.body], [P.body, skins.black.glass], [P.face, skins.black.face], [P.top, skins.black.top], [P.core, HW.coreDark]] as [THREE.BufferGeometry, THREE.Material][],
+    /** the precision model: shell, frame and core swap in; the detail groups join them */
+    useModel(g: DriveModel) {
+      const swap = (m: THREE.Mesh, k: keyof DriveModel) => { const x = g[k]; if (x) { m.geometry.dispose(); m.geometry = x.geometry } }
+      swap(body, 'Ivory_Frame'); swap(glass, 'Frosted_Shell'); swap(core, 'Diffuser')
+      for (const [m, k] of [[screws, 'Titanium'], [inlay, 'Champagne']] as const) { const x = g[k]; if (x) { m.geometry = x.geometry; m.material = x.material } }
+      for (const k of ['Ceramic', 'Moulded_Edge', 'Engraving'] as const) { const x = g[k]; if (x) mk(x.geometry, x.material, false) }
+    },
+    /** decrypted: the frosted shell clears as the file opens, and the board inside shows */
+    setClear(k: number) {
+      skins.white.glass.roughness = 0.27 - 0.24 * k; skins.white.glass.clearcoatRoughness = 0.25 - 0.2 * k
+      skins.black.glass.roughness = 0.5 - 0.3 * k
+    },
     /** the printed label hides while a demo is projected onto the face */
     setLabel(visible: boolean) { label.visible = visible },
     setDark(d: boolean) {
       if (d === dark) return; dark = d
       const s = d ? skins.black : skins.white
-      body.material = s.body; face.material = s.face; top.material = s.top; core.material = d ? HW.coreDark : HW.core
+      body.material = s.body; glass.material = s.glass; face.material = s.face; top.material = s.top; core.material = d ? HW.coreDark : HW.core
     },
     setLed(c: THREE.Color | null, kind: 'long' | 'double' | 'dot' = 'long') { ledMat.color.copy(c ?? LED.off); for (const [k, m] of Object.entries(ledMeshes)) m.visible = k === kind },
     /** reveal: light front 0→1 · glow: trace light · die: chip flash · seam: 0→1 */

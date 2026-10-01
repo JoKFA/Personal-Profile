@@ -3,7 +3,7 @@
 // sitemap line and prerendered page.
 import { ENTRIES, SUBJECT } from '../src/casefile/data/entries.ts'
 
-const pages = ENTRIES.filter((e) => (e.kind === 'case' || e.kind === 'service' || e.kind === 'restricted') && e.seo)
+const pages = ENTRIES.filter((e) => (e.kind === 'case' || e.kind === 'service' || e.kind === 'education' || e.kind === 'restricted') && e.seo)
 
 /** Canonical origin: absolute URLs are required for share cards (LinkedIn, iMessage, Slack). */
 export const SITE_URL = (process.env.VITE_SITE_URL || process.env.SITE_URL || 'https://personal-profile-alpha-cyan.vercel.app').replace(/\/$/, '')

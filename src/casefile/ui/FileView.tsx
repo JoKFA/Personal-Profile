@@ -3,8 +3,9 @@
 // Text arrives under ink bars that retract line by line (Rhine-style document decryption).
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { CAPABILITIES } from '../data/capabilities'
-import { CERTIFICATIONS, CONTACT, EDUCATION, entryById } from '../data/entries'
-import { CHAPTERS, HEADLINE, KEY_NUMBERS, PRINCIPLES } from '../data/story'
+import { CERTIFICATIONS, CONTACT, entryById, shortName } from '../data/entries'
+import { EDUCATION_ENTRIES } from '../data/education'
+import { CHAPTERS, HEADLINE, KEY_NUMBERS, PRINCIPLES, type Chapter } from '../data/story'
 import { DRAWERS, roleById } from '../data/roles'
 import type { Entry } from '../data/types'
 import { Demo } from './demos'
@@ -91,7 +92,7 @@ export function FileView({ entry: e }: { entry: Entry }) {
   return (
     <div ref={root} className={`file file--${e.kind} ${shredStep !== null ? 'wiping' : ''}`} role="dialog" aria-modal="true" aria-label={e.title} tabIndex={-1}>
       <header className="file-bar">
-        <button className="file-back" onClick={() => void close()}><span aria-hidden="true">←</span> Archive<span className="wide"> overview</span> <kbd>ESC</kbd></button>
+        <button className="file-back" onClick={() => void close()}><span aria-hidden="true">←</span> All files <kbd>ESC</kbd></button>
         <span className="lbl file-wm">File <b>{e.id}</b> · watermarked to <b>{visitor.id}</b></span>
         <button className="file-shred" onClick={() => void shred()}><span className="wide">Crypto-</span>shred ✕</button>
       </header>
@@ -99,13 +100,13 @@ export function FileView({ entry: e }: { entry: Entry }) {
       {e.demo && (
         <div className="file-stage-wrap">
           <div ref={stage} className="file-stage" style={{ width: STAGE.w, height: STAGE.h }}>
-            <Demo kind={e.demo} entry={e} />
+            <Demo kind={e.demo} entry={e} jump={goTo} />
           </div>
         </div>
       )}
       {e.demoNote && <div className="file-demonote lbl"><span>{e.demoNote[0]}</span><span>{e.demoNote[1]}</span></div>}
 
-      <div className="file-no"><div className="n">{e.id}</div><div className="lbl">{({ service: 'Service record', subject: 'Subject file', restricted: 'Restricted', visitor: 'Visitor file', case: 'Case file', skill: 'Skill', credential: 'Credential' } as const)[e.kind]}{e.year ? ` · ${e.year}` : ''}</div></div>
+      <div className="file-no"><div className="n">{e.id}</div><div className="lbl">{({ service: 'Service record', education: 'Education', subject: 'Subject file', restricted: 'Restricted', visitor: 'Visitor file', case: 'Case file', skill: 'Skill', credential: 'Credential' } as const)[e.kind]}{e.year ? ` · ${e.year}` : ''}</div></div>
 
       <article className="file-meta">
         {shredStep !== null && (
@@ -118,14 +119,14 @@ export function FileView({ entry: e }: { entry: Entry }) {
         )}
         <div className="file-eyebrow lbl"><span>File {e.id} · Drawer {String(e.slot.lane + 1).padStart(2, '0')} · {drawer.name}</span><span className="ok">✓ integrity verified</span></div>
         <h1 ref={title}>{heading}</h1>
-        <div className="file-kicker" data-redact>{e.kind === 'service' ? `${e.title} · ${e.dates} · ${e.place}` : e.kicker}</div>
+        <div className="file-kicker" data-redact>{e.kind === 'service' ? `${e.title} · ${e.dates} · ${e.place}` : e.kind === 'education' ? `${e.org} · ${e.dates} · ${e.place}` : e.kicker}</div>
         {e.era && <div className="file-era lbl" data-redact>{e.era}</div>}
         <p className="file-sum" data-redact>{e.kind === 'subject' ? HEADLINE : e.summary}</p>
         {e.facts.length > 0 && (
           <dl className="file-facts">{e.facts.map(([k, v]) => <div key={k}><dt className="lbl">{k}</dt><dd data-redact>{v}</dd></div>)}</dl>
         )}
         <div className="file-tabs" role="tablist">
-          {tabs.map((t, i) => <button key={t.id} role="tab" aria-selected={tab === i} onClick={() => setTab(i)}><small>{String(i + 1).padStart(2, '0')}</small>{t.label}</button>)}
+          {tabs.map((t, i) => <button key={t.id} role="tab" aria-selected={tab === i} onClick={(ev) => { setTab(i); if (narrow) ev.currentTarget.parentElement?.scrollIntoView({ behavior: reduced ? 'auto' : 'smooth', block: 'start' }) }}><small>{String(i + 1).padStart(2, '0')}</small>{t.label}</button>)}
         </div>
         <div className="file-tab" role="tabpanel" key={tab}>{tabs[tab].body}</div>
         <div className="file-act">
@@ -165,16 +166,9 @@ function tabsFor(e: Entry, visitor: string, audit: [string, string][], jump: (id
   if (e.kind === 'subject') return [
     { id: 'story', label: 'Story', body: <div className="story-tab">
       <div className="keynums">{KEY_NUMBERS.map(([n, l, why]) => <div key={l}><b data-redact>{n}</b><span className="lbl">{l}</span><p data-redact>{why}</p></div>)}</div>
-      {CHAPTERS.map((c) => (
-        <section key={c.title} className="chapter">
-          <div className="chapter-h"><span className="lbl">{c.years}</span><h3 data-redact>{c.title}</h3></div>
-          <p data-redact>{c.line}</p>
-          <ol>{c.steps.map((st) => { const r = entryById.get(st.id); return (
-            <li key={st.id}><button onClick={() => jump(st.id)} disabled={!r || r.kind === 'credential'}><span className="lbl">{st.year} · {st.id}</span><span data-redact>{st.what}</span></button></li>
-          ) })}</ol>
-        </section>
-      ))}
+      {CHAPTERS.map((c) => <ChapterView key={c.title} c={c} jump={jump} />)}
     </div> },
+
     { id: 'how', label: 'How I work', body: <div className="principles">{PRINCIPLES.map((pr) => (
       <section key={pr.title}><h3 data-redact>{pr.title}</h3><p data-redact>{pr.body}</p>
         <div className="proof">{pr.proof.map((id) => { const r = entryById.get(id)!; return <button key={id} onClick={() => jump(id)}><span className="lbl">{id}</span>{r.kind === 'service' ? r.org : r.title}</button> })}</div></section>
@@ -182,10 +176,10 @@ function tabsFor(e: Entry, visitor: string, audit: [string, string][], jump: (id
     { id: 'fit', label: 'Where I fit', body: <div className="caps">{CAPABILITIES.map((c) => (
       <div key={c.role} className="cap"><div className="cap-h"><b data-redact>{roleById(c.role).name}</b><span className="lbl">{roleById(c.role).seats}</span></div>
         <p data-redact>{roleById(c.role).fit}</p>
-        {c.skills.map(([sk, ev]) => <div key={sk} className="cap-row"><span data-redact>{sk}</span><span>{ev.map((id) => <button key={id} onClick={() => jump(id)}>{id}</button>)}</span></div>)}
+        {c.skills.map(([sk, ev]) => <div key={sk} className="cap-row"><span data-redact>{sk}</span><span>{ev.map((id) => <button key={id} onClick={() => jump(id)} title={id}>{shortName(id)}</button>)}</span></div>)}
       </div>))}
       <div className="cap"><div className="cap-h"><b>Education & credentials</b></div>
-        {EDUCATION.map(([d, o, t]) => <div key={d} className="cap-row"><span data-redact>{d} · {o}</span><span className="lbl">{t}</span></div>)}
+        {EDUCATION_ENTRIES.map((ed) => <div key={ed.id} className="cap-row"><span data-redact>{ed.title} · {ed.org}</span><span><button onClick={() => jump(ed.id)} title={ed.id}>{ed.dates}</button></span></div>)}
         <p className="certs" data-redact>{CERTIFICATIONS.join(' · ')}</p></div>
     </div> },
     { id: 'contact', label: 'Contact', body: <nav className="chan">
@@ -199,10 +193,37 @@ function tabsFor(e: Entry, visitor: string, audit: [string, string][], jump: (id
     { id: 'skills', label: 'Skills', body: <div className="stack">{e.stack?.map((s) => <span key={s}>{s}</span>)}</div> },
     log,
   ]
+  if (e.kind === 'education') return [
+    { id: 'trains', label: 'What it trains', body: <Sections e={e} /> },
+    { id: 'courses', label: 'Courses', body: <div className="courses">{e.courses?.map((c) => (
+      <div key={c.code + c.title} className="course"><span className="lbl">{c.code}</span><b data-redact>{c.title}</b>
+        <span className="course-out"><span data-redact>{c.out}</span>{(c.ids?.length || c.href) && <span className="course-links">{c.ids?.map((id) => <button key={id} onClick={() => jump(id)}><em>{shortName(id)}</em></button>)}{c.href && <a href={c.href} target="_blank" rel="noopener noreferrer"><em>Source · GitHub ↗</em></a>}</span>}</span></div>
+    ))}</div> },
+    log,
+  ]
   if (e.kind === 'visitor') return [log]
   const out: Tab[] = [{ id: 'ov', label: 'Overview', body: <>{e.numbers && <Numbers list={e.numbers} />}{e.stack && <div className="stack">{e.stack.map((s) => <span key={s}>{s}</span>)}</div>}</> }]
   if (e.sections?.length) out.push({ id: 'how', label: e.kind === 'restricted' ? 'Postmortem' : 'How it works', body: <Sections e={e} /> })
   if (e.findings?.length) out.push({ id: 'ev', label: 'Evidence', body: <div className="fnd">{e.findings.map((f) => <div key={f.title} className={`f f-${f.severity}`}><span className="lbl">{f.severity} · {f.label}</span><h4 data-redact>{f.title}</h4><p data-redact>{f.detail}</p></div>)}</div> })
   out.push(log)
   return out
+}
+
+/** A chapter: the key steps, the rest one click away. Each step names its file in words. */
+function ChapterView({ c, jump }: { c: Chapter; jump: (id: string) => void }) {
+  const [all, setAll] = useState(false)
+  const key = c.steps.filter((st) => st.key), rest = c.steps.filter((st) => !st.key)
+  const shown = all ? [...key, ...rest] : key
+  return (
+    <section className="chapter">
+      <div className="chapter-h"><span className="lbl">{c.years}</span><h3 data-redact>{c.title}</h3></div>
+      <p data-redact>{c.line}</p>
+      <ol>{shown.map((st) => { const r = entryById.get(st.id); return (
+        <li key={st.id}><button onClick={() => jump(st.id)} disabled={!r || r.kind === 'credential'}>
+          <span className="st-meta lbl">{st.year}<em>{shortName(st.id)}</em></span><span data-redact>{st.what}</span>
+        </button></li>
+      ) })}</ol>
+      {rest.length > 0 && <button className="chapter-more lbl" aria-expanded={all} onClick={() => setAll((v) => !v)}>{all ? 'Show less' : `+ ${rest.length} more`}</button>}
+    </section>
+  )
 }

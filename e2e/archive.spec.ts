@@ -15,7 +15,9 @@ async function enter(page: Page, path = '/?intro') {
   await page.waitForFunction(() => (window as unknown as Win).__cf?.getSnapshot().mode === 'archive', null, { timeout: 30_000 })
   // the HUD and the scene appear together once the first frame is on screen
   await page.waitForSelector('.cf-scene.on', { timeout: 30_000 }).catch(() => { /* no WebGL: the index page */ })
-  await page.waitForTimeout(1500)
+  // the entrance: the camera whips in and the file panel follows once it has settled
+  await page.waitForFunction(() => !document.querySelector('.cf--arriving'), null, { timeout: 10_000 })
+  await page.waitForTimeout(800)
 }
 async function openDrive(page: Page, id: string) {
   await page.evaluate((i) => (window as unknown as Win).__cf.jumpTo(i), id)
@@ -46,7 +48,7 @@ test('full flow: role lens, open, close, shred, deny, SENTINEL', async ({ page }
 
   // open a case file: dialog, integrity, the real title after decryption
   await openDrive(page, 'X-002')
-  await expect(page.locator('.file-meta h1')).toHaveText('AI-Enhanced EDR Triage', { timeout: 5000 })
+  await expect(page.locator('.file-meta h1')).toHaveText('SecureInsight · EDR + AI', { timeout: 5000 })
   await expect(page).toHaveURL(/\/projects\/ai-enhanced-edr-triage$/)
   expect(await noOverflow(page)).toBe(true)
   await closeFile(page)
@@ -64,8 +66,8 @@ test('full flow: role lens, open, close, shred, deny, SENTINEL', async ({ page }
   // deny: an empty drive raises the visitor's risk
   const before = await page.evaluate(() => (window as unknown as Win).__cf.getSnapshot().risk)
   await page.evaluate(() => { const a = (window as unknown as Win).__cf; a.jumpTo('X-001'); }); await page.waitForTimeout(700)
-  // arrows skip empty slots now; select the empty cell just above X-001 directly (as a click would)
-  await page.evaluate(() => { const a = (window as unknown as Win).__cf, c = a.getSnapshot().sel; a.select({ lane: c.lane, row: c.row + 1 }) }); await page.waitForTimeout(700)
+  // arrows skip empty slots; select an empty cell well beyond X-001's drawer run directly (as a click would)
+  await page.evaluate(() => { const a = (window as unknown as Win).__cf, c = a.getSnapshot().sel; a.select({ lane: c.lane, row: c.row + 12 }) }); await page.waitForTimeout(700)
   await page.keyboard.press('Enter')
   await expect(page.locator('.panel-status')).toContainText('Access denied')
   expect(await page.evaluate(() => (window as unknown as Win).__cf.getSnapshot().risk)).toBeGreaterThan(before)
@@ -86,7 +88,7 @@ test('every file opens without errors or overflow', async ({ page }) => {
   const errors = watchErrors(page)
   await page.route('**/api/redteam', (r) => r.abort())
   await enter(page)
-  for (const id of ['YW-000', 'X-001', 'X-004', 'X-007', 'SR-02', 'X-003', 'X-006', 'X-005', 'SR-01', 'X-008', 'X-009', 'SR-04', 'V-FILE']) {
+  for (const id of ['YW-000', 'X-001', 'X-004', 'X-007', 'SR-02', 'X-003', 'X-006', 'X-005', 'SR-01', 'X-008', 'X-009', 'SR-04', 'ED-01', 'ED-02', 'ED-03', 'V-FILE']) {
     await openDrive(page, id)
     await page.waitForTimeout(1200)
     expect(await noOverflow(page), id).toBe(true)

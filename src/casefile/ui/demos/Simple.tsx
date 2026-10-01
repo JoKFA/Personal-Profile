@@ -27,7 +27,7 @@ export function Subject() {
     <div className="dm-panel subj">
       <div className="dm-head"><span>Subject · YW-000</span><span className="live">open to hire</span></div>
       <div className="subj-name">YAOTING<br />WANG</div>
-      <div className="lbl subj-line">Security engineering · Vancouver, BC · MASc Cybersecurity, SFU</div>
+      <div className="lbl subj-line">Security analyst &amp; engineer · Vancouver, BC · Master of Cybersecurity, SFU</div>
       <div className="subj-bars">{counts.map(({ role, n }) => <div key={role.id}><span>{role.name}</span><i style={{ width: `${(n / max) * 100}%` }} /><b>{n}</b></div>)}</div>
       <div className="dm-cap"><b>evidence</b><span>drives that prove each direction · open any from the Capabilities tab</span></div>
     </div>

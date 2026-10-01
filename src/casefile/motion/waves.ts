@@ -38,6 +38,23 @@ export const idleWave = (row: number, lane: number, t: number) =>
   0.075 * Math.sin((t * Math.PI * 2) / 8 + row * 0.3 - lane * 0.45) +
   0.027 * Math.sin((t * Math.PI * 2) / 13 - row * 0.17 + lane * 0.3)
 
+/**
+ * The entrance (after the Rhine Lab PV, 27–30 s): the field breathes in. Broad diagonal swells roll
+ * across it while ripples run down the rows, all fading as the camera settles. `age` is seconds since
+ * the archive appeared; 0 before it.
+ */
+export function entranceWave(row: number, lane: number, age: number) {
+  if (age <= 0 || age > 6) return 0
+  const fade = smooth(age / 0.2) * Math.exp(-age * 0.55)
+  // row and lane are relative to the selected drive, so the crests cross the frame
+  const diag = row * 0.5 + lane * 2.6
+  // crests rush in and then slow, the way the camera does: position eases out rather than moving at one speed
+  const p1 = 30 * (1 - Math.exp(-age * 1.15)) - 12, p2 = 34 * (1 - Math.exp(-age * 0.9)) - 26
+  const swell = 2.1 * bell(diag - p1, 3.4) + 1.3 * bell(diag - p2, 3)
+  const ripple = 0.55 * Math.sin(row * 0.5 - 36 * (1 - Math.exp(-age * 0.8)) + lane * 1.3)
+  return fade * (swell + ripple)
+}
+
 /** Lane distance counts 2.2× a row: lanes are further apart than rows. */
 export const pulseDistance = (dRow: number, dLane: number) => Math.hypot(dRow, dLane * 2.2)
 
@@ -51,6 +68,8 @@ export interface FieldState {
   pulseGain: number
   pulses: readonly Pulse[]
   time: number
+  /** seconds since the archive appeared (the entrance swell); 0 when not entering */
+  entry?: number
 }
 
 /** The whole archive's height at (row, lane): one continuous surface. */
@@ -60,7 +79,8 @@ export function field(row: number, lane: number, s: FieldState) {
   return (
     settlingWave(row - s.shoulder) * columnStrength(lane, s.laneFocus) +
     idleWave(row, lane, s.time) * s.idleGain +
-    clamp(pulse, -PULSE_CLAMP, PULSE_CLAMP) * s.pulseGain
+    clamp(pulse, -PULSE_CLAMP, PULSE_CLAMP) * s.pulseGain +
+    entranceWave(row - s.shoulder, lane - s.laneFocus, s.entry ?? 0)
   )
 }
 

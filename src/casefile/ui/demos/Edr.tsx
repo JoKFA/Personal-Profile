@@ -1,4 +1,4 @@
-// AI-Enhanced EDR Triage (2024): raw Wazuh alerts on the left, the model's triage on the right.
+// SecureInsight, EDR + AI (2024): raw Wazuh alerts on the left, the model's triage on the right.
 import { useState } from 'react'
 import { useScript } from './useLoop'
 

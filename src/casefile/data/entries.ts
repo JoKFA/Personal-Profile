@@ -2,19 +2,21 @@
 // the user's confirmations logged in docs/casefile-spec.md §5.4 / §13. Numbers only where a
 // source states them. To add a project: append an Entry with a free slot (data.test.ts checks).
 import type { Entry } from './types'
+import { EDUCATION_ENTRIES } from './education.ts'
 import { CAPABILITIES } from './capabilities.ts'   // explicit extension: the build scripts load this file in Node
 
 const MAIL = 'felixwang1222@gmail.com'
 const ask = (subject: string) => ({ label: 'Walkthrough on request', href: `mailto:${MAIL}?subject=${encodeURIComponent(subject)}` })
 
 export const SUBJECT: Entry = {
-  id: 'YW-000', slug: 'profile', kind: 'subject', title: 'Yaoting Wang', kicker: 'Subject file · security engineering',
-  summary: 'MASc Cybersecurity at SFU. Security work across AI systems, cloud pipelines, detection, risk and networks, with the evidence kept.',
+  id: 'YW-000', slug: 'profile', kind: 'subject', title: 'Yaoting Wang', kicker: 'Security Analyst & Engineer · Risk, Cloud & AI Security',
+  summary: 'Master of Cybersecurity at SFU. Security work across AI systems, cloud pipelines, detection, risk and networks, with the evidence kept.',
   roles: 'all', slot: { lane: 0, row: 12 },
-  facts: [['Based', 'Vancouver, BC'], ['Status', 'Open to hire'], ['Studying', 'MASc Cybersecurity, SFU · exp. 2027'], ['Now', 'Information Security co-op, Coast Capital']],
-  demo: 'story', demoNote: ['Every dot is a drive in this archive', '2021 → 2026'],
+  // availability and targets: resume system (能力画像 · OBJECTIVE.md, 2026-09-24)
+  facts: [['Available', 'Full-time from Feb 2027'], ['Looking for', 'Security Analyst · GRC · Cloud & AI Security'], ['Now', 'Information Security co-op, Coast Capital'], ['Based', 'Vancouver, BC · open to relocating in Canada']],
+  demo: 'waysin', demoNote: ['Six ways in · each shield is a real piece of work', 'Select one to open its file'],
   numbers: [['50+', 'security assessments'], ['20+', 'vendor risk reviews'], ['60+', 'MCP servers tested'], ['14', 'pentest findings'], ['1,000+', 'people trained'], ['~30%', 'AWS cost cut']],
-  seo: { title: 'Yaoting Wang | Security Engineering Archive', description: 'MASc Cybersecurity at SFU. AI security, DevSecOps, security operations, GRC and networking, shown as an encrypted archive of case files and service records.' },
+  seo: { title: 'Yaoting Wang | Security Portfolio', description: 'Security analyst and engineer, Master of Cybersecurity at SFU: risk assessment at a Canadian financial institution, cloud and DevSecOps, detection, and AI security, with the evidence for each.' },
 }
 
 export const CASES: Entry[] = [
@@ -73,7 +75,7 @@ export const CASES: Entry[] = [
     seo: { title: 'Yaoting Wang | Distributed Password Manager', description: 'GFS-style distributed password manager on GCP: Go, TLS 1.3, ordered replication, heartbeat failover and WAL recovery.' },
   },
   {
-    id: 'X-002', slug: 'ai-enhanced-edr-triage', kind: 'case', title: 'AI-Enhanced EDR Triage',
+    id: 'X-002', slug: 'ai-enhanced-edr-triage', kind: 'case', title: 'SecureInsight · EDR + AI',
     kicker: 'Case file · detection', year: '2024', era: 'Built in 2024: an early experiment in putting an LLM inside the triage loop.',
     summary: 'Turns raw Wazuh EDR events into analyst-ready triage summaries, cached so repeated alerts cost nothing.',
     roles: ['soc', 'ai'], slot: { lane: 3, row: 12 },
@@ -84,8 +86,8 @@ export const CASES: Entry[] = [
       { eyebrow: '02 · Approach', title: 'The model writes the context; the analyst decides', body: 'A Python pipeline normalises Wazuh events and asks an LLM for a summary, suspected cause and next step. Repeated alert patterns resolve from a SQLite cache; user feedback suppresses known-benign repeats with a stated reason.', points: ['React dashboard follows the triage flow: what happened, why it matters, what to do next.', 'Validated with scripted brute-force, SQL-injection and DDoS simulations.'] },
     ],
     demo: 'edr', demoNote: ['Simulated replay · sample alerts', '2024'],
-    link: ask('AI-Enhanced EDR Triage'), related: ['X-006'],
-    seo: { title: 'Yaoting Wang | AI-Enhanced EDR Triage', description: 'LLM-assisted triage on Wazuh EDR telemetry (2024): analyst summaries, SQLite cache, React dashboard, validated with attack simulations.' },
+    link: ask('SecureInsight'), related: ['X-006'],
+    seo: { title: 'Yaoting Wang | SecureInsight, EDR + AI', description: 'LLM-assisted triage on Wazuh EDR telemetry (2024): analyst summaries, SQLite cache, React dashboard, validated with attack simulations.' },
   },
   {
     id: 'X-003', slug: 'internal-pentest', kind: 'case', title: 'Internal Penetration Test',
@@ -141,21 +143,22 @@ export const CASES: Entry[] = [
   {
     id: 'X-008', slug: 'enterprise-campus-network', kind: 'case', title: 'Enterprise Campus Network',
     kicker: 'Case file · network & security · capstone', year: '2022',
-    summary: 'A four-site network built and secured in a virtual lab: VLANs, OSPF, ACLs, PAT, DNS/DHCP, firewalls, and SIEM on top.',
+    summary: 'Six of us joined four separate sites into one network over MPLS. I configured the routers, switches, firewalls and VPN tunnels, and the segmentation that keeps one bad machine from reaching the rest.',
     roles: ['it', 'soc'], slot: { lane: 5, row: 12 },
-    facts: [['My role', 'One of six engineers; configured the network and security layers'], ['Sites', '4, over MPLS L3 VPN'], ['Security', 'NGFW policies · segmentation · ACLs'], ['Monitoring', 'Splunk · FortiSIEM']],
-    stack: ['VLAN', 'OSPF', 'ACL', 'PAT', 'DNS / DHCP', 'NGFW', 'Splunk', 'FortiSIEM'],
+    facts: [['My role', 'One of six; routers, switches, firewalls and VPN tunnels'], ['Sites', '4, joined over an MPLS L3VPN'], ['Security', 'Segmentation and access rules'], ['Monitoring', 'Splunk · FortiSIEM']],
+    stack: ['MPLS L3VPN', 'VLAN', 'OSPF', 'ACL', 'PAT', 'DNS / DHCP', 'Firewalls', 'Splunk', 'FortiSIEM'],
     sections: [
-      { eyebrow: '01 · Build', title: 'Four sites, one routed network', body: 'I configured the VLANs, OSPF, ACLs, PAT, DNS/DHCP, firewall policies and SIEM integration in the virtual lab, with the team designing the MPLS L3 VPN between four sites.' },
-      { eyebrow: '02 · Segment', title: 'Limit the blast radius', body: 'Segmentation and access rules kept guest, staff and finance traffic apart while leaving operations working. Network and security logs flowed to Splunk and FortiSIEM.' },
+      { eyebrow: '01 · Build', title: 'Four sites, one network', body: 'As a six-person team we designed and deployed an MPLS L3VPN joining four separate sites. I configured the routers, switches, next-generation firewalls and VPN tunnels, with VLANs, OSPF, ACLs, PAT, DNS and DHCP underneath.' },
+      { eyebrow: '02 · Contain', title: 'One bad machine stays one', body: 'We defined segmentation and access rules so that a compromised machine in one zone cannot reach the rest, while staff keep working across all four sites. Limiting the blast radius without stopping operations was the point of the design.' },
+      { eyebrow: '03 · Hand over', title: 'Logged, drawn, handed over', body: 'Network and security logs flowed into Splunk and FortiSIEM in one place, and we left network diagrams and documentation for whoever would run it next.' },
     ],
-    demo: 'network', demoNote: ['Lab topology · events simulated', 'Built in a virtual environment'],
+    demo: 'network', demoNote: ['Lab replay · zones and hosts illustrative', 'Built in a virtual lab, 2022'],
     link: ask('Enterprise Campus Network'),
-    seo: { title: 'Yaoting Wang | Enterprise Campus Network', description: 'Four-site network in a virtual lab: VLANs, OSPF, ACLs, PAT, DNS/DHCP, NGFW policies and Splunk / FortiSIEM monitoring.' },
+    seo: { title: 'Yaoting Wang | Enterprise Campus Network', description: 'A four-site MPLS L3VPN network built by a team of six: routers, switches, firewalls and VPN tunnels, segmentation that limits the blast radius, and logs in Splunk and FortiSIEM.' },
   },
   {
     id: 'X-009', slug: 'pwnscan', kind: 'case', title: 'PwnScan',
-    kicker: 'Case file · IoT exposure · SFU CMPT 783', year: '2026', era: 'Top 3 project, SFU MASc Cybersecurity (CMPT 783), 2026.',
+    kicker: 'Case file · IoT exposure · SFU CMPT 783', year: '2026', era: 'Top 3 project, SFU Master of Cybersecurity (CMPT 783), 2026.',
     summary: 'Finds every device on a network without agents, fingerprints the IoT ones, and ranks their CVEs by how likely they are to be exploited.',
     roles: ['it', 'soc'], slot: { lane: 5, row: 15 },
     facts: [['Team', 'Three; I built discovery, fingerprinting and risk scoring'], ['Discovery', 'ARP · mDNS · SSDP'], ['Risk', 'CVSS × EPSS × exposure'], ['Recognition', 'Top 3, CMPT 783']],
@@ -166,7 +169,7 @@ export const CASES: Entry[] = [
     ],
     demo: 'pwnscan', demoNote: ['Lab targets · simulated IoT devices', 'Repository private (coursework)'],
     link: ask('PwnScan'), related: ['X-008'],
-    seo: { title: 'Yaoting Wang | PwnScan', description: 'Agentless IoT discovery and CVE risk ranking (CVSS × EPSS × exposure). Top 3 project, SFU MASc Cybersecurity CMPT 783.' },
+    seo: { title: 'Yaoting Wang | PwnScan', description: 'Agentless IoT discovery and CVE risk ranking (CVSS × EPSS × exposure). Top 3 project, SFU Master of Cybersecurity, CMPT 783.' },
   },
 ]
 
@@ -244,11 +247,8 @@ export const VISITOR: Entry = {
   facts: [], demo: 'visitor',
 }
 
-export const EDUCATION: [string, string, string][] = [
-  ['Master of Applied Science, Cybersecurity', 'Simon Fraser University', 'Sept 2025 – exp. 2027'],
-  ['Bachelor of Technology, Digital Forensics & Cybersecurity', 'BCIT', 'Sept 2023 – May 2025'],
-  ['Diploma, Computer Information Systems Administration', 'BCIT', 'Sept 2021 – May 2023'],
-]
+// the degree is "Master of Cybersecurity" (SFU transcript and Graduate Calendar), not an MASc
+export const EDUCATION: [string, string, string][] = EDUCATION_ENTRIES.map((e) => [e.title, e.org!, e.dates!])
 export const CERTIFICATIONS = ['Cisco CCNA', 'CompTIA Security+', 'Fortinet NSE 4', 'Palo Alto EDU-120', 'Google Cybersecurity', 'CISA (in progress)']
 export const CONTACT = { email: MAIL, linkedin: 'https://www.linkedin.com/in/yaoting-wang/', github: 'https://github.com/JoKFA' }
 
@@ -260,33 +260,44 @@ export const SKILLS: Entry[] = CAPABILITIES.flatMap((c, ci) => c.skills.map(([na
   roles: [c.role], slot: { lane: ci + 1, row: 0 }, facts: [], evidence,
 })))
 export const CREDENTIALS: Entry[] = [
-  ...EDUCATION.map(([degree, school, dates], k): Entry => ({
-    id: `ED-0${k + 1}`, slug: `education-${k + 1}`, kind: 'credential', title: degree, kicker: `Education · ${school}`,
-    summary: `${school} · ${dates}`, roles: 'all', slot: { lane: 0, row: 0 }, facts: [], evidence: ['YW-000'],
-  })),
   { id: 'CT-01', slug: 'certifications', kind: 'credential', title: 'Certifications', kicker: 'Credentials',
     summary: CERTIFICATIONS.join(' · '), roles: 'all', slot: { lane: 0, row: 0 }, facts: [], evidence: ['YW-000'] },
 ]
+/** A few words for a file, used wherever an evidence link would otherwise be a bare ID. */
+const SHORT: Record<string, string> = {
+  'YW-000': 'Subject file', 'X-000': 'SENTINEL-1', 'X-001': 'MCP scanner', 'X-002': 'SecureInsight', 'X-003': 'Pentest', 'X-004': 'TELUS hackathon',
+  'X-005': 'Threat model', 'X-006': 'Splunk lab', 'X-007': 'Password vault', 'X-008': 'Campus network', 'X-009': 'PwnScan',
+  'SR-01': 'Coast Capital', 'SR-02': 'VibesMeet', 'SR-03': 'BCIT', 'SR-04': 'VIVA IT', 'ED-01': 'Master’s, SFU', 'ED-02': 'BTech, BCIT', 'ED-03': 'Diploma, BCIT', 'CT-01': 'Certifications',
+}
+export const shortName = (id: string) => SHORT[id] ?? id
+
 function titleOf(id: string) {
-  const e = [SUBJECT, ...CASES, ...SERVICE, RESTRICTED].find((x) => x.id === id)
+  const e = [SUBJECT, ...CASES, ...SERVICE, ...EDUCATION_ENTRIES, RESTRICTED].find((x) => x.id === id)
   return e ? (e.kind === 'service' ? e.org! : e.title) : id
 }
 
-// Each drawer's drives sit every third row from the centre outward: files first, then service
-// records, skills and credentials. A new entry only needs its lane; its row is assigned here.
-// X-000 sits at the far end of its drawer: an easter egg to find, not the first thing the eye lands on
-const ORDER: Record<string, number> = { subject: 0, case: 1, service: 3, visitor: 4, skill: 5, credential: 6, restricted: 7 }
-const CENTRE = 16, STEP = 4
+// Layout: each drawer's records stand together, a short run of lit drives from its centre outward
+// (files first, then education, service records, skills, credentials), and the drawers' centres
+// step down the field on a diagonal, so the overview reads as one band of light crossing the
+// archive. A new entry only needs its lane; its row is assigned here.
+// X-000 sits a little beyond the end of its run: an easter egg to find, not the first thing the eye lands on
+const ORDER: Record<string, number> = { subject: 0, case: 1, education: 2, service: 3, visitor: 4, skill: 5, credential: 6, restricted: 7 }
+const CENTRE = 16, DIAGONAL = 3
 function layout(list: Entry[]) {
   const lanes = new Map<number, Entry[]>()
   for (const e of list) lanes.set(e.slot.lane, [...(lanes.get(e.slot.lane) ?? []), e])
-  for (const group of lanes.values()) {
+  for (const [lane, group] of lanes) {
     group.sort((a, b) => ORDER[a.kind] - ORDER[b.kind])
-    group.forEach((e, i) => { const k = Math.ceil(i / 2) * (i % 2 ? -1 : 1); e.slot = { lane: e.slot.lane, row: CENTRE + k * STEP } })
+    const centre = CENTRE + Math.round((lane - (LANES_N - 1) / 2) * DIAGONAL)
+    const run = group.filter((e) => e.kind !== 'restricted'), egg = group.filter((e) => e.kind === 'restricted')
+    run.forEach((e, i) => { const k = Math.ceil(i / 2) * (i % 2 ? 1 : -1); e.slot = { lane, row: centre + k } })
+    const end = Math.ceil(run.length / 2) + 3
+    egg.forEach((e, i) => { e.slot = { lane, row: centre + end + i } })
   }
   return list
 }
+const LANES_N = 6
 
-export const ENTRIES: Entry[] = layout([SUBJECT, ...CASES, ...SERVICE, RESTRICTED, VISITOR, ...SKILLS, ...CREDENTIALS])
+export const ENTRIES: Entry[] = layout([SUBJECT, ...CASES, ...SERVICE, ...EDUCATION_ENTRIES, RESTRICTED, VISITOR, ...SKILLS, ...CREDENTIALS])
 export const entryById = new Map(ENTRIES.map((e) => [e.id, e]))
 export const entryBySlug = new Map(ENTRIES.map((e) => [e.slug, e]))

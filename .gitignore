@@ -32,3 +32,4 @@ dist-ssr
 test-results/
 
 .vercel
+art/.cache/

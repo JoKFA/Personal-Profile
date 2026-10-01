@@ -8,9 +8,14 @@ import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js'
 import { GTAOPass } from 'three/examples/jsm/postprocessing/GTAOPass.js'
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js'
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js'
+import { BokehPass } from 'three/examples/jsm/postprocessing/BokehPass.js'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { LANES, ROWS } from '../motion/grid'
-import { bodyMaterial, driveParts, etchMaterial, etchUniforms, hardwareMaterials, LED } from './drive'
+import { bodyMaterial, driveParts, etchMaterial, etchUniforms, frameMaterial, hardwareMaterials, LED, TRANSLUCENCY } from './drive'
+import { SMAAPass } from 'three/examples/jsm/postprocessing/SMAAPass.js'
+import { RectAreaLightUniformsLib } from 'three/examples/jsm/lights/RectAreaLightUniformsLib.js'
+import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js'
+import type { DriveModel } from './model'
 import type { Quality } from './quality'
 
 export const BG = 0xebe6de
@@ -21,7 +26,8 @@ export const COLS = LANES + 2
 export const DROWS = ROWS + 12
 const N = COLS * DROWS
 const ZERO = new THREE.Matrix4().makeScale(0, 0, 0)
-const DARK = new THREE.Color(0x2a2b2f), WHITE = new THREE.Color(1, 1, 1), CORE_DARK = new THREE.Color(0x3a3b40).multiplyScalar(1 / 0.89)
+// X-000, the one black drive, in RhineLabUI's dark register: cool slate shell, darker caps, an ink core
+const DARK = new THREE.Color(0x58616a), DARK_CAP = new THREE.Color(0x3b4247), WHITE = new THREE.Color(1, 1, 1), SHADE = new THREE.Color(), CORE_DARK = new THREE.Color(0x1d272c).multiplyScalar(1 / 0.5)
 
 export interface Atlas { canvas: HTMLCanvasElement; texture: THREE.CanvasTexture; cell: (i: number) => { x: number; y: number; w: number; h: number } }
 /** Label atlas: 8 × 16 cells, transparent; only the printed ID sits on the drive. 0–55 cipher IDs, 64+ records. */
@@ -39,24 +45,40 @@ export function createStage(canvas: HTMLCanvasElement, quality: Quality) {
   // PCFSoft is deprecated in r183 and rewritten to PCF at the first shadow render, which changes
   // every lit program's key after it was precompiled; ask for PCF directly
   renderer.shadowMap.type = THREE.PCFShadowMap
-  renderer.toneMapping = THREE.NeutralToneMapping
+  renderer.toneMapping = THREE.ACESFilmicToneMapping
   renderer.toneMappingExposure = 1.05
   renderer.outputColorSpace = THREE.SRGBColorSpace
 
   const scene = new THREE.Scene()
   scene.background = new THREE.Color(BG)
   scene.fog = new THREE.Fog(BG, 145, 165)
-  const camera = new THREE.PerspectiveCamera(3, innerWidth / innerHeight, 5, 400)
+  // near/far hug the scene (camera 72–140 units away, the archive ±30 around it): the depth buffer,
+  // and the depth-of-field pass that reads it at half precision, keep ~0.2-unit resolution instead of
+  // ~2 units, so the focused drive is actually sharp
+  const camera = new THREE.PerspectiveCamera(3, innerWidth / innerHeight, 40, 220)
 
-  scene.environmentIntensity = 0.5
-  scene.add(new THREE.HemisphereLight(0xfffaf5, 0xb4a18c, 0.55))
-  const key = new THREE.DirectionalLight(0xfff5ea, 1.75); key.position.set(-9, 11, 4)
+  scene.environmentIntensity = 0.22
+  scene.add(new THREE.HemisphereLight(0xfff1e2, 0x8f6e4c, 0.24))
+  const key = new THREE.DirectionalLight(0xfff0dc, 1.25); key.position.set(9, 13, -9)   // behind the field: faces read in shade, the resin glows
   key.castShadow = quality.shadows > 0
   Object.assign(key.shadow.camera, { left: -16, right: 16, top: 15, bottom: -15, near: 0.1, far: 50 })
   key.shadow.mapSize.set(quality.shadows || 1, quality.shadows || 1); key.shadow.normalBias = 0.035; key.shadow.bias = -0.0003; key.shadow.radius = 4
-  const fill = new THREE.DirectionalLight(0xe9eef5, 0.45); fill.position.set(8, 6, -8)
-  const back = new THREE.DirectionalLight(0xfff8ef, 0.9); back.position.set(3, 7, -12)
-  scene.add(key, fill, back)
+  const fill = new THREE.DirectionalLight(0xffffff, 0.6); fill.position.set(7, 8, -10)
+  // a reading light on the camera side, only while a file is open
+  const reading = new THREE.DirectionalLight(0xfff4e6, 0); reading.position.set(-9, 6, 8)
+  // the selection is told by light (after the PV): a warm, low spot rakes along the selected drive's
+  // row; everything else sits in the warm shade of the field. It follows the selection.
+  // A panel of light the drive's own shape, standing in the gap in front of the selected drive and
+  // facing it: the light leaks out of the slot around it, the way the PV lights its file.
+  RectAreaLightUniformsLib.init()
+  // two thin strips of light just under the top edge, one in the slot on each side of the drive,
+  // each facing it: the slot glows and lights the edges near it, rather than one flat light on the face
+  const slots = [new THREE.RectAreaLight(0xffbe7a, 0, 4.6, 0.45), new THREE.RectAreaLight(0xffbe7a, 0, 4.6, 0.45)]
+  scene.add(...slots)
+  // a low warm light along the lanes: every column's end faces catch a soft side light
+  const side = new THREE.DirectionalLight(0xffd2a2, 0.75); side.position.set(-14, 4, 3)
+  scene.add(side)
+  scene.add(key, fill, reading)
   const floor = new THREE.Mesh(new THREE.PlaneGeometry(400, 400), new THREE.MeshStandardMaterial({ color: 0xddd3c6, roughness: 0.95 }))
   floor.rotation.x = -Math.PI / 2; floor.position.y = FLOOR_Y; floor.receiveShadow = true; scene.add(floor)
 
@@ -85,37 +107,93 @@ export function createStage(canvas: HTMLCanvasElement, quality: Quality) {
   const P = driveParts(), HW = hardwareMaterials()
   const cellAttr = new THREE.InstancedBufferAttribute(new Float32Array(N), 1)
   const glowAttr = new THREE.InstancedBufferAttribute(new Float32Array(N), 1)
+  // per drive: how lit its top edge is, and how clear (decrypted) its shell reads
+  const topGlowAttr = new THREE.InstancedBufferAttribute(new Float32Array(N), 1), clearAttr = new THREE.InstancedBufferAttribute(new Float32Array(N), 1)
+  topGlowAttr.setUsage(THREE.DynamicDrawUsage); clearAttr.setUsage(THREE.DynamicDrawUsage)
   cellAttr.setUsage(THREE.DynamicDrawUsage); glowAttr.setUsage(THREE.DynamicDrawUsage)
-  P.label.setAttribute('aCell', cellAttr); P.face.setAttribute('aGlow', glowAttr); P.top.setAttribute('aGlow', glowAttr)
+  P.label.setAttribute('aCell', cellAttr); P.face.setAttribute('aGlow', glowAttr); P.top.setAttribute('aGlow', topGlowAttr); P.body.setAttribute('aClear', clearAttr)
   const mk = (geo: THREE.BufferGeometry, mat: THREE.Material, shadow = true) => {
     const m = new THREE.InstancedMesh(geo, mat, N); m.castShadow = shadow && quality.shadows > 0; m.receiveShadow = true; m.frustumCulled = false
     m.instanceMatrix.setUsage(THREE.DynamicDrawUsage); scene.add(m); return m
   }
-  const bodyMat = bodyMaterial()
-  if (!quality.transmission) { bodyMat.transmission = 0; bodyMat.color.set(0xf6f2ec) }
+  const bodyMat = bodyMaterial(false, true), capMat = frameMaterial(false, true)
+  if (!quality.transmission) { bodyMat.transmission = 0; bodyMat.color.set(0xefe4d6) }
   const faceEtch = etchMaterial({ part: 'face', instanced: true }), topEtch = etchMaterial({ part: 'top', instanced: true })
-  const core = mk(P.core, HW.core, false), body = mk(P.body, bodyMat), face = mk(P.face, faceEtch, false), top = mk(P.top, topEtch, false)
+  // the lantern: a drive that holds a record glows from its diffuser plate, softly, through the frost
+  const lampAttr = new THREE.InstancedBufferAttribute(new Float32Array(N), 1); lampAttr.setUsage(THREE.DynamicDrawUsage)
+  P.core.setAttribute('aLamp', lampAttr); P.face.setAttribute('aLamp', lampAttr); P.top.setAttribute('aLamp', lampAttr); P.body.setAttribute('aLamp', lampAttr)
+  const coreMat = new THREE.MeshStandardMaterial({ color: 0x806447, roughness: 0.7, envMapIntensity: 0.6 })
+  const lampCol = { value: new THREE.Color(0xffa95c).multiplyScalar(1.3) }
+  coreMat.onBeforeCompile = (sh) => {
+    sh.uniforms.uLampCol = lampCol
+    sh.vertexShader = 'attribute float aLamp; varying float vLamp;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\nvLamp = aLamp;')
+    sh.fragmentShader = 'uniform vec3 uLampCol; varying float vLamp;\n' + sh.fragmentShader.replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += uLampCol * vLamp;')
+  }
+  coreMat.customProgramCacheKey = () => 'core-lamp'
+  const core = mk(P.core, coreMat, false), body = mk(P.body, bodyMat), face = mk(P.face, faceEtch, false), top = mk(P.top, topEtch, false)
+  // the packed field stays quiet (after RhineLabUI's array): no tabs, grips or printed labels;
+  // the selected drive carries all of them
   const hard = mk(mergeGeometries([P.tab, ...P.grips]), HW.tab), labels = mk(P.label, labelMat, false)
+  hard.visible = false; labels.visible = false
+  const glass = mk(P.caps, capMat), screws = mk(P.screws, HW.metal, false), inlay = mk(P.inlay, HW.gold, false)
   const ledMat = new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: false })
   const ledSets = { long: mk(P.led, ledMat, false), double: mk(P.ledDouble, ledMat, false), dot: mk(P.ledDot, ledMat, false) }
   const leds = ledSets.long
-  for (const m of [core, face, top, hard, labels]) m.instanceMatrix = body.instanceMatrix
-  for (let i = 0; i < N; i++) { body.setColorAt(i, WHITE); face.setColorAt(i, WHITE); top.setColorAt(i, WHITE); core.setColorAt(i, WHITE); for (const l of Object.values(ledSets)) l.setColorAt(i, LED.off) }
+  for (const m of [core, face, top, hard, labels, glass, screws, inlay]) m.instanceMatrix = body.instanceMatrix
+  for (let i = 0; i < N; i++) { body.setColorAt(i, WHITE); glass.setColorAt(i, WHITE); face.setColorAt(i, WHITE); top.setColorAt(i, WHITE); core.setColorAt(i, WHITE); for (const l of Object.values(ledSets)) l.setColorAt(i, LED.off) }
   void leds
-  const tinted = [body, face, top, core, ...Object.values(ledSets)]
+  const tinted = [body, glass, face, top, core, ...Object.values(ledSets)]
 
   const composer = new EffectComposer(renderer)
   composer.addPass(new RenderPass(scene, camera))
   if (quality.ao) {
     const ao = new GTAOPass(scene, camera, innerWidth, innerHeight)
-    ao.updateGtaoMaterial({ radius: 0.35, distanceExponent: 1.5, thickness: 0.6, scale: 1, samples: 16 }); ao.blendIntensity = 0.6
+    ao.updateGtaoMaterial({ radius: 0.35, distanceExponent: 1.5, thickness: 0.6, scale: 1, samples: 16 }); ao.blendIntensity = 0.85
     composer.addPass(ao)
   }
+  // depth of field (after RhineLabUI and the Arknights UI it comes from): the eye goes where the
+  // focus is. The archive keeps a shallow band around the selected drive; opening a file pulls
+  // focus onto it and lets the rest fall away. Off on the low tier.
+  const dof = quality.name === 'low' ? null : new BokehPass(scene, camera, { focus: 140, aperture: 0.0004, maxblur: 0.004 })
+  if (dof) composer.addPass(dof)
+  // camera-speed blur (after the PV's whip into the archive): samples along the screen-space motion
+  // of the field; off whenever the camera is still
+  const motion = new ShaderPass({
+    uniforms: { tDiffuse: { value: null }, uDelta: { value: new THREE.Vector2() } },
+    vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+    fragmentShader: `uniform sampler2D tDiffuse; uniform vec2 uDelta; varying vec2 vUv;
+      void main() { vec4 c = vec4(0.0); for (int i = 0; i < 12; i++) { float k = float(i) / 11.0 - 0.5; c += texture2D(tDiffuse, vUv + uDelta * k); } gl_FragColor = c / 12.0; }`,
+  })
+  motion.enabled = false
+  composer.addPass(motion)
+  // focus (after the PV): sharp around the selected drive, softening with distance from it on screen.
+  // Screen-space and centred on the drive itself, so it never misses the way a depth focus can
+  // with a telephoto camera whose whole field sits within a few units of depth.
+  const focus = new ShaderPass({
+    uniforms: { tDiffuse: { value: null }, uCenter: { value: new THREE.Vector2(0.5, 0.5) }, uRadius: { value: new THREE.Vector2(0.2, 0.2) }, uMax: { value: 0 }, uRes: { value: new THREE.Vector2(innerWidth, innerHeight) } },
+    vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+    fragmentShader: `uniform sampler2D tDiffuse; uniform vec2 uCenter, uRadius, uRes; uniform float uMax; varying vec2 vUv;
+      void main() {
+        float d = length((vUv - uCenter) / uRadius);
+        float r = uMax * smoothstep(0.8, 1.9, d);
+        vec4 c = texture2D(tDiffuse, vUv);
+        if (r < 0.4) { gl_FragColor = c; return; }
+        vec4 acc = c; float n = 1.0;
+        for (int i = 0; i < 24; i++) {
+          float a = float(i) * 2.39996, rr = sqrt((float(i) + 0.5) / 24.0) * r;
+          acc += texture2D(tDiffuse, vUv + vec2(cos(a), sin(a)) * rr / uRes); n += 1.0;
+        }
+        gl_FragColor = acc / n;
+      }`,
+  })
+  focus.enabled = quality.name !== 'low'
+  composer.addPass(focus)
   // bloom only while a drive is being read: the threshold sits above the lit cream surfaces, so
   // only the trace light (emissive ×4) blooms; the pass is disabled whenever strength is 0
-  const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth / 2, innerHeight / 2), 0, 0.55, 1.35)
+  const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth / 2, innerHeight / 2), 0, 0.6, 1.0)
   bloom.enabled = false
   composer.addPass(bloom)
+  const smaa = new SMAAPass(); composer.addPass(smaa)
   composer.addPass(new OutputPass())
   const resize = () => { renderer.setSize(innerWidth, innerHeight, false); composer.setSize(innerWidth, innerHeight); bloom.setSize(innerWidth / 2, innerHeight / 2); camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix() }
   addEventListener('resize', resize)
@@ -123,25 +201,55 @@ export function createStage(canvas: HTMLCanvasElement, quality: Quality) {
   const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), p = new THREE.Vector3(), one = new THREE.Vector3(1, 1, 1), zero = new THREE.Vector3()
   return {
     renderer, scene, camera, composer, atlas, pick: body, N,
+    /** swap the procedural stand-ins for the precision model's coarse groups */
+    useModel(g: DriveModel) {
+      const swap = (m: THREE.InstancedMesh, k: keyof DriveModel) => { const x = g[k]; if (x) { m.geometry.dispose(); m.geometry = x.geometry } }
+      swap(body, 'Frosted_Shell'); body.geometry.setAttribute('aClear', clearAttr); body.geometry.setAttribute('aLamp', lampAttr); swap(glass, 'Ivory_Frame'); swap(core, 'Diffuser'); core.geometry.setAttribute('aLamp', lampAttr); swap(screws, 'Titanium'); swap(inlay, 'Champagne')
+    },
     /** led: null = off · glow 0/1 · dark = X-000 */
-    set(i: number, x: number, y: number, z: number, tilt: number, labelCell: number, led: THREE.Color | null, hidden: boolean, glow: number, dark: boolean, ledKind: 'long' | 'double' | 'dot' = 'long') {
+    set(i: number, x: number, y: number, z: number, tilt: number, labelCell: number, led: THREE.Color | null, hidden: boolean, glow: number, dark: boolean, ledKind: 'long' | 'double' | 'dot' = 'long', shade = 1, topGlow = glow, clear = 0, lamp = 0) {
       e.set(tilt, 0, 0); q.setFromEuler(e); p.set(x, y, z)
       m4.compose(p, q, hidden ? zero : one); body.setMatrixAt(i, m4)
-      for (const [k, l] of Object.entries(ledSets)) l.setMatrixAt(i, k === ledKind ? m4 : ZERO)
-      body.setColorAt(i, dark ? DARK : WHITE); face.setColorAt(i, dark ? DARK : WHITE); top.setColorAt(i, dark ? DARK : WHITE); core.setColorAt(i, dark ? CORE_DARK : WHITE)
+      for (const [k, l] of Object.entries(ledSets)) l.setMatrixAt(i, k === ledKind && led ? m4 : ZERO)   // an unlit slit is not drawn
+      const w = shade < 1 ? SHADE.setScalar(shade) : WHITE
+      body.setColorAt(i, dark ? DARK : w); glass.setColorAt(i, dark ? DARK_CAP : w); face.setColorAt(i, dark ? DARK : w); top.setColorAt(i, dark ? DARK : w); core.setColorAt(i, dark ? CORE_DARK : w)
       ledSets[ledKind].setColorAt(i, led ?? LED.off)
-      cellAttr.setX(i, labelCell); glowAttr.setX(i, glow)
+      cellAttr.setX(i, labelCell); glowAttr.setX(i, glow); topGlowAttr.setX(i, topGlow); clearAttr.setX(i, clear); lampAttr.setX(i, lamp)
     },
     commit(time: number) {
       body.instanceMatrix.needsUpdate = true
       for (const l of Object.values(ledSets)) l.instanceMatrix.needsUpdate = true
       for (const m of tinted) m.instanceColor!.needsUpdate = true
-      cellAttr.needsUpdate = glowAttr.needsUpdate = true
+      cellAttr.needsUpdate = glowAttr.needsUpdate = topGlowAttr.needsUpdate = clearAttr.needsUpdate = lampAttr.needsUpdate = true
       etchUniforms(faceEtch).uTime.value = etchUniforms(topEtch).uTime.value = time
     },
     /** trace-light bloom (0 = off) and scene exposure, both animated by the read */
     setBloom(strength: number) { bloom.strength = strength; bloom.enabled = strength > 0.01 },
     setExposure(x: number) { renderer.toneMappingExposure = x },
+    /** the key light sits behind the field so faces read in shade; an open file gets a reading light on its face */
+    /** the selection light: where it stands, what it looks at, how bright */
+    /** the selection light: a drive-shaped panel at (x, y, z) facing (tx, ty, tz) */
+    setSlotLight(x: number, y: number, z: number, gap: number, intensity: number) {
+      slots[0].position.set(x, y, z + gap); slots[0].lookAt(x, y, z)
+      slots[1].position.set(x, y, z - gap); slots[1].lookAt(x, y, z)
+      for (const s of slots) s.intensity = intensity
+    },
+    setFaceLight(k: number) { reading.intensity = 0.9 * k },
+    /** focus distance (world units from the camera), aperture (blur per unit of defocus), max blur */
+    /** screen-space blur vector in UV units; below a hair it switches off */
+    setMotion(dx: number, dy: number) { motion.uniforms.uDelta.value.set(dx, dy); motion.enabled = Math.hypot(dx, dy) > 0.0015 },
+    /** screen focus: centre (uv), radii (uv) of the sharp region, max blur radius (px) */
+    setFocus(cx: number, cy: number, rx: number, ry: number, max: number) {
+      // a phone shows the field small: skip the cost there
+      focus.enabled = quality.name !== 'low' && innerWidth >= 900 && max > 0.4
+      focus.uniforms.uCenter.value.set(cx, cy); focus.uniforms.uRadius.value.set(rx, ry); focus.uniforms.uMax.value = max; focus.uniforms.uRes.value.set(innerWidth, innerHeight)
+    },
+    setDof(focus: number, aperture: number, maxblur: number) {
+      if (!dof) return
+      const u = (dof as unknown as { uniforms: Record<string, { value: number }> }).uniforms
+      u.focus.value = focus; u.aperture.value = aperture; u.maxblur.value = maxblur
+      dof.enabled = aperture > 0
+    },
     /**
      * Build the environment and compile every program the first frames will use, without blocking
      * the main thread (KHR_parallel_shader_compile). Two things make a plain compileAsync(scene)
@@ -185,7 +293,7 @@ export function createStage(canvas: HTMLCanvasElement, quality: Quality) {
       // the output pass sets its defines on first render; set them now, the way it would
       const out = composer.passes.find((x) => x instanceof OutputPass) as (OutputPass & { _outputColorSpace: string | null; _toneMapping: number | null }) | undefined
       if (out) {
-        out.material.defines = { SRGB_TRANSFER: '', ...(renderer.toneMapping === THREE.NeutralToneMapping ? { NEUTRAL_TONE_MAPPING: '' } : {}) }
+        out.material.defines = { SRGB_TRANSFER: '', ...(renderer.toneMapping === THREE.ACESFilmicToneMapping ? { ACES_FILMIC_TONE_MAPPING: '' } : {}) }
         out.material.needsUpdate = true
         out._outputColorSpace = renderer.outputColorSpace; out._toneMapping = renderer.toneMapping
         const screen = new THREE.Scene(); screen.add(new THREE.Mesh(quad, out.material)); jobs.push(renderer.compileAsync(screen, camera))
@@ -193,7 +301,7 @@ export function createStage(canvas: HTMLCanvasElement, quality: Quality) {
       await Promise.all(jobs)
       quad.dispose()
     },
-    render() { composer.render() },
+    render() { TRANSLUCENCY.dir.value.copy(key.position).normalize().transformDirection(camera.matrixWorldInverse); composer.render() },
     dispose() {
       removeEventListener('resize', resize)
       renderer.dispose(); composer.dispose()

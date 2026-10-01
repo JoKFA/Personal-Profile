@@ -4,7 +4,7 @@ import { CAPABILITIES } from './capabilities'
 import { DRAWERS, ROLE_IDS } from './roles'
 import { LANES, ROWS, slotKey } from '../motion/grid'
 
-const openable = ENTRIES.filter((e) => e.kind === 'case' || e.kind === 'service')
+const openable = ENTRIES.filter((e) => e.kind === 'case' || e.kind === 'service' || e.kind === 'education')
 const reads = (e: (typeof ENTRIES)[number], role: string) => e.roles === 'all' || e.roles.includes(role as never)
 
 describe('archive data', () => {

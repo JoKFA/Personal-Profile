@@ -1,6 +1,8 @@
-// The encrypted drive: the archive's card. A cartridge × SSD in frosted, softly translucent
-// polymer. Material concept after RhineLabUI's frosted cassette (MIT, github.com/LBEILC/RhineLabUI);
-// geometry and etch are our own, procedural.
+// The encrypted drive: the archive's card, built as a small precision assembly after the way
+// RhineLabUI builds its cassette (MIT, github.com/LBEILC/RhineLabUI): an ivory carrier frame,
+// frosted polymer windows front and back, and an internal ceramic board whose etched circuit and
+// packages read through the frost; titanium fasteners and a champagne index inlay. The geometry,
+// etch and meaning (an encrypted storage module) are our own, procedural.
 //
 // A tone-on-tone circuit is etched into the face and continues over the top edge, the part the
 // archive's telephoto camera sees. Readable drives carry champagne light along the traces; on
@@ -10,9 +12,12 @@ import * as THREE from 'three'
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 
-export const CARD = { W: 5, H: 3.7, T: 0.38 } as const
+export const CARD = { W: 5, H: 3.7, T: 0.376 } as const
 const { W, H, T } = CARD
-const R = 0.17
+/** the ivory end caps' width; the frosted shell runs between them */
+const CAP = 0.16
+/** the etched face lies on the internal diffuser board, behind the frosted shell */
+export const BOARD_Z = (T - 0.16) / 2 + 0.002
 export const LED_X = -1.3
 export const LABEL = { W: 1.6, H: 0.8, x: -W / 2 + 0.3 + 0.8, y: H - 0.66 }
 /** Where the top traces drop onto the face, in face UV. The reveal spreads from here. */
@@ -90,19 +95,69 @@ const RIM = /* glsl */ `float fr = pow(1.0 - saturate(dot(normalize(vNormal), no
       outgoingLight += uRimColor * fr * uRim;
       #include <opaque_fragment>`
 
-/** Frosted polymer after the reference: transmissive, rough, warm attenuation, a lit rim. */
-export function bodyMaterial(dark = false) {
+/**
+ * Backlit resin (after the Rhine Lab PV): the key light sits behind the field; where the eye looks
+ * toward it through the polymer, or a face turns away from it, the material glows warm amber, as
+ * light scattered through it would. A cheap translucency term on top of the transmission pass.
+ * `TRANSLUCENCY.dir` is the key light's direction in view space, updated every frame.
+ */
+export const TRANSLUCENCY = { dir: { value: new THREE.Vector3(0, 1, 0) }, color: { value: new THREE.Color(0xf0b47a) }, amount: { value: 0.55 } }
+const TRANS = /* glsl */ `{
+        vec3 tV = normalize(vViewPosition), tN = normalize(vNormal), tL = normalize(uTransDir);
+        float through = pow(saturate(dot(tV, -tL)), 2.5) * 0.7 + pow(saturate(dot(tN, -tL) * 0.5 + 0.5), 3.0) * 0.6;
+        outgoingLight += uTransCol * through * uTransAmt * diffuseColor.rgb;
+      }
+      `
+
+/**
+ * In the packed archive a drive darkens toward its foot: light reaches the tops and dies warm in
+ * the gaps (after RhineLabUI's array shell). The selected drive, lifted out, is not graded.
+ */
+const GRADE_V = 'varying float vGrade;\n'
+function grade(sh: THREE.WebGLProgramParametersWithUniforms) {
+  sh.vertexShader = GRADE_V + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\nvGrade = position.y / 3.7;')
+  sh.fragmentShader = GRADE_V + sh.fragmentShader.replace('#include <color_fragment>',
+    '#include <color_fragment>\ndiffuseColor.rgb *= mix(vec3(0.34, 0.24, 0.15), vec3(1.0, 0.97, 0.92), smoothstep(0.05, 1.0, vGrade));')
+}
+
+/** The ivory carrier frame: opaque, satin, a soft clearcoat on the radiused edge. */
+export function frameMaterial(dark = false, graded = false) {
   const m = new THREE.MeshPhysicalMaterial({
-    color: dark ? 0x2a2b2f : 0xfffdfa, roughness: 0.3, transmission: dark ? 0.45 : 0.6, thickness: 0.9, ior: 1.46,
-    attenuationColor: new THREE.Color(dark ? 0x141518 : 0xeee6df), attenuationDistance: dark ? 0.6 : 2,
-    clearcoat: dark ? 0.6 : 0.35, clearcoatRoughness: dark ? 0.28 : 0.4, sheen: dark ? 0.15 : 0.4, sheenRoughness: 0.7,
-    sheenColor: new THREE.Color(0xffffff), envMapIntensity: 0.75,
+    color: dark ? 0x353c40 : graded ? 0xfff5e9 : 0xf3e7d5, roughness: graded ? 0.38 : 0.34, clearcoat: dark ? 0.5 : 0.2, clearcoatRoughness: 0.35,
+    sheen: 0.15, sheenRoughness: 0.7, sheenColor: new THREE.Color(0xffffff), envMapIntensity: 0.6,
   })
+  if (graded) { m.onBeforeCompile = grade; m.customProgramCacheKey = () => 'frame-graded' }
+  return m
+}
+
+/** Frosted polymer after the reference: transmissive, rough, warm attenuation, a lit rim. */
+export function bodyMaterial(dark = false, graded = false) {
+  const m = new THREE.MeshPhysicalMaterial({
+    color: dark ? 0x3c444a : graded ? 0xf6e2c8 : 0xfffdfa, roughness: graded ? 0.28 : 0.27, transmission: dark ? 0 : graded ? 0.78 : 0.9, thickness: 0.12, ior: 1.46,
+    attenuationColor: new THREE.Color(dark ? 0x141518 : 0xd9a873), attenuationDistance: dark ? 0.6 : 0.6,
+    clearcoat: dark ? 0.12 : 0.3, clearcoatRoughness: dark ? 0.4 : 0.25, envMapIntensity: dark ? 0.22 : 0.6,
+  })
+  if (dark) m.roughness = 0.5   // slate reads as a solid, not a mirror for the bright room
   const u = { uRim: { value: dark ? 0.3 : 0.28 }, uRimColor: { value: new THREE.Color(dark ? 0x6a6f78 : 0xfffaf2) } }
   m.onBeforeCompile = (sh) => {
-    Object.assign(sh.uniforms, u)
-    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nuniform float uRim; uniform vec3 uRimColor;').replace('#include <opaque_fragment>', RIM)
+    Object.assign(sh.uniforms, u, { uTransDir: TRANSLUCENCY.dir, uTransCol: TRANSLUCENCY.color, uTransAmt: TRANSLUCENCY.amount })
+    sh.fragmentShader = sh.fragmentShader
+      .replace('#include <common>', '#include <common>\nuniform float uRim; uniform vec3 uRimColor; uniform vec3 uTransDir, uTransCol; uniform float uTransAmt;')
+      .replace('#include <opaque_fragment>', dark ? RIM : TRANS + RIM)
+    if (graded) {
+      grade(sh)
+      // a dark-tinted instance (X-000) is solid: no light through it
+      sh.fragmentShader = sh.fragmentShader.replace('#include <transmission_fragment>',
+        THREE.ShaderChunk.transmission_fragment.replace('material.transmission = transmission;', 'material.transmission = transmission * step(0.5, vColor.r + vColor.g);'))
+      // a decrypted drive's shell clears: the frost (roughness) falls away and the inside shows
+      sh.vertexShader = 'attribute float aClear, aLamp; varying float vClear, vLamp;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\nvClear = aClear; vLamp = aLamp;')
+      // the shell itself carries a record's light: a broad surface stays steady where a thin bright gap shimmers
+      sh.fragmentShader = 'varying float vClear, vLamp;\n' + sh.fragmentShader
+        .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = mix(roughnessFactor, 0.04, vClear);')
+        .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += vec3(1.0, 0.62, 0.30) * 0.075 * vLamp;')
+    }
   }
+  if (graded) m.customProgramCacheKey = () => 'glass-graded'
   return m
 }
 
@@ -117,16 +172,17 @@ export interface EtchUniforms {
 export function etchMaterial({ part = 'face', dark = false, instanced = false }: { part?: 'face' | 'top'; dark?: boolean; instanced?: boolean } = {}) {
   const M = etchMaps()[part]
   const m = new THREE.MeshPhysicalMaterial({
-    color: dark ? 0x1d1e21 : 0xf4f0ea, roughness: 1, metalness: 1, roughnessMap: M.mr, metalnessMap: M.mr,
+    color: dark ? 0x1d1e21 : part === 'face' ? (instanced ? 0x8a6c4c : 0xb9aa96) : 0xf4f0ea, roughness: 1, metalness: 1, roughnessMap: M.mr, metalnessMap: M.mr,
     normalMap: M.normal, normalScale: new THREE.Vector2(1.1, 1.1), clearcoat: dark ? 0.6 : 0.35, clearcoatRoughness: dark ? 0.28 : 0.4,
     sheen: dark ? 0.15 : 0.4, sheenRoughness: 0.7, sheenColor: new THREE.Color(0xffffff),
-    emissive: 0xffffff, emissiveMap: M.mask, emissiveIntensity: 1, envMapIntensity: 0.75,
-    transparent: true, alphaMap: M.lip, depthWrite: false,
+    emissive: 0xffffff, emissiveMap: M.mask, emissiveIntensity: 1, envMapIntensity: 0.6,
   })
   const u: EtchUniforms & Record<string, { value: unknown }> = {
     uReveal: { value: 1 }, uGlow: { value: 0 }, uTime: { value: 0 }, uDie: { value: 0 },
     uCol: { value: new THREE.Color(0xe6c98f) }, uHot: { value: new THREE.Color(0xffffff) },
     uRim: { value: 0.3 }, uRimColor: { value: new THREE.Color(0xfffaf2) }, uEntry: { value: ENTRY_UV },
+    // the lantern: a record's whole plate glows warm behind the frost, and its top edge carries a line of it
+    uLamp: { value: new THREE.Color(0xffa458).multiplyScalar(1.6) },
   }
   m.userData.u = u
   const progress = part === 'top'
@@ -134,9 +190,9 @@ export function etchMaterial({ part = 'face', dark = false, instanced = false }:
     : '(uReveal - 0.25) / 0.75 * 1.25 - distance(vEmissiveMapUv * vec2(1.35, 1.0), uEntry * vec2(1.35, 1.0))'   // from the entry point
   m.onBeforeCompile = (sh) => {
     Object.assign(sh.uniforms, u)
-    if (instanced) sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute float aGlow; varying float vGlow;').replace('#include <uv_vertex>', '#include <uv_vertex>\nvGlow = aGlow;')
+    if (instanced) sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute float aGlow, aLamp; varying float vGlow, vLamp;').replace('#include <uv_vertex>', '#include <uv_vertex>\nvGlow = aGlow; vLamp = aLamp;')
     sh.fragmentShader = sh.fragmentShader
-      .replace('#include <common>', `#include <common>\nuniform float uReveal, uGlow, uTime, uDie, uRim; uniform vec3 uCol, uHot, uRimColor; uniform vec2 uEntry;${instanced ? '\nvarying float vGlow;' : ''}`)
+      .replace('#include <common>', `#include <common>\nuniform float uReveal, uGlow, uTime, uDie, uRim; uniform vec3 uCol, uHot, uRimColor, uLamp; uniform vec2 uEntry;${instanced ? '\nvarying float vGlow, vLamp;' : ''}`)
       .replace('#include <opaque_fragment>', RIM)
       .replace('#include <emissivemap_fragment>', /* glsl */ `
       float mask = texture2D(emissiveMap, vEmissiveMapUv).r;
@@ -147,7 +203,8 @@ export function etchMaterial({ part = 'face', dark = false, instanced = false }:
       float front = exp(-pow(p / 0.035, 2.0)) * step(0.001, uReveal) * step(uReveal, 0.999);
       float flow = pow(0.5 + 0.5 * sin(x * 60.0 + vEmissiveMapUv.y * 23.0 - uTime * 5.0), 8.0);
       ${part === 'face' ? 'float die = uDie * smoothstep(0.1, 0.0, max(abs(x - 0.69) - 0.1, abs(vEmissiveMapUv.y - 0.54) - 0.11));' : 'float die = 0.0;'}
-      totalEmissiveRadiance = mask * (uCol * lit * glow * (1.1 + 2.2 * flow) + uHot * (front * 4.0 + die * 2.5));`)
+      totalEmissiveRadiance = mask * (uCol * lit * glow * (1.1 + 2.2 * flow) + uHot * (front * 4.0 + die * 2.5));
+      ${instanced ? `totalEmissiveRadiance += uLamp * vLamp * ${part === 'top' ? '(0.35 + 0.9 * mask)' : '(0.55 + 0.6 * mask)'};` : ''}`)
   }
   return m
 }
@@ -158,10 +215,22 @@ const box = (w: number, h: number, d: number, x: number, y: number, z: number) =
 
 /** A drive standing on its bottom edge, faces toward ±z, y from 0 up. */
 export function driveParts() {
-  const body = new RoundedBoxGeometry(W, H, T, 8, R); body.translate(0, H / 2, 0)
-  const face = new THREE.PlaneGeometry(W - 0.5, H - 0.55); face.translate(0, H / 2 - 0.06, T / 2 + 0.0015)
-  const top = new THREE.PlaneGeometry(W - 0.6, T - 0.12); top.rotateX(-Math.PI / 2); top.translate(0, H + 0.0015, 0)
-  const core = box(W - 0.9, H - 0.9, 0.04, 0, H / 2 - 0.05, 0)
+  // the frosted shell runs between the two ivory end caps; light passes into it and comes back warm
+  // from the diffuser inside, so the packed drives read as tinted polymer rather than white plastic
+  const inner = W - 2 * CAP
+  const body = new RoundedBoxGeometry(inner + 0.02, H, T, 4, 0.04); body.translate(0, H / 2, 0)
+  const cap = (x: number) => { const g = new RoundedBoxGeometry(CAP, H + 0.02, T + 0.03, 4, 0.035); g.translate(x, H / 2, 0); return g }
+  const caps = mergeGeometries([cap(-(W / 2 - CAP / 2)), cap(W / 2 - CAP / 2)])
+  // the diffuser board inside, and two packages on it (lower left, clear of the etched die)
+  const core = mergeGeometries([box(inner - 0.2, H - 0.25, T - 0.16, 0, H / 2, 0),
+    box(0.62, 0.42, 0.03, -1.05, H / 2 - 0.62, BOARD_Z + 0.014), box(0.42, 0.42, 0.03, -0.28, H / 2 - 0.62, BOARD_Z + 0.014)])
+  const face = new THREE.PlaneGeometry(inner - 0.3, H - 0.4); face.translate(0, H / 2, BOARD_Z)
+  const top = new THREE.PlaneGeometry(inner - 0.3, T - 0.12); top.rotateX(-Math.PI / 2); top.translate(0, H + 0.0015, 0)
+  // titanium fasteners on the caps, both faces, and a champagne index inlay on the right cap
+  const cz = T / 2 + 0.015, cx = W / 2 - CAP / 2
+  const screw = (x: number, y: number, z: number) => { const g = new THREE.CylinderGeometry(0.035, 0.035, 0.012, 20); g.rotateX(Math.PI / 2); g.translate(x, y, z); return g }
+  const screws = mergeGeometries([cx, -cx].flatMap((x) => [0.32, H - 0.32].flatMap((y) => [screw(x, y, cz + 0.004), screw(x, y, -cz - 0.004)])))
+  const inlay = mergeGeometries([box(0.03, 0.9, 0.01, cx, H / 2, cz + 0.003), box(0.03, 0.9, 0.01, cx, H / 2, -cz - 0.003)])
   // the LED says what kind of drive this is: one long slit = file, two short = service record, a dot = skill
   const led = box(1.2, 0.03, 0.09, LED_X, H + 0.006, 0)
   const ledDouble = merge2(box(0.5, 0.03, 0.09, LED_X - 0.33, H + 0.006, 0), box(0.5, 0.03, 0.09, LED_X + 0.33, H + 0.006, 0))
@@ -169,17 +238,19 @@ export function driveParts() {
   const tab = box(0.34, 0.08, 0.07, W / 2 - 0.75, H + 0.02, 0)
   const grips = Array.from({ length: 5 }, (_, i) => box(0.012, 0.045, T * 0.55, -W / 2 - 0.002, H - 0.55 - i * 0.11, 0))
   const label = new THREE.PlaneGeometry(LABEL.W, LABEL.H); label.translate(LABEL.x, LABEL.y, T / 2 + 0.003)
-  return { body, face, top, core, led, ledDouble, ledDot, tab, grips, label }
+  return { body, caps, face, top, core, screws, inlay, led, ledDouble, ledDot, tab, grips, label }
 }
 
 export function hardwareMaterials() {
   return {
-    core: new THREE.MeshStandardMaterial({ color: 0xe2d8ca, roughness: 0.55 }),
-    coreDark: new THREE.MeshStandardMaterial({ color: 0x3a3b40, roughness: 0.55 }),
+    core: new THREE.MeshStandardMaterial({ color: 0xcdc3b6, roughness: 0.6, metalness: 0.05 }),
+    metal: new THREE.MeshStandardMaterial({ color: 0xd2d0c9, roughness: 0.34, metalness: 0.55 }),
+    gold: new THREE.MeshStandardMaterial({ color: 0xa47a4a, roughness: 0.33, metalness: 0.6 }),
+    coreDark: new THREE.MeshStandardMaterial({ color: 0x1d272c, roughness: 0.5 }),
     // tone-on-tone hardware: from a distance only a lit LED stands out
-    tab: new THREE.MeshStandardMaterial({ color: 0xe9e2d7, roughness: 0.35, metalness: 0.15 }),
+    tab: new THREE.MeshStandardMaterial({ color: 0xf1eadf, roughness: 0.5, metalness: 0.05 }),
     grip: new THREE.MeshStandardMaterial({ color: 0xebe5dc, roughness: 0.5 }),
   }
 }
 
-export const LED = { off: new THREE.Color(0xe6e0d6), on: new THREE.Color(0x9bb03a), shredded: new THREE.Color(0xe0502a) }
+export const LED = { off: new THREE.Color(0xf1eadf), on: new THREE.Color(0x9bb03a), shredded: new THREE.Color(0xe0502a) }

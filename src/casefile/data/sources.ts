@@ -17,4 +17,7 @@ export const SOURCES: Record<string, string[]> = {
   'SR-04': ['work_viva_it_security'],
   'X-000': ['src/server/redteam.ts'],
   'V-FILE': ['browser APIs, computed locally'],
+  'ED-01': ['SFU unofficial transcript 2026-09-07 (degree name, courses)', 'github.com/JoKFA/CryptoLab-SecurePWMSystem README (CMPT 789, user 2026-09-29)', 'user 2026-09-29: pentest and MCP scanner from CMPT 782 Lab I', 'sfu.ca Graduate Calendar: Master of Cybersecurity, CMPT 782 / 783', 'project_gfs_password_manager (CMPT 756)', 'X-009 sources (CMPT 783)'],
+  'ED-02': ['bcit.ca: Forensic Investigation (Digital Forensics and Cybersecurity Option), BTech, program matrix', 'Final Report _Grad Project.pdf (FSCT 8611; Table 3: redundancy 65% → 12%, alerts/hour 15 → 150)', 'user 2026-09-29: capstone = EDR AI; BCIT and VibesMeet internships during the BTech', '能力画像.md (dates; forensic tools confirmed 2026-09-07)', 'work_bcit_cybersecurity_office (dates inside the degree)'],
+  'ED-03': ['bcit.ca: Computer Information Systems Administration, Diploma', '能力画像.md / main.tex (dates)', 'project_enterprise_campus_network (coursework, 2022)'],
 }

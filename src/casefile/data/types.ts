@@ -20,11 +20,11 @@ export interface Drawer { lane: number; name: string; code: string }
 export interface Slot { lane: number; row: number }
 
 /** case = project · service = job · skill / credential = small records that point at evidence */
-export type EntryKind = 'subject' | 'case' | 'service' | 'visitor' | 'restricted' | 'skill' | 'credential'
+export type EntryKind = 'subject' | 'case' | 'service' | 'education' | 'visitor' | 'restricted' | 'skill' | 'credential'
 
 export type DemoKey =
   | 'mcpsf' | 'edr' | 'pentest' | 'telus' | 'viva' | 'network' | 'pwnscan'
-  | 'visitor' | 'sentinel' | 'timeline' | 'subject' | 'story' | 'coast' | 'vibes' | 'bcit' | 'vivaops'
+  | 'visitor' | 'sentinel' | 'timeline' | 'subject' | 'waysin' | 'coast' | 'vibes' | 'bcit' | 'vivaops' | 'custody' | 'stack' | 'quorum'
 
 export interface Section { eyebrow: string; title: string; body: string; points?: string[]; note?: string }
 export interface Finding { severity: 'critical' | 'high' | 'medium' | 'low' | 'ok'; label: string; title: string; detail: string }
@@ -58,7 +58,9 @@ export interface Entry {
   seo?: { title: string; description: string }
   /** skills and credentials: the drives that prove them */
   evidence?: string[]
-  // service records
+  /** education: the courses, and what each one produced (a drive when there is one) */
+  courses?: { code: string; title: string; out: string; ids?: string[]; href?: string }[]
+  // service records and education
   org?: string
   dates?: string
   place?: string

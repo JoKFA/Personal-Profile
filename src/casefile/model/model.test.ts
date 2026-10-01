@@ -45,7 +45,7 @@ describe('lens', () => {
     const at = slotIndex(ENTRIES), s = entryById.get('X-001')!.slot
     expect(at(s)?.id).toBe('X-001')
     expect(at({ lane: s.lane + 6, row: s.row - 32 })?.id).toBe('X-001')
-    expect(at({ lane: s.lane, row: s.row + 1 })).toBeNull()
+    expect(at({ lane: s.lane, row: s.row + 12 })).toBeNull()   // beyond its drawer's run
   })
 })
 

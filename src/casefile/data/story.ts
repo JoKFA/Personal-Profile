@@ -1,32 +1,36 @@
 // The subject file tells one story: security learned from the network up. Every step is a drive
-// in the archive (years: user, spec G17; dates: resume). Nothing here is new fact; it is order.
+// in the archive (years: user, spec G17; dates: resume). Facts come from the resume system's
+// experience_db.yaml and golden bullets; the wording here says what actually happened, in plain
+// terms, rather than repeating resume bullets. Nothing here is a new fact; it is order.
 import type { RoleId } from './types'
 
 export const HEADLINE = 'Security learned from the network up: routing, then detection, then pipelines, then AI agents. Now assessing risk at a Canadian credit union.'
 
-export interface Chapter { years: string; title: string; line: string; steps: { year: string; id: string; what: string; role: RoleId | null }[] }
+/** A step marked `key` is shown; the rest of a chapter sits behind "more". */
+export interface Step { year: string; id: string; what: string; role: RoleId | null; key?: boolean }
+export interface Chapter { years: string; title: string; line: string; steps: Step[] }
 export const CHAPTERS: Chapter[] = [
-  { years: '2021 – 2022', title: 'Infrastructure first', line: 'Systems administration, then a four-site network built and monitored end to end.', steps: [
+  { years: '2021 – 2022', title: 'Infrastructure first', line: 'Trained as a systems administrator, then built a four-site network with a six-person team and put a SIEM on top of it.', steps: [
+    { year: '2022', id: 'X-008', what: 'Configured routers, firewalls and VPN tunnels for four sites over MPLS, with segmentation rules and all logs sent to Splunk and FortiSIEM.', role: 'it', key: true },
     { year: '2021', id: 'ED-03', what: 'Diploma, Computer Information Systems Administration · BCIT', role: 'it' },
-    { year: '2022', id: 'X-008', what: 'VLANs, OSPF, ACLs, PAT, firewalls and SIEM across four sites', role: 'it' },
   ] },
-  { years: '2023 – 2024', title: 'Into detection', line: 'Logs became detections, detections became playbooks, and an LLM joined the triage loop.', steps: [
-    { year: '2023', id: 'X-006', what: 'Splunk lab: SPL detections mapped to ATT&CK, with runbooks', role: 'soc' },
-    { year: '2024', id: 'SR-03', what: 'BCIT Cyber Security Office: awareness for 1,000+, 20+ policies, 4 IR playbooks', role: 'grc' },
-    { year: '2024', id: 'X-002', what: 'Wazuh alerts summarised by an LLM, cached, reviewed by an analyst', role: 'soc' },
-    { year: '2024', id: 'SR-04', what: 'Sole IT and security contact for a 500+ person non-profit', role: 'it' },
+  { years: '2023 – 2024', title: 'Detection and people', line: 'Learned to read what systems report, then what people do: detections, playbooks, and an awareness programme with a measured result.', steps: [
+    { year: '2024', id: 'SR-03', what: 'Built BCIT’s awareness programme from scratch; later phishing simulations showed ~15% fewer successful attempts. Wrote 4 incident-response playbooks.', role: 'grc', key: true },
+    { year: '2023', id: 'X-006', what: 'Home SOC lab: Sysmon and firewall logs into Splunk, SPL detections for brute force, privilege escalation and lateral movement.', role: 'soc', key: true },
+    { year: '2024', id: 'X-002', what: 'An LLM writes the first triage note for each Wazuh alert; repeats are cached and an analyst decides.', role: 'soc' },
+    { year: '2024', id: 'SR-04', what: 'Sole IT and security contact for a 500+ person non-profit.', role: 'it' },
   ] },
-  { years: '2025', title: 'Security in the pipeline', line: 'Checks moved into CI, attacks were tested by hand, and AI tools got a scanner of their own.', steps: [
-    { year: '2025', id: 'SR-02', what: 'CI security gates, AWS Security Hub, IAM clean-up, ~30% lower AWS cost', role: 'cloud' },
-    { year: '2025', id: 'X-003', what: 'Grey-box pentest: 14 validated findings with fixes', role: 'soc' },
-    { year: '2025', id: 'X-005', what: 'STRIDE threat model: 12 threats found and remediated', role: 'grc' },
-    { year: '2025', id: 'X-001', what: 'MCP Security Framework: 14 detectors, 60+ servers tested', role: 'ai' },
-    { year: '2025', id: 'X-007', what: 'Distributed password vault on GCP (MASc coursework)', role: 'cloud' },
+  { years: '2025', title: 'Security where code ships', line: 'Moved checks to the point of merge, and tested applications and AI tools the way an attacker would.', steps: [
+    { year: '2025', id: 'SR-02', what: 'Put Trivy, GitGuardian and Semgrep in front of every merge, removed excess AWS access, and cut monthly spend ~30%.', role: 'cloud', key: true },
+    { year: '2025', id: 'X-003', what: 'Grey-box pentest of a staging web app and its APIs: 14 validated findings, each with evidence and a fix.', role: 'soc', key: true },
+    { year: '2025', id: 'X-001', what: 'A scanner that sandboxes MCP servers and tests them for prompt injection, tool poisoning and leaked credentials; run on 60+ servers.', role: 'ai', key: true },
+    { year: '2025', id: 'X-005', what: 'STRIDE threat model of a non-profit’s systems: 12 threats found, all remediated.', role: 'grc' },
+    { year: '2025', id: 'X-007', what: 'Distributed password vault on GCP (graduate coursework, CMPT 756).', role: 'cloud' },
   ] },
-  { years: '2026', title: 'AI and risk', line: 'AI inside code review, risk ranked by exploitation, and risk decisions at a financial institution.', steps: [
-    { year: '2026', id: 'X-004', what: 'AI reviewer that judges SAST findings and proposes safe fixes', role: 'ai' },
-    { year: '2026', id: 'X-009', what: 'PwnScan: CVSS × EPSS × exposure. Top 3, CMPT 783', role: 'it' },
-    { year: '2026', id: 'SR-01', what: 'Coast Capital: 50+ security assessments, 20+ vendor reviews', role: 'grc' },
+  { years: '2026', title: 'Risk at a financial institution', line: 'Now on the defending side of a regulated business: deciding what a change or a vendor adds to risk, and writing it down so it can be audited.', steps: [
+    { year: '2026', id: 'SR-01', what: 'Coast Capital: 50+ security risk assessments and 20+ third-party reviews, each ending in a rating and a treatment recommendation.', role: 'grc', key: true },
+    { year: '2026', id: 'X-004', what: 'TELUS AI Hackathon: an LLM triages SAST findings and proposes fixes a developer approves.', role: 'ai', key: true },
+    { year: '2026', id: 'X-009', what: 'PwnScan: finds IoT devices on a network and ranks their CVEs by CVSS × EPSS × exposure. Top 3, CMPT 783.', role: 'it' },
   ] },
 ]
 
@@ -37,9 +41,20 @@ export const PRINCIPLES: { title: string; body: string; proof: string[] }[] = [
   { title: 'Risk and cost in the same sentence', body: 'Prioritise by what is actually exploited, and cut spend while tightening access.', proof: ['X-009', 'SR-02'] },
 ]
 
-/** Three numbers that carry the story, each with what it means. */
+/** Three numbers, each proving a different kind of work, all from real jobs (evidence tier 1). */
 export const KEY_NUMBERS: [string, string, string][] = [
-  ['50+', 'security assessments', 'at a credit union, with risk treatment decisions'],
-  ['60+', 'MCP servers tested', 'by a scanner I designed for AI agent tools'],
-  ['1,000+', 'people trained', 'in a security awareness programme built from scratch'],
+  ['50+', 'security risk assessments', 'at Coast Capital, a regulated Canadian financial institution, plus 20+ third-party reviews'],
+  ['~15%', 'fewer phishing successes', 'in later simulations, after the awareness programme I built at BCIT'],
+  ['~30%', 'lower monthly AWS spend', 'at VibesMeet, while removing excess IAM access'],
+]
+
+/** The subject drive: six common ways into a company, and the real work that stopped each one.
+ *  Drawn left and right of "your data"; each line is one attack, each shield one drive. */
+export const WAYS_IN: { attack: string; defence: string; id: string }[] = [
+  { attack: 'Phishing email', defence: 'Built an awareness programme: ~15% fewer phishing successes', id: 'SR-03' },
+  { attack: 'Broken access in a web app', defence: 'Pentest of a web app: 14 validated findings, each with a fix', id: 'X-003' },
+  { attack: 'One machine infects the rest', defence: 'Segmented a four-site network so a breach stays small', id: 'X-008' },
+  { attack: 'Poisoned AI tool', defence: 'Scanned MCP servers before AI agents use them: 60+ tested', id: 'X-001' },
+  { attack: 'Leaked cloud key', defence: 'Secret checks before every merge; excess AWS access removed', id: 'SR-02' },
+  { attack: 'Risky vendor or change', defence: '50+ risk assessments and 20+ vendor reviews', id: 'SR-01' },
 ]

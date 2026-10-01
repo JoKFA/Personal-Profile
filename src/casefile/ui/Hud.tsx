@@ -11,11 +11,11 @@ import { sealedId } from '../model/archive'
 import { useCtx, useSnapshot } from './context'
 
 const pad = (n: number) => String(n).padStart(2, '0')
-const kindLabel = (e: Entry) => ({ service: 'Service record', case: 'Case file', subject: 'Subject file', restricted: 'Restricted', visitor: 'Visitor file', skill: 'Skill', credential: 'Credential' } as const)[e.kind]
+const kindLabel = (e: Entry) => ({ service: 'Service record', education: 'Education', case: 'Case file', subject: 'Subject file', restricted: 'Restricted', visitor: 'Visitor file', skill: 'Skill', credential: 'Credential' } as const)[e.kind]
 const small = (e: Entry) => e.kind === 'skill' || e.kind === 'credential'
 
 export function Hud({ statusLine, hidden, offer, onOfferDone }: { statusLine: { html: string; key: number } | null; hidden: boolean; offer: boolean; onOfferDone: () => void }) {
-  const { archive, visitor, open, status } = useCtx()
+  const { archive, open, status } = useCtx()
   const s = useSnapshot()
   const [index, setIndex] = useState(false)
   const [contact, setContact] = useState(false)
@@ -47,7 +47,7 @@ export function Hud({ statusLine, hidden, offer, onOfferDone }: { statusLine: { 
 
   return (
     <div className={`hud ${hidden ? '' : 'on'} ${s.mode !== 'archive' ? 'dim' : ''}`} aria-hidden={hidden}>
-      <div className="hud-lock"><div className="a">YAOTING WANG</div><div className="b">SECURITY ENGINEERING</div><div className="c">ENCRYPTED <b>ARCHIVE</b></div></div>
+      <div className="hud-lock"><div className="a">YAOTING WANG</div><div className="b">ANALYST &amp; ENGINEER<span className="loc"> · VANCOUVER, BC</span></div><div className="c">SECURITY <b>PORTFOLIO</b></div></div>
       <div className="hud-top">
         <button ref={contactBtn} className="hud-index-btn" aria-expanded={contact} onClick={() => { tourContact.current = false; setContact((v) => !v); setIndex(false) }}><span>Contact</span></button>
         <button className="hud-index-btn" aria-expanded={index} onClick={() => { setIndex((v) => !v); setContact(false) }}><span aria-hidden="true">⌕</span><span>Index</span><kbd>/</kbd></button>
@@ -81,7 +81,7 @@ export function Hud({ statusLine, hidden, offer, onOfferDone }: { statusLine: { 
           ) : e && s.plain ? (
             <>
               <h2 className="panel-title">{locked ? '[REDACTED]' : e.title}</h2>
-              <div className="panel-sub">{e.kind === 'service' ? `${e.org} · ${e.dates}` : e.year ? `${e.kicker.replace(/^Case file · /, '')} · ${e.year}` : e.kicker}</div>
+              <div className="panel-sub">{e.kind === 'service' || e.kind === 'education' ? `${e.org} · ${e.dates}` : e.year ? `${e.kicker.replace(/^Case file · /, '')} · ${e.year}` : e.kicker}</div>
               <p className="panel-sum">{e.summary}</p>
               {(dead || locked) && <dl className="policy"><dt className="lbl">{dead ? 'Status' : 'Access'}</dt><dd className="x">{dead ? 'Crypto-shredded · key zeroized' : 'Held by an AI guard · SENTINEL-1'}</dd></dl>}
               <button className="go" onClick={open}><b>{dead ? 'Restore & open' : locked ? 'Request clearance' : 'Open'}</b><kbd>ENTER</kbd><span aria-hidden="true">→</span></button>
@@ -99,7 +99,7 @@ export function Hud({ statusLine, hidden, offer, onOfferDone }: { statusLine: { 
           ) : (
             <>
               <h2 className="panel-title muted">Encrypted</h2>
-              <p className="panel-sum">Not part of this archive’s readable files. Drives with a lit olive light can be opened.</p>
+              <p className="panel-sum">No file on this drive. The drives that glow hold one.</p>
             </>
           )}
         </div>
@@ -139,12 +139,11 @@ export function Hud({ statusLine, hidden, offer, onOfferDone }: { statusLine: { 
 
       {hint && !hide && !tour && <div className="hud-hint lbl">← → drawers / ↑ ↓ drives / enter open / click a drive</div>}
       <div className={`hud-foot lbl ${tour ? 'hide' : ''}`}>
-        <span className="risk" data-lvl={s.riskLevel} tabIndex={0} aria-describedby="risk-tip"><span className="rb"><i style={{ width: `${s.risk}%` }} /></span>token risk {pad(s.risk)}
-          <span className="tip" id="risk-tip" role="tooltip">How suspicious this session looks to the archive’s behaviour analytics (UEBA). Denied drives, rapid scanning and shredding raise it; it cools down on its own.</span>
+        <span className="risk" data-lvl={s.riskLevel} tabIndex={0} aria-describedby="risk-tip"><span className="rb"><i style={{ width: `${s.risk}%` }} /></span>risk {pad(s.risk)}
+          <span className="tip" id="risk-tip" role="tooltip">How suspicious this session looks to this site’s behaviour analytics (UEBA). Denied drives, rapid scanning and shredding raise it; it cools down on its own.</span>
         </span>
-        <span>session <b>{visitor.id}</b></span>
         <PrivacyStat />
-        <button onClick={() => { try { localStorage.removeItem('yw.entry') } catch { /* */ } location.reload() }}>Replay ↺</button>
+        <button aria-label="Replay the intro" title="Replay the intro" onClick={() => { try { localStorage.removeItem('yw.entry') } catch { /* */ } location.reload() }}>↺</button>
       </div>
     </div>
   )
@@ -154,12 +153,18 @@ export function Hud({ statusLine, hidden, offer, onOfferDone }: { statusLine: { 
 function Leader({ entry, hidden }: { entry: Entry | null; hidden: boolean }) {
   const { archive } = useCtx()
   const s = useSnapshot()
-  const ref = useRef<SVGPathElement>(null), dot = useRef<SVGCircleElement>(null)
+  const ref = useRef<SVGPathElement>(null), dot = useRef<SVGCircleElement>(null), marks = useRef<SVGGElement>(null)
   useEffect(() => {
     let raf = 0
     const f = () => {
       raf = requestAnimationFrame(f)
       const a = archive.anchor(), panel = document.querySelector('.panel-eyebrow')?.getBoundingClientRect()
+      // four small black squares bracket the selected drive (after the PV's "selecting files")
+      const b = archive.screenBox(), m = marks.current
+      if (b && m) {
+        const o = 10, pts = [[b.x0 - o, b.y0 - o], [b.x1 + o, b.y0 - o], [b.x1 + o, b.y1 + o], [b.x0 - o, b.y1 + o]]
+        m.querySelectorAll('rect').forEach((r, i) => { r.setAttribute('x', String(pts[i][0] - 3)); r.setAttribute('y', String(pts[i][1] - 3)) })
+      }
       if (!a || !panel || !ref.current || innerWidth < 900) return
       const px = panel.left - 14, py = panel.top + panel.height / 2, mx = a.x + (px - a.x) * 0.35
       ref.current.setAttribute('d', `M${a.x},${a.y} L${mx},${py} L${px},${py}`)
@@ -171,7 +176,7 @@ function Leader({ entry, hidden }: { entry: Entry | null; hidden: boolean }) {
   return (
     <svg className={`leader ${hidden ? 'hide' : ''} ${entry && s.plain ? 'lit' : ''}`} aria-hidden="true">
       <path ref={ref} key={`${s.sel.lane}:${s.sel.row}`} pathLength={1} />
-      <circle ref={dot} r="3" />
+      <circle ref={dot} r="2.5" />
     </svg>
   )
 }
@@ -182,6 +187,7 @@ function IndexPanel({ onPick }: { onPick: (id: string) => void }) {
   const groups: [string, Entry[]][] = [
     ['Subject', ENTRIES.filter((e) => e.kind === 'subject' || e.kind === 'visitor')],
     ['Service records', ENTRIES.filter((e) => e.kind === 'service')],
+    ['Education', ENTRIES.filter((e) => e.kind === 'education')],
     ['Case files', ENTRIES.filter((e) => e.kind === 'case' || e.kind === 'restricted')],
   ]
   return (
@@ -195,7 +201,7 @@ function IndexPanel({ onPick }: { onPick: (id: string) => void }) {
             return (
               <button key={e.id} onClick={() => onPick(e.id)}>
                 <span className="n">{e.id}</span>
-                <span className="t">{archive.isLocked(e) ? '[REDACTED]' : e.kind === 'service' ? e.org : e.title}<small>{e.kind === 'service' ? e.title : e.year ? `${e.kicker.replace(/^Case file · /, '')} · ${e.year}` : e.kicker}</small></span>
+                <span className="t">{archive.isLocked(e) ? '[REDACTED]' : e.kind === 'service' ? e.org : e.title}<small>{e.kind === 'service' ? e.title : e.kind === 'education' ? `${e.org} · ${e.dates}` : e.year ? `${e.kicker.replace(/^Case file · /, '')} · ${e.year}` : e.kicker}</small></span>
                 <span className={`st ${plain ? '' : 'x'} ${s.lens !== 'all' && plain ? 'rel' : ''}`}>{archive.isShredded(e) ? 'shredded' : s.lens === 'all' ? '' : plain ? 'relevant' : 'sealed'}</span>
               </button>
             )
@@ -306,7 +312,7 @@ function PrivacyStat() {
   }, [])
   return (
     <span className="privacy" title="Counted live in this page">
-      third-party requests <b>{n.third}</b> · cookies <b>{n.cookies}</b> · <a href={OBSERVATORY} target="_blank" rel="noopener noreferrer">headers ↗</a>
+      <b>{n.third}</b> trackers · <b>{n.cookies}</b> cookies · <a href={OBSERVATORY} target="_blank" rel="noopener noreferrer">headers ↗</a>
     </span>
   )
 }
