@@ -18,6 +18,7 @@ export default defineConfig({
   projects: [
     { name: 'desktop-1440', testIgnore: /webkit\.spec/, use: { viewport: { width: 1440, height: 900 } } },
     { name: 'phone-390', testIgnore: /webkit\.spec/, use: { viewport: { width: 390, height: 844 }, hasTouch: true, deviceScaleFactor: 3 } },
+    { name: 'phone-short', testIgnore: /webkit\.spec/, grep: /entry:|entrance:|reduced motion/, use: { viewport: { width: 390, height: 650 }, hasTouch: true, deviceScaleFactor: 3 } },
     // Safari's engine: no GPU on Windows, so this checks rendering and flows, not frame rate
     { name: 'webkit-smoke', testMatch: /webkit\.spec/, use: { browserName: 'webkit', viewport: { width: 1280, height: 800 }, launchOptions: { args: [] } } },
   ],

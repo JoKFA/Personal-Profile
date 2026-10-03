@@ -4,33 +4,43 @@
 // distance 140, span 7.33; the selection ripple fires with the selection itself.
 import * as THREE from 'three'
 import { ENTRIES } from '../data/entries'
-import type { Entry, Lens } from '../data/types'
+import { KIND_NAME, type Entry, type Lens } from '../data/types'
 import { isPlain, land, rekey, sealAll, slotIndex, type ShownMap } from '../model/archive'
 import { Ueba, type Alert } from '../model/ueba'
 import { COLUMN_SPACING as CS, LANES, ROW_SPACING as RS, ROWS, cellKey, nearest, nearestCell, sameCell, wrap, type Cell } from '../motion/grid'
 import { approach, damp, LIFT, RATES, REDUCED_FACTOR, spring, type Spring } from '../motion/spring'
-import { field, PULSE_LIFE, settlingWave, slope, smooth, TILT, type FieldState, type Pulse } from '../motion/waves'
-import { CARD, LED } from './drive'
+import { crestRow, ENTRANCE, ENTRANCE_END, field, PULSE_LIFE, settlingWave, slope, smooth, TILT, type FieldState, type Pulse } from '../motion/waves'
+import { BOARD_Z, CARD, LED } from './drive'
+import { DIE_ON_FACE, DOOR, doorAt, doorDistance, doorSpan } from './door'
 import { createHero, type Hero } from './hero'
 import { loadDriveModel } from './model'
 import { FrameBudget, initialQuality, lower, type Quality } from './quality'
-import { CIPHER_CELLS, COLS, createStage, DROWS, RECORD_CELL0, type Stage } from './stage'
+import { CIPHER_CELLS, COLS, createStage, DROWS, PLAIN, RECORD_CELL0, type Form, type Stage } from './stage'
 
 export type Mode = 'entry' | 'archive' | 'opening' | 'file' | 'closing'
+/** the legend's groups: the kinds a visitor can light on their own */
+export type KindGroup = 'service' | 'case' | 'education' | 'skill'
+export const inGroup = (e: Entry, g: KindGroup) => e.kind === g || (g === 'skill' && e.kind === 'credential')
 export interface Snapshot {
   mode: Mode
+  kindFocus: KindGroup | null
   sel: Cell
   entry: Entry | null
   plain: boolean
-  lens: Lens
+  /** the visitor has been issued read access (spec §26.4 ⑥) */
+  granted: boolean
   readable: number
   risk: number
   riskLevel: string
   captured: boolean
   destroyed: ReadonlySet<string>
   quality: Quality['name']
+  /** the subject file's door is open: the camera is closing in on the drive, full frame (the HUD steps aside) */
+  door: boolean
   version: number
 }
+/** What the exterior's last frame looked like, so the interior's first frame can be the same picture. */
+export interface Handoff { glow: number; fov: number; /** the die's width as a fraction of the screen */ dieFrac: number }
 
 const ENTRY_INDEX = new Map(ENTRIES.map((e, i) => [e.id, i]))
 const yaw = THREE.MathUtils.degToRad(59), elev = THREE.MathUtils.degToRad(19)
@@ -45,7 +55,14 @@ const FACE_YAW = Math.atan2(viewDir.x, viewDir.z)
 const BASE_Y = -4.6
 const cellPos = (c: Cell) => new THREE.Vector3((c.lane - 2) * CS, BASE_Y, (c.row - 15.5) * RS)
 const ledKind = (e: Entry | null): 'long' | 'double' | 'dot' => (!e ? 'long' : e.kind === 'service' ? 'double' : e.kind === 'skill' || e.kind === 'credential' ? 'dot' : 'long')
-export const kindLabel = (e: Entry) => ({ service: 'SERVICE RECORD', case: 'CASE FILE', education: 'EDUCATION', skill: 'SKILL', credential: 'CREDENTIAL', subject: 'SUBJECT FILE', visitor: 'VISITOR FILE', restricted: 'RESTRICTED' } as const)[e.kind]
+export const kindLabel = (e: Entry) => KIND_NAME[e.kind].toUpperCase()
+// what a drive holds, told without words: a skill or credential is a short key (half the length);
+// a service record (a job) carries champagne end caps, an education record ink ones; projects plain
+const KIND_FORM: Partial<Record<Entry['kind'], Form>> = {
+  skill: { sx: 0.5, ox: 0, cap: null }, credential: { sx: 0.5, ox: 0, cap: null },
+  service: { sx: 1, ox: 0, cap: new THREE.Color(0.28, 0.29, 0.31) }, education: { sx: 1, ox: 0, cap: new THREE.Color(0.95, 0.7, 0.36) },
+}
+export const formOf = (e: Entry | null): Form => (e && KIND_FORM[e.kind]) || PLAIN
 const cipherCell = (c: Cell) => (wrap(c.lane, LANES) * 131 + wrap(c.row, ROWS) * 57) % CIPHER_CELLS
 const HEX = '0123456789abcdef'
 const rhex = (n: number) => Array.from({ length: n }, () => HEX[Math.floor(Math.random() * 16)]).join('')
@@ -95,6 +112,8 @@ export class Archive {
   private idleGain = 0
   private pulseGain = 1
   private detail = 0
+  private entryLook = 1
+  private entryLookTarget = 1
   private shake = 0
   private lastInteraction = 0
   private opening = false
@@ -170,10 +189,10 @@ export class Archive {
   private publish() {
     const entry = this.entryAt(this.sel)
     this.snap = {
-      mode: this.mode, sel: { ...this.sel }, entry, plain: isPlain(this.shown, entry), lens: this.lens,
+      mode: this.mode, kindFocus: this.kindFocus, sel: { ...this.sel }, entry, plain: isPlain(this.shown, entry), granted: this.granted,
       readable: ENTRIES.filter((e) => isPlain(this.shown, e)).length,
       risk: Math.round(this.ueba.risk), riskLevel: this.ueba.level, captured: this.captured, destroyed: this.destroyed,
-      quality: this.quality.name, version: ++this.version,
+      quality: this.quality.name, door: this.door.on, version: ++this.version,
     }
     this.listeners.forEach((f) => f())
   }
@@ -223,35 +242,68 @@ export class Archive {
   }
   jumpTo(id: string) { const e = ENTRIES.find((x) => x.id === id); if (e) this.select(nearestCell(e.slot, this.sel)) }
 
-  /** Switch the "Hiring for" lens. Returns how many drives change. */
-  setLens(lens: Lens) {
-    if (lens !== this.lens) this.lensAt = this.t
-    this.lens = lens
-    const n = rekey(this.shown, ENTRIES, lens, this.sel, this.t)
-    if (!this.reduced) this.pulses.push({ ...this.sel, time: this.t })
-    else land(this.shown, Infinity)
+  /**
+   * Least privilege (spec §26.4 ⑥): a first visit sees the archive sealed until the briefing ends;
+   * then the visitor's read access is issued and a decrypt wave runs out from the selection.
+   * Return visits and deep links are granted on entry.
+   */
+  private granted = false
+  grant() {
+    if (this.granted) return
+    this.granted = true; this.lensAt = this.t
+    rekey(this.shown, ENTRIES, 'all', this.sel, this.t)
+    // a front of light runs out from the file (lensAt above) as each label decrypts; the drives
+    // themselves do not move, so the archive stays exactly in its resting shape
+    if (this.reduced) land(this.shown, Infinity)
     this.lastInteraction = this.t
     this.publish()
-    return n
   }
-  /** The entry wave: everything sealed, then decrypted outward under "Any role". */
-  enter(select?: string) {
+  get isGranted() { return this.granted }
+  /** One file decrypted on its own, before the grant (the subject file opened by the entrance). */
+  decrypt(id: string) {
+    const s = this.shown.get(id)
+    if (s && !s.plain) { s.to = true; s.at = this.t }
+    if (this.reduced) land(this.shown, Infinity)
+  }
+  /** The legend: light only one kind of record (null = all). Told by light, like a lens. */
+  private kindFocus: KindGroup | null = null
+  setKindFocus(k: KindGroup | null) {
+    if (k === this.kindFocus) return
+    this.kindFocus = k; if (k) this.lensAt = this.t
+    this.publish()
+  }
+  /** a lens or the legend is narrowing what is lit */
+  private get narrowed() { return this.lens !== 'all' || this.kindFocus !== null }
+  /** Into the archive: everything starts sealed; `sealed` keeps it so until grant() (a first visit). */
+  enter(select?: string, sealed = false) {
     this.mode = 'archive'
     if (select) { const e = ENTRIES.find((x) => x.id === select); if (e) { this.sel = { ...e.slot }; const c = cellPos(this.sel); this.colCam.value = c.x; this.rail.value = -2.17 - c.z; this.shoulder.value = this.sel.row; this.laneFocus.value = this.sel.lane } }
-    this.setLens(this.lens)
+    if (!sealed) this.grant()
     this.lift = spring(0)
     this.paintSelected()
   }
   /**
-   * The PV's entrance, started the moment the archive is first on screen (not when it is built,
-   * which can be seconds earlier): the camera whips in from far down the field and slows to a stop,
-   * swells roll across the drives, and the selected drive rises once everything has settled.
+   * The entrance (spec §26.3, §26.10): one continuous shot down the selected file's drawer, the
+   * camera riding the search wave until it slows onto the file and becomes the resting shape.
+   * A first visit holds it at its first frame (holdEntrance) until the entry's light strikes the
+   * archive (releaseEntrance), so the wave starts from that strike.
    */
   startEntrance() {
-    if (!this.reduced) { this.colCam.value += CS * 1.4; this.rail.value += RS * 26 }
     this.lift = spring(0)
     this.enteredAt = this.t
   }
+  private entranceHeld = false
+  /** Freeze the entrance at its first frame (the archive is seen, still, before the wave). */
+  holdEntrance() { this.entranceHeld = true; this.enteredAt = this.t - 0.001 }
+  releaseEntrance() { if (!this.entranceHeld) return; this.entranceHeld = false; this.enteredAt = this.t - 0.001 }
+  /** Where on screen the wave starts (the crest at the entrance's first frame). */
+  entranceOrigin() { return this.project(this.sel.lane, this.sel.row + crestRow(0.001), 0.6) }
+  /** seconds into the entrance (Infinity when not entering, or long after it) */
+  private get entryAge() { const a = this.t - this.enteredAt; return this.reduced || a < 0 || a > ENTRANCE_END + 4 ? Infinity : a }
+  /** Seconds since the entrance started; Infinity when there is none (reduced motion, or long done). */
+  entranceAge() { return this.entryAge }
+  /** The entrance is over: the wave has settled into the archive's resting shape. */
+  entranceDone() { return this.entryAge === Infinity || this.entryAge >= ENTRANCE_END }
 
   // ── open / close choreography (awaited by the UI flow) ──
   denyFeedback() {
@@ -271,6 +323,7 @@ export class Archive {
       this.lift.velocity -= 1.6
       await new Promise((r) => setTimeout(r, 240))
     }
+    this.entryLookTarget = 0
     this.opening = true; this.faceTarget = 1; this.focus.target = 1
     if (!(await this.until(() => this.face > 0.85 && this.detail > 0.8))) this.stalled = true
   }
@@ -290,6 +343,8 @@ export class Archive {
   /** `pageGone` resolves when the file view has left; the archive is not interactive before then. */
   async close(pageGone: Promise<unknown> = Promise.resolve()) {
     this.mode = 'closing'; this.publish(); this.clearanceMin = Infinity; this.stalled = false
+    // inside the drive: the interior plays its intro backwards, then the door runs in reverse and the drive is as it was
+    if (this.door.open) { await this.interior?.exit(); await this.endDoor() }
     const L = this.light, glow0 = Math.max(L.glow, 0.6)
     L.seam = 0
     // the light retracts while the drive turns back, still up; it starts descending once most of
@@ -354,6 +409,54 @@ export class Archive {
       return { x: (this.tmp.x + 1) / 2 * innerWidth, y: (1 - this.tmp.y) / 2 * innerHeight }
     })
   }
+  // ── the subject file's door (docs/subject-space-spec.md §3) ──
+  private door = { on: false, open: false, t: 0, dir: 1, speed: 1, cut: null as null | ((h: Handoff) => void), back: null as null | (() => void) }
+  /** the interior is drawing on our canvas: this archive stands still until it hands back */
+  private suspended = false
+  /** test hook: keep the last exterior frame (set window.__cfCaptureCut before the cut) */
+  private shotCut = false
+  /** a 2D canvas laid over the scene: it takes the exterior's last frame at the cut and dissolves, so the interior arrives under it as a continuation */
+  veil: HTMLCanvasElement | null = null
+  private lastHandoff: Handoff = { glow: 0, fov: 24.5, dieFrac: 0.7 }
+  /** the interior registers how to leave: it plays its intro backwards and ends on the frame the door resumes from */
+  interior: null | { exit: () => Promise<void> } = null
+  /** What the interior borrows: this archive's renderer (and so its canvas), its environment and its quality tier. */
+  get host() { return { renderer: this.stage.renderer, environment: this.stage.scene.environment, quality: this.quality } }
+  /** The door is closing in (not yet cut, not yet leaving). */
+  doorActive() { return this.door.on && this.door.dir > 0 }
+  /**
+   * The subject drive, already open and decrypted, stands to face the reader and the camera closes in
+   * until the die on its circuit board fills the view. Resolves at the cut with what the interior must
+   * match; from then on this archive stands still (the interior draws) until `close()` hands back.
+   */
+  beginDoor(): Promise<Handoff> {
+    this.mode = 'opening'; this.suspended = false
+    this.door = { ...this.door, on: true, open: false, t: this.reduced ? DOOR.end : 0, dir: 1, speed: 1 }
+    this.publish()
+    return new Promise((res) => { this.door.cut = res })
+  }
+  /** Any key or click during the door: run it out quickly instead of making anyone wait. */
+  skipDoor() { if (this.doorActive()) this.door.speed = 5 }
+  /** The interior has played its intro backwards: run the door in reverse and wait until the drive is as it was. */
+  private async endDoor() {
+    this.suspended = false; this.last = performance.now()
+    this.door = { ...this.door, on: true, open: false, dir: -1, speed: this.reduced ? 20 : DOOR.backSpeed }
+    this.publish()
+    await new Promise<void>((res) => { this.door.back = res })
+  }
+  /** The die's width on screen, the lens and the trace light at this moment: what the interior's first frame is built to match. */
+  private measureHandoff(): Handoff {
+    const S = this.stage
+    S.camera.updateMatrixWorld(); this.heroGroup.updateMatrixWorld(true)
+    const edge = (sx: number) => new THREE.Vector3(DIE_ON_FACE.x + sx * DIE_ON_FACE.halfW, DIE_ON_FACE.y, BOARD_Z).applyMatrix4(this.heroGroup.matrixWorld).project(S.camera)
+    const a = edge(-1), b = edge(1)
+    return { glow: this.light.glow, fov: S.camera.fov, dieFrac: Math.max(0.05, Math.abs(b.x - a.x) / 2) }
+  }
+  /** Screen position of a point in the archive (lane and row may be fractional; up = above the drives' tops). */
+  project(lane: number, row: number, up = 0) {
+    this.tmp.set((lane - 2) * CS - this.colCam.value, BASE_Y + CARD.H + up, (row - 15.5) * RS + this.rail.value).project(this.stage.camera)
+    return { x: (this.tmp.x + 1) / 2 * innerWidth, y: (1 - this.tmp.y) / 2 * innerHeight }
+  }
   /** debug / perf probe: hold the read bloom on */
   debugBloom(s: number) { this.stage.setBloom(s) }
   setPointer(x: number, y: number) { this.pointer.set(x / innerWidth * 2 - 1, -(y / innerHeight) * 2 + 1) }
@@ -374,7 +477,8 @@ export class Archive {
   // ── internals ──
   private unbind?: () => void
   private bindInput() {
-    const move = (e: PointerEvent) => { if (e.pointerType === 'mouse') this.setPointer(e.clientX, e.clientY) }
+    // a pointer over the HUD (a button, the legend) is not over a drive
+    const move = (e: PointerEvent) => { if (e.pointerType !== 'mouse') return; if (e.target === this.canvas) this.setPointer(e.clientX, e.clientY); else this.clearPointer() }
     const leave = () => this.clearPointer()
     const vis = () => { if (!document.hidden) this.last = performance.now() }
     addEventListener('pointermove', move); addEventListener('pointerleave', leave); document.addEventListener('visibilitychange', vis)
@@ -415,7 +519,7 @@ export class Archive {
   private lensAt = -10
   private relOf(e: Entry | null, dt: number) {
     if (!e) return 0
-    const want = this.lens !== 'all' && isPlain(this.shown, e) && !this.isLocked(e) && !this.destroyed.has(e.id) ? 1 : 0
+    const want = this.narrowed && isPlain(this.shown, e) && !this.isLocked(e) && !this.destroyed.has(e.id) && (!this.kindFocus || inGroup(e, this.kindFocus)) ? 1 : 0
     const v = approach(this.relief.get(e.id) ?? 0, want, this.reduced ? 60 : 2.2, dt); this.relief.set(e.id, v)
     return v
   }
@@ -424,12 +528,12 @@ export class Archive {
     const minor = e.kind === 'skill' || e.kind === 'credential'
     // light leaks from the slots around a record: a faint warm seam in the overview, a full glow
     // for the drives a lens picks out, nearly nothing for the rest
-    const rest = this.lens === 'all' ? (minor ? 2.4 : 5.5) : 0.1
+    const rest = !this.narrowed ? (minor ? 2.4 : 5.5) : 0.1
     return Math.max(rest, r * (minor ? 3 : 5.5)) + sweep * (r > 0.01 ? 4 : 0.8)
   }
   private fieldGlow(e: Entry | null, r: number) {
     if (!e || this.isLocked(e) || this.destroyed.has(e.id)) return 0
-    return this.lens === 'all' ? 0.18 : 0.9 * r
+    return !this.narrowed ? 0.18 : 0.9 * r
   }
   private glowOf(e: Entry | null) {
     return e && isPlain(this.shown, e) && !this.isLocked(e) && !this.destroyed.has(e.id) ? 1 : 0
@@ -449,6 +553,7 @@ export class Archive {
   private paintSelected() {
     const e = this.selected
     this.hero.setDark(e?.kind === 'restricted')
+    const f = formOf(e); this.heroGroup.scale.x = f.sx; this.hero.setCap(f.cap)
     this.hero.setLed(this.ledOf(e), ledKind(e))
     this.light.glowTarget = this.glowOf(e)
     clearInterval(this.heroTimer)
@@ -460,6 +565,8 @@ export class Archive {
   private paintHero(kind: 'plain' | 'cipher' | 'denied', k = 1) {
     const g = this.hero.labelCanvas.getContext('2d')!, e = this.selected, dark = e?.kind === 'restricted'
     g.clearRect(0, 0, 512, 256); g.textBaseline = 'middle'
+    // a short key is the drive squashed to half its length: print the label twice as wide so it reads true
+    g.setTransform(1 / formOf(e).sx, 0, 0, 1, 0, 0)
     const mix = (s: string) => s.split('').map((ch, j) => (j / s.length < k || ch === ' ' ? ch : HEX[Math.floor(Math.random() * 16)])).join('')
     const ink = dark ? 'rgba(222,224,228,.92)' : 'rgba(30,29,26,.88)', sub = dark ? 'rgba(200,203,208,.72)' : 'rgba(60,57,50,.62)'
     if (kind === 'plain' && e) {
@@ -470,21 +577,29 @@ export class Archive {
       g.fillStyle = kind === 'denied' ? '#d9431c' : sub; g.font = '700 68px "JetBrains Mono", monospace'; g.fillText(`0x${rhex(4)}`, 20, 80)
       g.font = '600 34px "JetBrains Mono", monospace'; g.fillText(kind === 'denied' ? 'ACCESS DENIED' : 'SEALED', 24, 160)
     }
+    g.setTransform(1, 0, 0, 1, 0, 0)
     this.hero.labelTex.needsUpdate = true
   }
 
   private frame = (now: number) => {
     this.raf = requestAnimationFrame(this.frame)
     if (document.hidden) return
+    if (this.suspended) { this.last = now; return }
     const rawDt = now - this.last
     const dt = Math.min(0.05, rawDt / 1000); this.last = now; this.t += dt
+    if (this.door.on) this.door.t = Math.min(DOOR.end, Math.max(0, this.door.t + dt * this.door.dir * this.door.speed))
+    const D = this.door.on ? doorAt(this.door.t) : null
     if (this.budget.sample(rawDt, now) && this.quality.name !== 'low') this.degrade()
     const t = this.t, R = this.reduced ? REDUCED_FACTOR : 1, S = this.stage
+    if (this.entranceHeld) this.enteredAt = t - 0.001
     const chosen = cellPos(this.sel)
     damp(this.shoulder, this.sel.row, RATES.shoulder * R, dt); damp(this.laneFocus, this.sel.lane, RATES.laneFocus * R, dt)
-    // the entrance decelerates over about three seconds (the PV's whip); after it, normal tracking
-    const track = (t - this.enteredAt < 3.4 ? 1.45 : RATES.track) * R
-    damp(this.colCam, chosen.x, track, dt); damp(this.rail, -2.17 - chosen.z, track, dt)
+    const track = RATES.track * R
+    // the entrance's shot: the camera rides the search wave down the file's drawer (no spring)
+    const age = this.entryAge, sweeping = age < ENTRANCE.travel
+    this.entryLook = approach(this.entryLook, this.reduced ? 0 : this.entryLookTarget, 6, dt)
+    if (sweeping) { this.colCam.value = chosen.x; this.colCam.velocity = 0; this.rail.value = -2.17 - chosen.z - crestRow(age) * RS; this.rail.velocity = 0 }
+    else { damp(this.colCam, chosen.x, track, dt); damp(this.rail, -2.17 - chosen.z, track, dt) }
     const trackX = this.colCam.value
     // screen-space speed of the field this frame → blur along it
     {
@@ -492,8 +607,10 @@ export class Archive {
       if (Math.abs(dx) > 6 || Math.abs(dz) > 6) { dx = 0; dz = 0 }   // a jump, not a move
       this.tmp.set(0, BASE_Y, 0).project(S.camera); const ax = this.tmp.x, ay = this.tmp.y
       this.tmp.set(-dx, BASE_Y, dz).project(S.camera)
-      const k = this.reduced || dt <= 0 ? 0 : 0.5 * Math.min(1, 1 / 60 / dt) * 2.2
-      S.setMotion((this.tmp.x - ax) * k, (this.tmp.y - ay) * k)
+      // Keep the travelling silhouette readable; shutter length shortens before the final focus.
+      const shutter = age < ENTRANCE.travel ? 1 + 1.2 * (1 - smooth(age / 2.1)) : 1
+      const k = this.reduced || dt <= 0 ? 0 : 0.5 * Math.min(1, 1 / 60 / dt) * 2.2 * shutter
+      S.setMotion(THREE.MathUtils.clamp((this.tmp.x - ax) * k, -0.045, 0.045), THREE.MathUtils.clamp((this.tmp.y - ay) * k, -0.018, 0.018))
     }
     this.pulses = this.pulses.filter((p) => t - p.time < PULSE_LIFE)
     // the field keeps breathing whenever the archive is showing, not only when idle
@@ -520,11 +637,11 @@ export class Archive {
     for (const [k, v] of this.hovers) { const n = approach(v, k === hk ? 0.28 : 0, RATES.hover, dt); if (k !== hk && n < 1e-4) this.hovers.delete(k); else this.hovers.set(k, n) }
 
     const up = this.opening || this.holdHigh
-    const settling = this.mode === 'archive' && t - this.enteredAt < 2.4
+    const settling = this.mode === 'archive' && age < ENTRANCE.travel - 0.4
     damp(this.lift, up ? LIFT.open : settling ? 0 : LIFT.rest, (this.opening ? RATES.eject : this.mode === 'closing' ? RATES.land : RATES.lift) * R, dt)
     for (const [k, s] of this.lifts) { damp(s, 0, RATES.outgoing * R, dt); if (Math.abs(s.value) < 1e-4 && Math.abs(s.velocity) < 1e-3) this.lifts.delete(k) }
 
-    const fs: FieldState = { shoulder: this.shoulder.value, laneFocus: this.laneFocus.value, idleGain: this.idleGain, pulseGain: this.pulseGain, pulses: this.pulses, time: t, entry: this.reduced ? 0 : t - this.enteredAt }
+    const fs: FieldState = { shoulder: this.shoulder.value, laneFocus: this.laneFocus.value, idleGain: this.idleGain, pulseGain: this.pulseGain, pulses: this.pulses, time: t, entry: age === Infinity ? 0 : age }
     const cLane = Math.round(trackX / CS) + 2, cRow = Math.round((-2.17 - this.rail.value) / RS + 15.5)
     for (let i = 0; i < S.N; i++) {
       const c = { lane: cLane - (COLS >> 1) + Math.floor(i / DROWS), row: cRow - (DROWS >> 1) + (i % DROWS) }
@@ -547,16 +664,24 @@ export class Archive {
       // the overview is the main view: a record stands in light, an empty drive sits in warm shade;
       // under a lens, records the lens does not pick join the shade
       const isRecord = !!e && e.kind !== 'restricted' && !this.destroyed.has(e.id)
-      const lit = this.lens === 'all' ? (isRecord ? 1 : 0) : r
+      const lit = !this.narrowed ? (isRecord ? 1 : 0) : r
       // eased per entry (decrypt flips, lens changes): the light glides, it never jumps
       let shade = isSel ? 1 : 1 - 0.48 * (1 - lit), lamp = isSel ? 0 : this.lampOf(e, r, sweep)
       if (e && !this.reduced) {
         const le = this.lightEase.get(e.id) ?? [lamp, shade], k2 = 1 - Math.exp(-dt * 4)
         le[0] += (lamp - le[0]) * k2; le[1] += (shade - le[1]) * k2; this.lightEase.set(e.id, le); lamp = le[0]; shade = le[1]
       }
+      // the search: every drive it carries is lit, the way the PV's archive is all ivory
+      // the search sees one ivory archive (the PV's); the records' own light returns as it settles
+      if (age < ENTRANCE_END) {
+        const q = 1 - smooth((age - ENTRANCE.settle) / ENTRANCE.settleFor)
+        shade += (1 - shade) * 0.9 * q; lamp *= 1 - q
+      }
+      // The entrance resolves to one answer. Other records remain discoverable, with quieter light.
+      lamp *= 1 - 0.68 * this.entryLook * (1 - this.detail)
       S.set(i, (c.lane - 2) * CS - trackX, y, (c.row - 15.5) * RS + this.rail.value, slope(c.row, c.lane, fs) * TILT * (1 - smooth(lifted / 0.4)),
         e && (isPlain(this.shown, e) || e.kind === 'restricted') ? RECORD_CELL0 + ENTRY_INDEX.get(e.id)! : cipherCell(c),
-        this.ledOf(e), isSel, this.fieldGlow(e, r), e?.kind === 'restricted', ledKind(e), shade, this.fieldGlow(e, r), 0, lamp)
+        this.ledOf(e), isSel, this.fieldGlow(e, r), e?.kind === 'restricted', ledKind(e), shade, this.fieldGlow(e, r), 0, lamp, formOf(e))
     }
     S.commit(t)
 
@@ -566,7 +691,7 @@ export class Archive {
     this.hero.setLabel(this.detail < 0.5)
     this.hero.setClear(smooth(Math.min(1, this.detail * 1.25)))
     this.shake *= Math.exp(-dt * 6)
-    this.heroGroup.position.set(chosen.x - trackX, BASE_Y + field(this.sel.row, this.sel.lane, fs) + this.lift.value + (this.hovers.get(cellKey(this.sel)) || 0), chosen.z + this.rail.value)
+    this.heroGroup.position.set(chosen.x - trackX, BASE_Y + field(this.sel.row, this.sel.lane, fs) + this.lift.value + (D ? DOOR.lift * D.stand : 0) + (this.hovers.get(cellKey(this.sel)) || 0), chosen.z + this.rail.value)
     {
       // the selection light: a drive-shaped panel in the slot in front of the selected drive, facing
       // it; it glides to a new selection and fades while a file is open
@@ -577,9 +702,9 @@ export class Archive {
       const far = this.spotAt.distanceTo(this.tmp)
       this.slotFade = approach(this.slotFade, far > 0.8 ? 0 : 1, this.reduced ? 60 : far > 0.8 ? 9 : 3.5, dt)
       if (this.slotFade < 0.02 || far <= 0.8) this.spotAt.lerp(this.tmp, this.slotFade < 0.02 ? 1 : 1 - Math.exp(-dt * 12))
-      const s = this.spotAt, on = (1 - this.detail) * (this.mode === 'entry' ? 0 : 1) * this.slotFade
+      const s = this.spotAt, on = (1 - this.detail) * (this.mode === 'entry' || sweeping ? 0 : 1) * this.slotFade
       // the black drive is lit by its own dark register, not by a warm slot that would mirror in its coat
-      S.setSlotLight(s.x, s.y, s.z, RS * 0.5, (this.selected?.kind === 'restricted' ? 0 : 16) * on)
+      S.setSlotLight(s.x, s.y, s.z, RS * 0.5, (this.selected?.kind === 'restricted' ? 0 : 16) * on, 4.6 * formOf(this.selected).sx)
     }
     // the drive may only turn once it is clear of the drives around it: 5 wide, turned 48° it
     // sweeps ±3 rows, so its underside has to be above their tops first (no clipping, by construction)
@@ -587,13 +712,15 @@ export class Archive {
     for (let i = 0; i < S.N; i++) if (this.tops[i] > top) top = this.tops[i]
     const gap = this.heroGroup.position.y - top
     const turn = Math.min(smooth(this.face), Math.max(0, Math.min(1, (gap - 0.12) / 0.5)))
-    this.heroGroup.rotation.set(slope(this.sel.row, this.sel.lane, fs) * TILT * (1 - this.detail) * (1 - smooth(this.lift.value / 0.4)), Math.sin(t * 38) * this.shake * 0.05 + FACE_YAW * 0.82 * turn, 0)
+    this.heroGroup.rotation.set(slope(this.sel.row, this.sel.lane, fs) * TILT * (1 - this.detail) * (1 - smooth(this.lift.value / 0.4)), Math.sin(t * 38) * this.shake * 0.05 + FACE_YAW * 0.82 * turn * (1 - (D ? D.stand : 0)), 0)
 
     if (this.mode === 'opening' || this.mode === 'closing') this.measureClearance()
     this.face = approach(this.face, this.faceTarget, this.reduced ? 60 : this.faceTarget ? 4.2 : 6.5, dt)
     this.focus.value = approach(this.focus.value, this.focus.target, this.reduced ? 60 : this.focus.target ? 3 : 4.5, dt)
     this.bloom.value = approach(this.bloom.value, this.bloom.target, this.reduced ? 60 : 5, dt)
-    S.setExposure(0.86 - 0.24 * this.focus.value)   // high-key, after the PV
+    // high-key, after the PV; brighter still while the entrance searches
+    S.setEntranceLight(this.entryLook * (1 - this.detail) * (age < ENTRANCE_END ? 1 - 0.15 * smooth((age - ENTRANCE.settle) / ENTRANCE.settleFor) : 0.85))
+    S.setExposure(0.86 - 0.24 * this.focus.value + (age < ENTRANCE_END ? 0.1 * (1 - smooth((age - ENTRANCE.settle) / ENTRANCE.settleFor)) : 0))
     S.setFaceLight(this.detail)
     // depth of field: focus on the selected drive; the closer the camera has pushed in (an open
     // file), the shallower the focus, so the archive behind the file falls away
@@ -609,6 +736,14 @@ export class Archive {
         const f = this.focusEase, k = this.reduced ? 1 : 1 - Math.exp(-dt * 5)
         f[0] += (cx - f[0]) * k; f[1] += (cy - f[1]) * k; f[2] += (rx - f[2]) * k; f[3] += (ry - f[3]) * k
         S.setFocus(f[0], f[1], f[2] * 1.8, f[3] * 1.7, this.reduced ? 0 : (4.5 + 6 * this.detail) * Math.min(innerWidth / 1440, 1.2))   // the overview stays sharp; only the far edges soften
+        // the PV's deep focus: a sharp band through the middle, the near and far rows soft
+        if (age < ENTRANCE_END) {
+          const stop = smooth((age - 1.2) / 2.2), handover = smooth((age - ENTRANCE.settle) / ENTRANCE.settleFor)
+          const fx = 0.5 + (f[0] - 0.5) * stop, fy = 0.5 + (f[1] - 0.5) * stop
+          const rxE = 0.68 + (f[2] * 1.25 - 0.68) * stop, ryE = 0.24 + (f[3] * 1.2 - 0.24) * stop
+          S.setFocus(fx, fy, rxE + (f[2] * 1.8 - rxE) * handover, ryE + (f[3] * 1.7 - ryE) * handover,
+            (8 + 3 * stop) * (1 - handover) + 4.5 * handover)
+        }
       }
     }
     S.setBloom(this.reduced ? 0 : 0.95 * this.bloom.value)
@@ -628,24 +763,68 @@ export class Archive {
     // while the drive ejects and the camera has not pushed in yet, tilt up with it so it never
     // leaves the frame through the top
     if (this.opening || this.holdHigh) aim.addScaledVector(upV, Math.max(0, this.lift.value - LIFT.rest) * 0.55 * (1 - d))
-    // the entrance turns the view as well as moving it: it starts swung round and higher, and eases
-    // to the archive's angle as the camera settles
-    const ek = this.reduced ? 1 : smooth(Math.min(1, Math.max(0, (t - this.enteredAt) / 3.4)))
-    const yawE = yaw + THREE.MathUtils.degToRad(17) * (1 - ek), elevE = elev + THREE.MathUtils.degToRad(10) * (1 - ek)
-    const dir = this.tmp2.set(-Math.sin(yawE) * Math.cos(elevE), Math.sin(elevE), Math.cos(yawE) * Math.cos(elevE))
-    const camPos = aim.clone().addScaledVector(d > 0.01 ? viewDir : dir, distance)
+    // the entrance: riding the wave, low and close, side-on to the drives; after the cut, a higher,
+    // steeper angle that eases to the archive's own as the stair settles
+    let yawE = yaw, elevE = elev, spanE = span
+    if (age < ENTRANCE_END) {
+      // one move: higher and turned at first, closer, easing to the archive's own angle as it stops
+      const k = smooth(Math.min(1, age / (ENTRANCE.travel + 0.6)))
+      // it starts nearly along the drawers, the drives' edges standing as slats (PV 27.6–29.4), and
+      // turns while it travels until the faces open out (PV 30.8–31.6)
+      yawE = THREE.MathUtils.degToRad(84) + (yaw - THREE.MathUtils.degToRad(84)) * k
+      elevE = THREE.MathUtils.degToRad(23) + (elev - THREE.MathUtils.degToRad(23)) * k
+      spanE = span * (0.9 + 0.1 * k)
+    }
+    let yawB = yawE, elevB = elevE, spanB = spanE
+    // the door: round to the front, centred on the face, then the dolly in to the die; the lens widens as it closes
+    let distanceD = distance
+    if (D) {
+      yawB += (0 - yawB) * D.stand; elevB += (0 - elevB) * D.stand
+      const hp = this.heroGroup.position
+      aim.lerp(new THREE.Vector3(hp.x, hp.y + CARD.H / 2, hp.z), D.stand).lerp(new THREE.Vector3(hp.x + DIE_ON_FACE.x, hp.y + DIE_ON_FACE.y, hp.z + BOARD_Z), D.die)
+      distanceD = doorDistance(distance, D.dolly); spanB = doorSpan(spanB, distance, distanceD, D.lens)
+    }
+    const dir = this.tmp2.set(-Math.sin(yawB) * Math.cos(elevB), Math.sin(elevB), Math.cos(yawB) * Math.cos(elevB))
+    const camPos = aim.clone().addScaledVector(d > 0.01 && !D ? viewDir : dir, distanceD)
     if (this.pointer.x > -2 && this.mode === 'archive') { camPos.x += this.pointer.x * 0.12; camPos.y -= this.pointer.y * 0.12 }
-    const blend = this.reduced ? 1 : 1 - Math.exp(-dt * RATES.camera)
+    // a cut jumps: no easing across it
+    const blend = this.reduced || sweeping || D ? 1 : 1 - Math.exp(-dt * RATES.camera)
     S.camera.position.lerp(camPos, blend); this.camAim.lerp(aim, blend); S.camera.lookAt(this.camAim)
-    S.camera.fov = THREE.MathUtils.lerp(S.camera.fov, THREE.MathUtils.radToDeg(2 * Math.atan(span / (2 * distance))), blend)
+    S.camera.fov = THREE.MathUtils.lerp(S.camera.fov, THREE.MathUtils.radToDeg(2 * Math.atan(spanB / (2 * distanceD))), blend)
+    {
+      // the planes hug the scene at the archive's distance; close in, they close in with the camera
+      const near = D ? Math.max(0.05, distanceD * 0.45) : 40, far = D ? distanceD + 170 : 220
+      if (S.camera.near !== near || S.camera.far !== far) { S.camera.near = near; S.camera.far = far }
+      S.setAo(this.quality.ao && (!D || D.dolly < 0.25))
+    }
     const rd = S.camera.position.distanceTo(this.camAim), fog = S.scene.fog as THREE.Fog
     fog.near = rd + 8 - 9 * d; fog.far = rd + 46 - 34 * d
     S.camera.updateProjectionMatrix()
 
+    // the cut: this is the exterior's last frame (drawn below); the interior takes the canvas from the next
+    if (D && this.door.dir > 0 && D.done && this.door.cut) {
+      const cut = this.door.cut; this.door.cut = null; this.door = { ...this.door, on: false, open: true }; this.suspended = true
+      this.lastHandoff = this.measureHandoff()
+      this.publish(); cut(this.lastHandoff)
+      this.shotCut = true
+    } else if (D && this.door.dir < 0 && this.door.t <= 0) {
+      const back = this.door.back; this.door.back = null; this.door = { ...this.door, on: false, open: false }
+      this.publish(); back?.()
+    }
     const before = Math.round(this.ueba.risk)
     this.ueba.tick(dt)
     if (Math.round(this.ueba.risk) !== before) this.publish()
     S.render()
+    if (this.shotCut) {
+      this.shotCut = false
+      const v = this.veil
+      if (v) {
+        v.width = Math.round(innerWidth * 0.75); v.height = Math.round(innerHeight * 0.75)
+        v.getContext('2d')?.drawImage(this.canvas, 0, 0, v.width, v.height)
+        v.style.transition = 'none'; v.style.opacity = '1'
+        requestAnimationFrame(() => requestAnimationFrame(() => { v.style.transition = 'opacity .45s cubic-bezier(.4, 0, .2, 1)'; v.style.opacity = '0' }))
+      }
+      const w = window as unknown as { __cfCaptureCut?: boolean; __cutExterior?: string }; if (w.__cfCaptureCut) { w.__cutExterior = this.canvas.toDataURL('image/png'); (window as unknown as { __cutHandoff?: Handoff }).__cutHandoff = this.lastHandoff } }
     ;(window as unknown as { __frames?: number }).__frames = ((window as unknown as { __frames?: number }).__frames || 0) + 1
   }
   private degrade() {
@@ -653,7 +832,8 @@ export class Archive {
     this.stage.renderer.setPixelRatio(Math.min(this.quality.dpr, devicePixelRatio || 1))
     this.stage.composer.setPixelRatio(Math.min(this.quality.dpr, devicePixelRatio || 1))
     if (!this.quality.ao) this.stage.composer.passes.forEach((p) => { if (p.constructor.name === 'GTAOPass') p.enabled = false })
-    if (!this.quality.shadows) this.stage.renderer.shadowMap.enabled = false
+    // (the archive's own light stops casting; the renderer's switch stays on, so the programs the interior compiled are still the ones it uses)
+    if (!this.quality.shadows) this.stage.setShadows(false)
     this.publish()
   }
 }

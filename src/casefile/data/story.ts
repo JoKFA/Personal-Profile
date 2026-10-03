@@ -11,7 +11,7 @@ export interface Step { year: string; id: string; what: string; role: RoleId | n
 export interface Chapter { years: string; title: string; line: string; steps: Step[] }
 export const CHAPTERS: Chapter[] = [
   { years: '2021 – 2022', title: 'Infrastructure first', line: 'Trained as a systems administrator, then built a four-site network with a six-person team and put a SIEM on top of it.', steps: [
-    { year: '2022', id: 'X-008', what: 'Configured routers, firewalls and VPN tunnels for four sites over MPLS, with segmentation rules and all logs sent to Splunk and FortiSIEM.', role: 'it', key: true },
+    { year: '2022', id: 'X-008', what: 'Built a four-site enterprise network from scratch with a team of six, every layer hands-on: routing and switching, firewalls and VPNs, servers, and a SIEM and IPS watching it.', role: 'it', key: true },
     { year: '2021', id: 'ED-03', what: 'Diploma, Computer Information Systems Administration · BCIT', role: 'it' },
   ] },
   { years: '2023 – 2024', title: 'Detection and people', line: 'Learned to read what systems report, then what people do: detections, playbooks, and an awareness programme with a measured result.', steps: [
@@ -22,7 +22,7 @@ export const CHAPTERS: Chapter[] = [
   ] },
   { years: '2025', title: 'Security where code ships', line: 'Moved checks to the point of merge, and tested applications and AI tools the way an attacker would.', steps: [
     { year: '2025', id: 'SR-02', what: 'Put Trivy, GitGuardian and Semgrep in front of every merge, removed excess AWS access, and cut monthly spend ~30%.', role: 'cloud', key: true },
-    { year: '2025', id: 'X-003', what: 'Grey-box pentest of a staging web app and its APIs: 14 validated findings, each with evidence and a fix.', role: 'soc', key: true },
+    { year: '2025', id: 'X-003', what: 'Team grey-box pentest of a staging web app; my part was the access-control findings, each proven and paired with a fix.', role: 'soc' },
     { year: '2025', id: 'X-001', what: 'A scanner that sandboxes MCP servers and tests them for prompt injection, tool poisoning and leaked credentials; run on 60+ servers.', role: 'ai', key: true },
     { year: '2025', id: 'X-005', what: 'STRIDE threat model of a non-profit’s systems: 12 threats found, all remediated.', role: 'grc' },
     { year: '2025', id: 'X-007', what: 'Distributed password vault on GCP (graduate coursework, CMPT 756).', role: 'cloud' },
@@ -48,13 +48,3 @@ export const KEY_NUMBERS: [string, string, string][] = [
   ['~30%', 'lower monthly AWS spend', 'at VibesMeet, while removing excess IAM access'],
 ]
 
-/** The subject drive: six common ways into a company, and the real work that stopped each one.
- *  Drawn left and right of "your data"; each line is one attack, each shield one drive. */
-export const WAYS_IN: { attack: string; defence: string; id: string }[] = [
-  { attack: 'Phishing email', defence: 'Built an awareness programme: ~15% fewer phishing successes', id: 'SR-03' },
-  { attack: 'Broken access in a web app', defence: 'Pentest of a web app: 14 validated findings, each with a fix', id: 'X-003' },
-  { attack: 'One machine infects the rest', defence: 'Segmented a four-site network so a breach stays small', id: 'X-008' },
-  { attack: 'Poisoned AI tool', defence: 'Scanned MCP servers before AI agents use them: 60+ tested', id: 'X-001' },
-  { attack: 'Leaked cloud key', defence: 'Secret checks before every merge; excess AWS access removed', id: 'SR-02' },
-  { attack: 'Risky vendor or change', defence: '50+ risk assessments and 20+ vendor reviews', id: 'SR-01' },
-]

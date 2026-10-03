@@ -31,7 +31,7 @@ export const ROLE_IDS = ROLES.map((r) => r.id)
 export const roleById = (id: RoleId) => ROLES.find((r) => r.id === id)!
 
 export const DRAWERS: Drawer[] = [
-  { lane: 0, name: 'Subject', code: 'SUB' },
+  { lane: 0, name: 'Profile & Education', code: 'PRO' },
   { lane: 1, name: 'AI Security', code: 'AIS' },
   { lane: 2, name: 'Cloud & DevSecOps', code: 'DEV' },
   { lane: 3, name: 'Security Operations', code: 'SOC' },

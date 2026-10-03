@@ -16,7 +16,7 @@ export const EDUCATION_ENTRIES: Entry[] = [
     facts: [['Program', 'Full-time cohort · co-op integrated'], ['Core', 'Cybersecurity Lab I & II · Applied Cryptography · Distributed & Cloud Systems'], ['Co-op', 'Information Security, Coast Capital Savings'], ['Built here', 'PwnScan (Top 3) · CryptoLab vault · MCP scanner · pentest']],
     // X-003 and X-001 came out of CMPT 782, Cybersecurity Lab I (user confirmed 2026-09-29)
     courses: [
-      { code: 'CMPT 782', title: 'Cybersecurity Lab I', out: 'A grey-box pentest with 14 validated findings, and a scanner for MCP servers', ids: ['X-003', 'X-001'] },
+      { code: 'CMPT 782', title: 'Cybersecurity Lab I', out: 'A team grey-box pentest (my part: the access-control findings), and a scanner for MCP servers', ids: ['X-003', 'X-001'] },
       { code: 'CMPT 783', title: 'Cybersecurity Lab II', out: 'PwnScan: IoT devices found and their CVEs ranked by real risk · Top 3', ids: ['X-009'] },
       { code: 'CMPT 789', title: 'Applied Cryptography', out: 'CryptoLab vault: scrypt keys, AES-256-GCM, Shamir k-of-n recovery', href: 'https://github.com/JoKFA/CryptoLab-SecurePWMSystem' },
       { code: 'CMPT 756', title: 'Distributed and Cloud Systems', out: 'A GFS-style password vault on GCP, across three zones', ids: ['X-007'] },
@@ -65,14 +65,14 @@ export const EDUCATION_ENTRIES: Entry[] = [
     roles: 'all', slot: { lane: 0, row: 0 },
     facts: [['Program', 'Full-time · theory with hands-on labs'], ['Core', 'Cisco routing & switching · Active Directory & IAM · Linux & Windows Server'], ['Also', 'Databases and programming essentials'], ['Capstone', 'Four-site enterprise network, team of six']],
     courses: [
-      { code: 'Capstone', title: 'Cisco routing and switching', out: 'A four-site enterprise network over MPLS, built by a team of six', ids: ['X-008'] },
+      { code: 'Capstone', title: 'Cisco routing and switching', out: 'A four-site enterprise network built from scratch: routing, firewalls, servers, SIEM and IPS', ids: ['X-008'] },
       { code: 'Systems', title: 'Active Directory and cloud IAM', out: 'Identity and access: directory users, groups and cloud roles' },
       { code: 'Systems', title: 'Linux and Windows Server administration', out: 'Servers configured and kept running' },
       { code: 'Data', title: 'Databases and programming', out: 'Scripts and data behind the services' },
     ],
     sections: [
       { eyebrow: '01 · Infrastructure', title: 'Install, configure, monitor, troubleshoot', body: 'The program trains administrators of LANs and WANs: Cisco routers, switches, firewalls and wireless, Active Directory and Linux, with theory and lab work side by side.' },
-      { eyebrow: '02 · Capstone', title: 'A network with four sites', body: 'With a team of six I configured routers, firewalls and VPN tunnels for four sites over MPLS, wrote segmentation rules, and sent every device’s logs to Splunk and FortiSIEM.' },
+      { eyebrow: '02 · Capstone', title: 'A network with four sites', body: 'With a team of six I built a four-site network from scratch and worked every layer: OSPF, VLANs, ACLs, PAT and MPLS between sites; firewalls and VPN tunnels; the servers; and a SIEM and IPS watching all of it.' },
     ],
     related: ['X-008'],
     demo: 'stack', demoNote: ['Sample ticket · layers are the program’s subjects', 'Program: BCIT CISA diploma page'],

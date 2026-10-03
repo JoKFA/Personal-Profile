@@ -9,9 +9,9 @@ export function NoWebGL({ visitor }: { visitor: Visitor }) {
       <h1>Yaoting Wang</h1>
       <p className="lbl">Security analyst &amp; engineer · security portfolio · 3D view unavailable on this device</p>
       <p>{SUBJECT.summary}</p>
-      <h2 className="lbl">Service records</h2>
+      <h2 className="lbl">Experience</h2>
       <ul>{SERVICE.map((e) => <li key={e.id}><Link to={`/projects/${e.slug}`}>{e.title} · {e.org}</Link> <span>{e.dates}</span></li>)}</ul>
-      <h2 className="lbl">Case files</h2>
+      <h2 className="lbl">Projects</h2>
       <ul>{CASES.map((e) => <li key={e.id}><Link to={`/projects/${e.slug}`}>{e.title}</Link> <span>{e.summary}</span></li>)}</ul>
       <p className="lbl">Visitor {visitor.id}</p>
     </main>

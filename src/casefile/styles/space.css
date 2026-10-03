@@ -1,0 +1,137 @@
+/* the words over the subject file's interior (ui/SpaceExhibit.tsx). Same grammar as the archive HUD and the
+   hairlines, small caps labels, paper fog behind small text, no boxes, one ease. */
+.space-host { position: fixed; inset: 0; pointer-events: none; z-index: 31; }
+.space-host .space button, .space-host .space a, .space-host .space-index { pointer-events: auto; }
+.space { position: absolute; inset: 0; --p: 0; }
+.space button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; }
+.space button:focus-visible { outline: 1.5px solid var(--acc); outline-offset: 3px; }
+
+/* the window the scene is composed into: the left of the screen */
+.space-hole { position: absolute; left: 0; top: 0; width: 60%; height: 100%; pointer-events: none; }
+
+/* ── head: reference, one title, the four steps, the step being shown ── */
+.space-head { position: absolute; left: var(--g); top: 92px; max-width: min(44vw, 620px); isolation: isolate; opacity: 0; transition: opacity .5s var(--ease-in) .1s; }
+.space.live .space-head { opacity: 1; }
+.space-head::before { content: ""; position: absolute; inset: -34px -70px -26px -48px; z-index: -1; pointer-events: none;
+  background: radial-gradient(ellipse at 30% 45%, color-mix(in srgb, var(--bg) 92%, transparent) 38%, transparent 72%); }
+.space-ref { color: var(--acc-text); }
+.space-title { margin: 12px 0 0; font: 300 clamp(24px, 2.3vw, 36px)/1.14 var(--sans); letter-spacing: -.012em; color: var(--ink); animation: content .5s var(--ease-in); }
+.space-steps { list-style: none; margin: 20px 0 0; padding: 0; display: flex; gap: 8px; }
+.space-steps button { position: relative; display: block; width: 62px; padding: 12px 0 0; text-align: left; }
+.space-steps i { display: block; height: 2px; background: var(--hair2); position: relative; overflow: hidden; }
+.space-steps i::after { content: ""; position: absolute; inset: 0; background: var(--ink); transform-origin: left; transform: scaleX(0); }
+.space-steps button[data-state="done"] i::after { transform: scaleX(1); }
+.space-steps button[data-state="on"] i::after { transform: scaleX(clamp(0, calc((var(--p) - var(--a)) / (var(--b) - var(--a))), 1)); }
+.space-steps .lbl { display: block; margin-top: 6px; color: var(--ink3); }
+.space-steps button[data-state="on"] .lbl, .space-steps button[data-state="done"] .lbl { color: var(--ink); }
+.space-cap { margin: 8px 0 0; font: 500 clamp(14px, 1.05vw, 16px)/1.45 var(--sans); color: var(--ink2); max-width: 44ch; animation: content .3s var(--ease-in); }
+.space-cap .lbl { margin-right: 10px; color: var(--acc-text); }
+
+/* ── chips: hang from a point on the model by a hairline; the scene's own clock moves them ── */
+.space-chips { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+.space-chip { position: absolute; left: 0; top: 0; width: max-content; max-width: 220px; opacity: 0; visibility: hidden; will-change: transform, opacity; isolation: isolate; text-align: center; }
+.space-chip::before { content: ""; position: absolute; inset: -9px -16px; z-index: -1; pointer-events: none;
+  background: radial-gradient(closest-side, color-mix(in srgb, var(--bg) 90%, transparent) 55%, transparent); }
+.space-chip .lbl { display: block; font-size: 10.5px; }
+.space-chip b { display: block; margin-top: 3px; font: 600 13px/1.3 var(--sans); color: var(--ink); text-wrap: balance; }
+.space-chip[data-tone="alert"] .lbl { color: var(--alert); }
+.space-chip[data-tone="ok"] .lbl { color: var(--acc-text); }
+.space-chip[data-tone="quiet"] b { color: var(--ink2); font-weight: 500; }
+/* the leader: a hairline from the text to its point, ending in a dot on the model */
+.space-chip::after { content: ""; position: absolute; background: var(--ink3); }
+.space-chip { --gap: 22px; }
+.space-chip[data-side="up"] { translate: -50% calc(-100% - var(--gap)); }
+.space-chip[data-side="up"]::after { left: 50%; top: calc(100% + 4px); width: 1px; height: calc(var(--gap) - 4px); }
+.space-chip[data-side="down"] { translate: -50% var(--gap); }
+.space-chip[data-side="down"]::after { left: 50%; bottom: calc(100% + 4px); width: 1px; height: calc(var(--gap) - 4px); }
+.space-chip[data-side="left"] { translate: calc(-100% - var(--gap)) -50%; text-align: right; }
+.space-chip[data-side="left"]::after { top: 50%; left: calc(100% + 4px); height: 1px; width: calc(var(--gap) - 4px); }
+.space-chip[data-side="right"] { translate: var(--gap) -50%; text-align: left; }
+.space-chip[data-side="right"]::after { top: 50%; right: calc(100% + 4px); height: 1px; width: calc(var(--gap) - 4px); }
+
+/* ── bottom: the result, the six areas, the controls ── */
+.space-bar { position: absolute; left: var(--g); bottom: var(--bottom); width: calc(58vw - var(--g) - 18px); display: grid; gap: 12px; isolation: isolate; opacity: 0; transition: opacity .5s var(--ease-in) .3s; }
+.space.live .space-bar { opacity: 1; }
+.space-bar::before { content: ""; position: absolute; left: calc(-1 * var(--g)); right: -40px; bottom: calc(-1 * var(--bottom)); top: -80px; z-index: -1; pointer-events: none;
+  background: linear-gradient(to top, color-mix(in srgb, var(--bg) 78%, transparent) 0%, color-mix(in srgb, var(--bg) 40%, transparent) 55%, transparent 100%); }
+.space-result { opacity: 0; transform: translateY(8px); transition: opacity .6s var(--ease-in), transform .6s var(--ease-in); pointer-events: none; }
+.space.has-result .space-result { opacity: 1; transform: none; pointer-events: auto; }
+.space-result p { margin: 0 0 12px; font: 500 clamp(15px, 1.25vw, 18px)/1.45 var(--sans); color: var(--ink); max-width: 46ch; }
+.space-result-row { display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px 26px; }
+.space-go { display: inline-flex; gap: 12px; align-items: center; padding: 7px 0; border-bottom: 1.5px solid var(--ink); font: 700 11.5px/1 var(--sans); letter-spacing: .1em; text-transform: uppercase; text-align: left; }
+.space-go b { font: inherit; }
+.space-go span { transition: transform .25s var(--ease-in); } .space-go:hover span { transform: translateX(5px); }
+.space-kept { color: var(--acc-text); }
+.space-nav { display: flex; flex-wrap: wrap; gap: 4px 20px; }
+.space-area { position: relative; display: inline-flex; gap: 8px; align-items: baseline; padding: 6px 0; font: 600 12px/1 var(--sans); letter-spacing: .02em; color: var(--label); transition: color .2s ease; }
+.space-area .lbl { font-size: 9.5px; color: var(--ink3); }
+.space-area:hover, .space-area[aria-pressed="true"] { color: var(--ink); }
+.space-area::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 1.5px; background: var(--ink); transform: scaleX(0); transform-origin: left; transition: transform .35s var(--ease-move); }
+.space-area[aria-pressed="true"]::after { transform: scaleX(1); }
+.space-area i { width: 5px; height: 5px; border-radius: 50%; background: var(--acc); align-self: center; opacity: 0; transition: opacity .4s ease; }
+.space-area[data-kept="1"] i { opacity: 1; }
+.space-ctl { display: flex; flex-wrap: wrap; gap: 4px 22px; opacity: .78; transition: opacity .3s ease; }
+.space-ctl:hover, .space-ctl:focus-within { opacity: 1; }
+.space-ctl button { padding: 6px 0; color: var(--label); transition: color .2s ease; white-space: nowrap; }
+.space-ctl button:hover { color: var(--ink); }
+.space-ctl button span { margin-right: 8px; letter-spacing: 0; }
+.space-ev b { color: var(--ink); font-weight: 600; }
+
+/* the trace of light that carries a result from its plate to the index */
+.space-trail { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none !important; overflow: visible; }
+.space-trail path { fill: none; stroke: #b89a6a; stroke-width: 1.2; stroke-dasharray: 1; stroke-dashoffset: 1; opacity: 0; }
+
+/* ── the evidence index: two columns of three, over the left of the screen ── */
+.space.index-open .space-chips { opacity: 0; transition: opacity .2s ease; }
+.space-index { position: absolute; left: var(--g); top: 84px; bottom: calc(var(--bottom) + 84px); width: calc(58vw - var(--g)); overflow: auto; z-index: 3;
+  background: color-mix(in srgb, var(--bg) 94%, transparent); backdrop-filter: blur(14px); border-top: 1px solid var(--ink); animation: rise var(--t-enter) var(--ease-in); }
+.space-index-h { display: flex; justify-content: space-between; align-items: center; padding: 14px 16px 4px; position: sticky; top: 0; background: color-mix(in srgb, var(--bg) 96%, transparent); z-index: 1; }
+.space-index-h button { color: var(--label); } .space-index-h button:hover { color: var(--ink); }
+.space-index-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px 26px; padding: 12px 16px 18px; }
+.space-cell { display: grid; gap: 7px; align-content: start; }
+.space-thumb { display: block; width: 100%; height: clamp(72px, calc((100svh - 540px) / 3), 160px); background: var(--bg2); overflow: hidden; position: relative; text-align: left; }
+.space-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; transition: transform .6s var(--ease-in); }
+.space-thumb:hover img { transform: scale(1.03); }
+.space-thumb > .lbl { position: absolute; left: 12px; top: 10px; font: 200 38px/1 var(--sans); letter-spacing: 0; text-transform: none; color: var(--ink3); }
+.space-cell[data-kept="0"] .space-thumb { background: transparent; box-shadow: inset 0 0 0 1px var(--hair); }
+.space-cell h3 { margin: 2px 0 0; font: 700 14px/1.3 var(--sans); color: var(--ink); }
+.space-cell .space-go { margin-top: 2px; }
+.space-cell[data-kept="1"] .lbl { color: var(--acc-text); }
+
+/* ── a phone: the show is in the flow of the sheet, in a window the sheet leaves transparent ── */
+.space--phone { position: relative; inset: auto; margin: 22px calc(-1 * var(--g)) 0; }
+.space--phone .space-hole { position: relative; width: auto; height: 58svh; min-height: 380px; overflow: hidden; }
+.space--phone .space-head { left: var(--g); right: var(--g); top: 6px; max-width: none; }
+.space--phone .space-head::before { inset: -14px -24px -10px -24px; }
+.space--phone .space-title { margin-top: 8px; font-size: 21px; }
+.space--phone .space-steps { margin-top: 12px; } .space--phone .space-steps button { width: 52px; }
+.space--phone .space-cap { font-size: 14px; }
+.space--phone .space-chip[data-phone="0"] { display: none; }
+.space--phone .space-chip b { font-size: 12.5px; }
+.space--phone .space-bar { position: relative; left: auto; bottom: auto; width: auto; padding: 14px var(--g) 8px; gap: 14px; opacity: 1; }
+.space--phone .space-bar::before { display: none; }
+.space--phone .space-result { opacity: 1; transform: none; pointer-events: auto; }
+.space--phone:not(.has-result) .space-result { opacity: .0; height: 0; overflow: hidden; margin: 0; }
+.space--phone .space-nav { gap: 2px 18px; }
+.space--phone .space-area { padding: 9px 0; font-size: 13px; }
+.space--phone .space-ctl button { padding: 10px 0; }
+.space-list { margin: 0 calc(-1 * var(--g)); padding: 0 var(--g) 28px; border-top: 1px solid var(--hair2); }
+.space-list-h { display: flex; justify-content: space-between; width: 100%; padding: 16px 0; }
+.space-list .space-index-grid { grid-template-columns: 1fr; padding: 6px 0 4px; }
+.space-list .space-cell { grid-template-columns: 110px 1fr; align-items: start; gap: 14px; }
+
+@media (min-width: 900px) and (max-width: 1199px) {
+  .space-title { font-size: 24px; }
+  .space-bar { width: calc(60vw - var(--g)); }
+  .space-nav { gap: 2px 14px; }
+}
+@media (prefers-reduced-motion: reduce) { .space *, .space-index { animation: none !important; transition: none !important; } }
+
+/* phone: the sheet is paper above and below, and open in the middle where the scene shows through */
+@media (max-width: 899px) {
+  .file--subject { background: transparent; }
+  .file--subject .file-meta { --paper: color-mix(in srgb, var(--bg) 95%, transparent);
+    background: linear-gradient(to bottom, var(--paper) 0, var(--paper) var(--hole-top, 0px), transparent var(--hole-top, 0px), transparent calc(var(--hole-top, 0px) + var(--hole-h, 0px)), var(--paper) calc(var(--hole-top, 0px) + var(--hole-h, 0px)), var(--paper) 100%);
+    backdrop-filter: none; -webkit-backdrop-filter: none; }
+  .file--subject .file-bar { background: color-mix(in srgb, var(--bg) 90%, transparent); }
+}

@@ -11,12 +11,19 @@ function watchErrors(page: Page) {
 }
 async function enter(page: Page, path = '/?intro') {
   await page.goto(path)
-  await page.getByRole('button', { name: /Skip|Continue/ }).click({ timeout: 3000 }).catch(() => { /* reduced motion: the entry already finished */ })
-  await page.waitForFunction(() => (window as unknown as Win).__cf?.getSnapshot().mode === 'archive', null, { timeout: 30_000 })
+  await page.getByRole('button', { name: /Skip|Continue/ }).click({ timeout: 15_000 })
+  // (a first visit may already be opening the subject file by itself; that is handled below)
+  await page.waitForFunction(() => ['archive', 'opening', 'file'].includes((window as unknown as Win).__cf?.getSnapshot().mode), null, { timeout: 30_000 })
   // the HUD and the scene appear together once the first frame is on screen
   await page.waitForSelector('.cf-scene.on', { timeout: 30_000 }).catch(() => { /* no WebGL: the index page */ })
   // the entrance: the camera whips in and the file panel follows once it has settled
-  await page.waitForFunction(() => !document.querySelector('.cf--arriving'), null, { timeout: 10_000 })
+  await page.waitForFunction(() => !document.querySelector('.cf--arriving'), null, { timeout: 15_000 })
+  // a first visit opens the subject file by itself once the entrance settles: close it
+  const opened = await page.waitForFunction(() => (window as unknown as Win).__cf.getSnapshot().mode !== 'archive', null, { timeout: 2500 }).then(() => true, () => false)
+  if (opened) {
+    await page.waitForFunction(() => (window as unknown as Win).__cf.getSnapshot().mode === 'file', null, { timeout: 20_000 })
+    await closeFile(page)
+  }
   await page.waitForTimeout(800)
 }
 async function openDrive(page: Page, id: string) {
@@ -32,19 +39,14 @@ async function closeFile(page: Page) {
 }
 const noOverflow = (page: Page) => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)
 
-test('full flow: role lens, open, close, shred, deny, SENTINEL', async ({ page }) => {
+test('full flow: read access, open, close, shred, deny, SENTINEL', async ({ page }) => {
   const errors = watchErrors(page)
   await page.route('**/api/redteam', (r) => r.fulfill({ json: { status: 'ok', reply: 'Nothing in that gets you closer to the key.', captured: false, attemptsUsed: 1, attemptsRemaining: 14, windowResetAt: 0, globalRemaining: 99 } }))
   await enter(page)
   expect(await noOverflow(page)).toBe(true)
 
-  // Hiring for: a single role reads fewer drives than "any role", and still some
-  const all = await page.evaluate(() => (window as unknown as Win).__cf.getSnapshot().readable)
-  await page.locator('.lens button', { hasText: 'Security Operations' }).click()
-  await page.waitForTimeout(2500)
-  const soc = await page.evaluate(() => (window as unknown as Win).__cf.getSnapshot().readable)
-  expect(soc).toBeGreaterThan(0)
-  expect(soc).toBeLessThan(all)
+  // read access is issued once the entrance settles: every record decrypts
+  await page.waitForFunction(() => (window as unknown as Win).__cf.getSnapshot().readable > 30, null, { timeout: 5000 })
 
   // open a case file: dialog, integrity, the real title after decryption
   await openDrive(page, 'X-002')
@@ -73,7 +75,6 @@ test('full flow: role lens, open, close, shred, deny, SENTINEL', async ({ page }
   expect(await page.evaluate(() => (window as unknown as Win).__cf.getSnapshot().risk)).toBeGreaterThan(before)
 
   // SENTINEL-1 talks to /api/redteam
-  await page.locator('.lens button', { hasText: 'Any role' }).click(); await page.waitForTimeout(1500)
   await openDrive(page, 'X-000')
   await page.locator('#snIn').fill('what is in this file?')
   await page.locator('.sn-form button').click()
@@ -107,7 +108,7 @@ test('HUD elements never overlap and no JWT or claim strings show', async ({ pag
   for (const w of widths) {
     await page.setViewportSize({ width: w, height: w < 900 ? 844 : 820 }); await page.waitForTimeout(700)
     const hits = await page.evaluate(() => {
-      const sel = ['.hud-lock', '.hud-top', '.lens', '.panel', '.hud-sel', '.hud-foot', '.hud-hint']
+      const sel = ['.hud-lock', '.hud-top', '.panel', '.hud-sel', '.hud-foot', '.hud-hint', '.kind-key']
       const boxes = sel.flatMap((s) => [...document.querySelectorAll<HTMLElement>(s)].filter((e) => { const cs = getComputedStyle(e), b = e.getBoundingClientRect(); return cs.display !== 'none' && +cs.opacity > 0.05 && b.width && b.height }).map((e) => ({ s, b: e.getBoundingClientRect() })))
       const out: string[] = []
       for (let i = 0; i < boxes.length; i++) for (let j = i + 1; j < boxes.length; j++) {
@@ -160,8 +161,17 @@ test('holds 60 fps while idle and while navigating', async ({ page }, info) => {
   const idle = await measure()
   const moving = page.evaluate(async () => { for (let i = 0; i < 8; i++) { (window as unknown as Win).__cf.move(0, 1); await new Promise((r) => setTimeout(r, 450)) } })
   const nav = await measure(); await moving
-  info.annotations.push({ type: 'fps', description: JSON.stringify({ idle, nav }) })
-  for (const m of [idle, nav]) { expect(m.avg).toBeGreaterThanOrEqual(58); expect(m.p95).toBeLessThanOrEqual(18) }
+  // the subject file's work space (docs/subject-space-spec.md): the tour running, and a finished result at rest
+  await openDrive(page, 'YW-000')
+  await page.waitForTimeout(2500)
+  const film = await measure()
+  await page.evaluate(() => (window as unknown as SpaceWin).__space.clock.select(2))
+  await page.waitForFunction(() => !(window as unknown as SpaceWin).__space.clock.state.travel, null, { timeout: 15_000 })
+  await page.evaluate(() => (window as unknown as SpaceWin).__space.clock.step(3))
+  await page.waitForTimeout(1200)
+  const rest = await measure()
+  info.annotations.push({ type: 'fps', description: JSON.stringify({ idle, nav, film, rest }) })
+  for (const m of [idle, nav, film, rest]) { expect(m.avg).toBeGreaterThanOrEqual(58); expect(m.p95).toBeLessThanOrEqual(18) }
 })
 
 test('keyboard only: browse, open, Tab stays in the file, Esc returns focus', async ({ page }, info) => {
@@ -250,34 +260,211 @@ test('open never clips, close is quick, every shred step stays readable', async 
   expect(errors).toEqual([])
 })
 
-test('entry: the recon is large, and it names the attack profile', async ({ page }, info) => {
+test('entry: your facts land in an attack profile, which is sealed and falls into the archive', async ({ page }, info) => {
   const errors = watchErrors(page)
+  const phone = info.project.name.startsWith('phone')
   await page.goto('/?intro')
-  await expect(page.locator('.g-p2')).toBeVisible({ timeout: 12_000 })
-  const size = await page.locator('.g-line').first().evaluate((el) => parseFloat(getComputedStyle(el).fontSize))
-  expect(size).toBeGreaterThanOrEqual(info.project.name.startsWith('phone') ? 20 : 24)
-  expect(await page.locator('.g-line').count()).toBeGreaterThanOrEqual(4)
-  await expect(page.locator('.g-card-h')).toContainText('ATTACK PROFILE', { timeout: 3000 })
-  await expect(page.locator('.g-note span').nth(2)).toContainText('lure', { timeout: 4000 })
-  const notes = await page.locator('.g-note span').allTextContents()
-  expect(notes.filter((t) => t.trim().length > 8).length).toBe(3)
+  // the hook: the first fact is said large and lands in the card within about two seconds
+  await expect(page.locator('.gz-s').first()).toBeVisible({ timeout: 5000 })
+  const size = await page.locator('.gz-s').first().evaluate((el) => parseFloat(getComputedStyle(el).fontSize))
+  expect(size).toBeGreaterThanOrEqual(phone ? 24 : 30)
+  await expect(page.locator('.gz-f .v').first()).toBeVisible({ timeout: 2500 })
+  // the turn: an attack profile, with what an attacker would do written under three fields
+  await expect(page.locator('.gz-card.attack .gz-h')).toContainText('ATTACK PROFILE', { timeout: 4000 })
+  const aims = await page.locator('.gz-aim').allTextContents()
+  expect(aims.filter((t) => t.trim().length > 8).length).toBe(3)
+  await expect.poll(() => page.locator('.gz-aim').last().evaluate((el) => Number(getComputedStyle(el).opacity))).toBeGreaterThan(0.95)
+  for (const el of await page.locator('.gz-aim').all()) {
+    expect(await el.evaluate((e) => e.scrollWidth <= e.clientWidth + 1), await el.textContent() ?? '').toBe(true)
+  }
+  await page.screenshot({ path: `.codex-runtime/design/entrance/art-directed/${info.project.name}-attack.png` })
+  // the defender: sealed, nothing left the browser; the card stays inside the screen
+  await expect(page.locator('.gz-card.sealed .gz-h')).toContainText('PROFILE SEALED', { timeout: 4000 })
+  await expect(page.locator('.gz-foot')).toContainText('Nothing sent.')
+  const card = await page.locator('.gz-card').boundingBox(), vw = page.viewportSize()!
+  expect(card && card.x >= 0 && card.x + card.width <= vw.width && card.y + card.height <= vw.height).toBe(true)
+  const skip = await page.locator('.gz-skip').boundingBox()
+  if (phone) expect(card && skip && card.y + card.height < skip.y).toBe(true)
+  for (const el of await page.locator('.gz-f .v, .gz-aim, .gz-h span').all()) {
+    const fits = await el.evaluate((e) => e.scrollWidth <= e.clientWidth + 1)
+    expect(fits, await el.textContent() ?? '').toBe(true)
+  }
+  await page.waitForTimeout(300)
+  await page.screenshot({ path: `.codex-runtime/design/entrance/art-directed/${info.project.name}-sealed.png` })
+  // then into the archive: the wave settles and the subject file opens by itself
+  await page.waitForFunction(() => (window as unknown as Win).__cf?.getSnapshot().mode === 'file', null, { timeout: 30_000 })
+  expect(await page.evaluate(() => (window as unknown as Win).__cf.getSnapshot().entry?.id)).toBe('YW-000')
+  await expect(page.locator('.gate')).toHaveCount(0)
   expect(errors).toEqual([])
 })
 
-test('first visit offers a guided tour; contact is one click away', async ({ page }) => {
+test('entry: skipping during a value flight leaves no moving text or gate behind', async ({ page }) => {
+  const errors = watchErrors(page)
+  await page.goto('/?intro')
+  await page.locator('.gz-flight').first().waitFor({ state: 'attached', timeout: 5000 })
+  await page.keyboard.press('Escape')
+  await page.waitForFunction(() => (window as unknown as Win).__cf?.getSnapshot().mode === 'file', null, { timeout: 30_000 })
+  await expect(page.locator('.gz-flight, .gate')).toHaveCount(0)
+  expect(await page.evaluate(() => (window as unknown as Win).__cf.getSnapshot().entry?.id)).toBe('YW-000')
+  expect(errors).toEqual([])
+})
+
+test('entrance: a returning visitor follows a populated wave to the selected file', async ({ page }, info) => {
+  const errors = watchErrors(page)
+  await page.addInitScript(() => { localStorage.setItem('yw.entry', '1'); localStorage.setItem('yw.hint', '1') })
+  await page.goto('/')
+  await page.locator('.cf-scene.on').waitFor({ state: 'visible', timeout: 30_000 })
+  type EntryWin = Window & { __cf: { entranceAge(): number; stage: { N: number }; getSnapshot(): { mode: string; entry: { id: string } | null } } }
+  for (const age of [0.7, 1.8, 3.5]) {
+    await page.waitForFunction((a) => (window as unknown as EntryWin).__cf.entranceAge() >= a, age, { timeout: 15_000, polling: 'raf' })
+    expect(await page.evaluate(() => (window as unknown as EntryWin).__cf.stage.N)).toBeGreaterThan(100)
+    await page.screenshot({ path: `.codex-runtime/design/entrance/art-directed/${info.project.name}-wave-${age}.png` })
+  }
+  await page.waitForFunction(() => !document.querySelector('.cf--arriving'), null, { timeout: 15_000 })
+  await expect(page.locator('.panel-title')).toContainText('Yaoting Wang')
+  expect(await page.evaluate(() => (window as unknown as EntryWin).__cf.getSnapshot().mode)).toBe('archive')
+  await expect(page.locator('.gate')).toHaveCount(0)
+  expect(errors).toEqual([])
+})
+
+test('contact is one click away', async ({ page }) => {
   const errors = watchErrors(page)
   await enter(page)
-  await expect(page.locator('.panel-status.offer')).toBeVisible()
-  expect(await page.evaluate(() => (window as unknown as Win).__cf.getSnapshot().entry?.id)).toBe('YW-000')
-  await page.getByRole('button', { name: /second tour/ }).click()
-  await expect(page.locator('.tour')).toContainText('subject file')
-  await expect(page.locator('.tour')).toContainText('Current work', { timeout: 10_000 })
-  expect(await page.evaluate(() => (window as unknown as Win).__cf.getSnapshot().entry?.id)).toBe('SR-01')
-  await page.keyboard.press('x')
-  await expect(page.locator('.tour')).toHaveCount(0)
   await page.getByRole('button', { name: 'Contact' }).click()
   const links = page.locator('nav[aria-label="Contact"] a')
   await expect(links).toHaveCount(3)
   expect(await links.first().getAttribute('href')).toMatch(/^mailto:/)
   expect(errors).toEqual([])
+})
+
+// the subject file is the way into the work space (docs/subject-space-spec.md); the kind legend is spec §25
+type FilmWin = Window & { __cf: { getSnapshot(): { mode: string; kindFocus: string | null } } }
+type SpaceWin = Window & { __space: { clock: { state: { area: number; travel: unknown; tour: boolean; playing: boolean; reason: string; retained: boolean[]; order: number[]; p: number }; select(i: number): void; step(i: number): void }; space: { debug(): { visibleAreas: number[] } } } }
+test('subject file: the drive opens into six areas, each alone in its space, and their evidence stays', async ({ page }, info) => {
+  test.setTimeout(180_000)
+  const errors = watchErrors(page)
+  const phone = info.project.name.startsWith('phone')
+  await enter(page)
+  // (the entry may have opened the file already: this visit is made a first one again)
+  await page.evaluate(() => sessionStorage.removeItem('yw.space'))
+  await openDrive(page, 'YW-000')
+  await page.waitForFunction(() => !!(window as unknown as SpaceWin).__space, null, { timeout: 10_000 })
+  await expect(page.locator('.space-title')).toBeVisible()
+  // the first area plays by itself: the tour is on and the right side is the whole profile
+  expect(await page.evaluate(() => (window as unknown as SpaceWin).__space.clock.state.tour)).toBe(true)
+  await expect(page.locator('.file-meta h1')).toContainText('Yaoting Wang')
+  await expect(page.locator('.file-creds')).toContainText('CCNA')
+  await expect(page.locator('.file-creds')).toContainText('Security+')
+  // the first area's fields are on screen while it plays (they hang from the scene's anchors every frame)
+  await expect.poll(() => page.locator('.space-chip').evaluateAll((els) => els.filter((e) => getComputedStyle(e).visibility === 'visible' && +getComputedStyle(e).opacity > 0.5).length), { timeout: 20_000 }).toBeGreaterThan(0)
+  const rightSide = () => page.evaluate(() => ({ tab: [...document.querySelectorAll('.file-tabs [role="tab"]')].findIndex((t) => t.getAttribute('aria-selected') === 'true'), top: document.querySelector('.file-meta')?.scrollTop ?? 0 }))
+  const right0 = await rightSide()
+  const titles: string[] = []
+  for (let i = 0; i < 6; i++) {
+    await page.locator('.space-area').nth(i).click()
+    await page.waitForFunction((n) => { const s = (window as unknown as SpaceWin).__space.clock.state; return s.area === n && !s.travel }, i, { timeout: 15_000 })
+    // choosing an area ends the tour; the right side does not move
+    expect(await page.evaluate(() => (window as unknown as SpaceWin).__space.clock.state.tour)).toBe(false)
+    await page.evaluate(() => (window as unknown as SpaceWin).__space.clock.step(3))
+    await expect(page.locator('.space-result')).toBeVisible()
+    await expect(page.locator('.space-kept')).toBeVisible()
+    titles.push((await page.locator('.space-title').textContent()) ?? '')
+    // one area at a time: nothing of any other area is in the scene
+    expect(await page.evaluate(() => (window as unknown as SpaceWin).__space.space.debug().visibleAreas)).toEqual([i])
+  }
+  // nothing on the left changed the right: the same tab; and, off a phone (where the page is the scroller), the same scroll
+  const right1 = await rightSide()
+  expect(right1.tab).toBe(right0.tab)
+  if (!phone) expect(right1.top).toBe(right0.top)
+  expect(new Set(titles).size).toBe(6)
+  // all six results are kept, in the order they were produced
+  const kept = await page.evaluate(() => (window as unknown as SpaceWin).__space.clock.state)
+  expect(kept.retained.filter(Boolean)).toHaveLength(6)
+  expect(kept.order).toEqual([0, 1, 2, 3, 4, 5])
+  await expect(page.locator('.space-ev b')).toHaveText('6')
+  // reading the profile pauses the show, and nothing on the left changes the right
+  await page.evaluate(() => (window as unknown as SpaceWin).__space.clock.select(0))
+  await page.waitForFunction(() => !(window as unknown as SpaceWin).__space.clock.state.travel, null, { timeout: 15_000 })
+  await expect.poll(() => page.evaluate(() => (window as unknown as SpaceWin).__space.clock.state.playing)).toBe(true)
+  await page.locator('.file-tabs [role="tab"]').nth(1).click()
+  expect(await page.evaluate(() => (window as unknown as SpaceWin).__space.clock.state.playing)).toBe(false)
+  expect(await page.evaluate(() => (window as unknown as SpaceWin).__space.clock.state.reason)).toBe('reading')
+  // the index: six cells, and each result links to the file of the work behind it
+  await page.locator('.space-ev').click()
+  const cells = phone ? page.locator('.space-list .space-cell') : page.locator('.space-index .space-cell')
+  await expect(cells).toHaveCount(6)
+  await cells.nth(4).locator('.space-go').click()   // awareness: the BCIT file
+  await page.waitForURL(/\/projects\/bcit-cyber-security-office/, { timeout: 15_000 })
+  await page.waitForFunction(() => (window as unknown as FilmWin).__cf.getSnapshot().mode === 'file', null, { timeout: 20_000 })
+  await closeFile(page)
+  // coming back in the same session opens on the work space again with the tour off, and the six results still pictured
+  await openDrive(page, 'YW-000')
+  await expect(page.locator('.space-title')).toBeVisible()
+  expect(await page.evaluate(() => (window as unknown as SpaceWin).__space.clock.state.tour)).toBe(false)
+  await page.locator('.space-ev').click()
+  await expect.poll(() => page.locator(phone ? '.space-list .space-thumb img' : '.space-index .space-thumb img').count(), { timeout: 5000 }).toBe(6)
+  // Esc closes the open index first, and only the next one leaves the file
+  await page.keyboard.press('Escape')
+  await expect(page.locator(phone ? '.space-list .space-index-grid' : '.space-index')).toHaveCount(0)
+  expect(await page.evaluate(() => (window as unknown as FilmWin).__cf.getSnapshot().mode)).toBe('file')
+  await closeFile(page)
+  expect(await noOverflow(page)).toBe(true)
+  expect(errors).toEqual([])
+})
+
+test('subject file: reading the profile pauses the show; hovering does not; a hidden tab freezes it and nothing is caught up', async ({ page }, info) => {
+  test.skip(info.project.name.startsWith('phone'), 'a phone reads by scrolling the page: covered by the flow test')
+  test.setTimeout(120_000)
+  const errors = watchErrors(page)
+  await enter(page)
+  await page.evaluate(() => sessionStorage.removeItem('yw.space'))
+  await openDrive(page, 'YW-000')
+  const st = () => page.evaluate(() => { const s = (window as unknown as SpaceWin).__space.clock.state; return { playing: s.playing, reason: s.reason, p: s.p, area: s.area } })
+  const resume = async () => { await page.locator('.space-ctl button').first().click(); await expect.poll(async () => (await st()).playing).toBe(true) }
+  await expect.poll(async () => (await st()).playing).toBe(true)
+  const meta = (await page.locator('.file-meta').boundingBox())!
+  // hovering the profile is not reading
+  await page.mouse.move(meta.x + 120, meta.y + 260); await page.waitForTimeout(900)
+  expect((await st()).playing).toBe(true)
+  // the wheel is
+  await page.mouse.wheel(0, 120)
+  await expect.poll(async () => (await st()).reason).toBe('reading')
+  expect((await st()).playing).toBe(false)
+  await resume()
+  // a key inside the profile, focus, a text selection: each is
+  await page.locator('.file-tabs [role="tab"]').nth(1).focus()
+  await expect.poll(async () => (await st()).reason).toBe('reading')
+  await resume()
+  await page.evaluate(() => { const h = document.querySelector('.file-meta h1')!; getSelection()!.selectAllChildren(h) })
+  await expect.poll(async () => (await st()).reason).toBe('reading')
+  await page.evaluate(() => getSelection()!.removeAllRanges())
+  await resume()
+  // choosing an area on the left is a command, not reading, and ends the tour
+  await page.locator('.space-area').nth(2).click()
+  await page.waitForFunction(() => { const s = (window as unknown as SpaceWin).__space.clock.state; return s.area === 2 && !s.travel }, null, { timeout: 15_000 })
+  expect((await st()).playing).toBe(true)
+  // a hidden tab: frozen, and coming back does not play on or catch up until the visitor resumes
+  const away = async (hidden: boolean) => page.evaluate((h) => { Object.defineProperty(document, 'hidden', { value: h, configurable: true }); document.dispatchEvent(new Event('visibilitychange')) }, hidden)
+  await away(true)
+  const frozen = await st()
+  expect(frozen.reason).toBe('away'); expect(frozen.playing).toBe(false)
+  await page.waitForTimeout(800); await away(false); await page.waitForTimeout(900)
+  const back = await st()
+  expect(back.reason).toBe('away'); expect(back.playing).toBe(false)
+  expect(back.p).toBeCloseTo(frozen.p, 3)
+  await resume()
+  await expect.poll(async () => (await st()).p).toBeGreaterThan(back.p)
+  expect(errors).toEqual([])
+})
+
+test('the legend lights one kind of record at a time', async ({ page }, info) => {
+  await enter(page)
+  const key = page.locator('.kind-key')
+  await expect(key).toContainText('Experience')
+  await expect(key).toContainText('Projects')
+  const exp = key.getByRole('button', { name: /Experience/ })
+  if (info.project.name.startsWith('phone')) await exp.tap(); else await exp.hover()
+  await page.waitForFunction(() => (window as unknown as FilmWin).__cf.getSnapshot().kindFocus === 'service', null, { timeout: 3000 })
+  // the panel names kinds in plain words
+  await expect(page.locator('.panel-eyebrow')).not.toContainText(/Case file|Service record/)
 })

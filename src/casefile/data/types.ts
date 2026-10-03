@@ -21,10 +21,15 @@ export interface Slot { lane: number; row: number }
 
 /** case = project · service = job · skill / credential = small records that point at evidence */
 export type EntryKind = 'subject' | 'case' | 'service' | 'education' | 'visitor' | 'restricted' | 'skill' | 'credential'
+/** What each kind is called on screen: the words a recruiter uses, not the archive's own */
+export const KIND_NAME: Record<EntryKind, string> = {
+  subject: 'Profile', case: 'Project', service: 'Experience', education: 'Education',
+  skill: 'Skill', credential: 'Certifications', visitor: 'Visitor file', restricted: 'Restricted',
+}
 
 export type DemoKey =
   | 'mcpsf' | 'edr' | 'pentest' | 'telus' | 'viva' | 'network' | 'pwnscan'
-  | 'visitor' | 'sentinel' | 'timeline' | 'subject' | 'waysin' | 'coast' | 'vibes' | 'bcit' | 'vivaops' | 'custody' | 'stack' | 'quorum'
+  | 'visitor' | 'sentinel' | 'timeline' | 'subject' | 'coast' | 'vibes' | 'bcit' | 'vivaops' | 'custody' | 'stack' | 'quorum'
 
 export interface Section { eyebrow: string; title: string; body: string; points?: string[]; note?: string }
 export interface Finding { severity: 'critical' | 'high' | 'medium' | 'low' | 'ok'; label: string; title: string; detail: string }

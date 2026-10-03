@@ -14,7 +14,7 @@ export const SUBJECT: Entry = {
   roles: 'all', slot: { lane: 0, row: 12 },
   // availability and targets: resume system (能力画像 · OBJECTIVE.md, 2026-09-24)
   facts: [['Available', 'Full-time from Feb 2027'], ['Looking for', 'Security Analyst · GRC · Cloud & AI Security'], ['Now', 'Information Security co-op, Coast Capital'], ['Based', 'Vancouver, BC · open to relocating in Canada']],
-  demo: 'waysin', demoNote: ['Six ways in · each shield is a real piece of work', 'Select one to open its file'],
+  // no demo on the drive: the subject file's exhibit is the drive's own work space (space/, docs/subject-space-spec.md)
   numbers: [['50+', 'security assessments'], ['20+', 'vendor risk reviews'], ['60+', 'MCP servers tested'], ['14', 'pentest findings'], ['1,000+', 'people trained'], ['~30%', 'AWS cost cut']],
   seo: { title: 'Yaoting Wang | Security Portfolio', description: 'Security analyst and engineer, Master of Cybersecurity at SFU: risk assessment at a Canadian financial institution, cloud and DevSecOps, detection, and AI security, with the evidence for each.' },
 }
@@ -22,7 +22,7 @@ export const SUBJECT: Entry = {
 export const CASES: Entry[] = [
   {
     id: 'X-001', slug: 'mcp-security-framework', kind: 'case', title: 'MCP Security Framework',
-    kicker: 'Case file · AI security', year: '2025',
+    kicker: 'Project · AI security', year: '2025',
     summary: 'Sandboxes any MCP server in Docker and runs 14 detectors before an AI agent is allowed near it.',
     roles: ['ai', 'cloud'], slot: { lane: 1, row: 12 },
     facts: [['My role', 'Designer and builder'], ['Tested', '60+ real MCP servers'], ['Output', 'HTML · TXT · SARIF for GitHub'], ['Evidence', 'JSON / JSONL logs']],
@@ -45,7 +45,7 @@ export const CASES: Entry[] = [
   },
   {
     id: 'X-004', slug: 'telus-ai-hackathon', kind: 'case', title: 'TELUS AI Hackathon',
-    kicker: 'Case file · AI-assisted AppSec', year: '2026',
+    kicker: 'Project · AI-assisted AppSec', year: '2026',
     summary: 'An AI reviewer that reads each static-analysis finding, decides whether it is real, and proposes a fix that will not break the code.',
     roles: ['ai', 'cloud'], slot: { lane: 1, row: 15 },
     facts: [['My role', 'Builder'], ['Input', 'Semgrep JSON + code context'], ['Output', 'Verdict · reason · safe fix'], ['Guardrail', 'A human approves every fix']],
@@ -61,7 +61,7 @@ export const CASES: Entry[] = [
   },
   {
     id: 'X-007', slug: 'distributed-password-manager', kind: 'case', title: 'Distributed Password Manager',
-    kicker: 'Case file · cloud systems · CMPT 756', year: '2025',
+    kicker: 'Project · cloud systems · CMPT 756', year: '2025',
     summary: 'A GFS-style password vault on GCP that keeps serving reads when a replica dies, and replays what it missed when it returns.',
     roles: ['cloud', 'it'], slot: { lane: 2, row: 12 },
     facts: [['Context', 'SFU CMPT 756 · coursework'], ['Deploy', 'GCP · 1 master + 3 chunk servers across zones'], ['Transport', 'Go · TLS 1.3'], ['Recovery', 'WAL replay']],
@@ -76,7 +76,7 @@ export const CASES: Entry[] = [
   },
   {
     id: 'X-002', slug: 'ai-enhanced-edr-triage', kind: 'case', title: 'SecureInsight · EDR + AI',
-    kicker: 'Case file · detection', year: '2024', era: 'Built in 2024: an early experiment in putting an LLM inside the triage loop.',
+    kicker: 'Project · detection', year: '2024', era: 'Built in 2024: an early experiment in putting an LLM inside the triage loop.',
     summary: 'Turns raw Wazuh EDR events into analyst-ready triage summaries, cached so repeated alerts cost nothing.',
     roles: ['soc', 'ai'], slot: { lane: 3, row: 12 },
     facts: [['My role', 'Builder'], ['Source', 'Wazuh EDR'], ['Validated with', 'Brute force · SQLi · DDoS'], ['Noise', 'Repeats suppressed from feedback']],
@@ -91,15 +91,15 @@ export const CASES: Entry[] = [
   },
   {
     id: 'X-003', slug: 'internal-pentest', kind: 'case', title: 'Internal Penetration Test',
-    kicker: 'Case file · AppSec · grey-box', year: '2025',
-    summary: 'A grey-box test of a staging web app and its APIs: 14 validated findings, each with reproduction steps and a fix.',
+    kicker: 'Project · AppSec · team grey-box', year: '2025',
+    // a team test (user, 2026-10-01): the user's part is the access-control findings below; no counts
+    summary: 'A team grey-box test of a staging web app and its APIs. My part: the access-control findings, each proven with the requests that show it and paired with a fix.',
     roles: ['soc', 'grc'], slot: { lane: 3, row: 15 },
-    facts: [['My role', 'Tester and report author'], ['Scope', 'Staging web app + APIs'], ['Surfaces', 'Auth · sessions · files · tenant access'], ['Tooling', 'Burp Suite, manual testing']],
-    numbers: [['14', 'validated findings'], ['4', 'surfaces tested']],
+    facts: [['My part', 'Access-control findings'], ['Scope', 'Staging web app + APIs'], ['Surfaces', 'Auth · sessions · files · tenant access'], ['Tooling', 'Burp Suite, manual testing']],
     stack: ['Burp Suite', 'API security', 'Session analysis'],
     sections: [
       { eyebrow: '01 · Scope', title: 'Where systems fail: the seams', body: 'The test focused on the joins between authentication, session state and authorisation logic, including tenant boundaries and file handling.' },
-      { eyebrow: '02 · Method', title: 'Prove it, then write the fix', body: 'Every issue was captured with request/response pairs, impact and a remediation an engineer could apply. Working controls were verified too, so the report says what held as well as what broke.' },
+      { eyebrow: '02 · My part', title: 'Who may read what', body: 'I took the access-control side: whether one user can reach another user’s records, whether a role check guards every privileged endpoint, and whether a session really ends at logout. Each finding was captured with request/response pairs, its impact and a remediation an engineer could apply.' },
     ],
     findings: [
       { severity: 'critical', label: 'IDOR', title: 'Other users’ records by ID', detail: 'Sequential IDs returned another user’s record; no ownership check on the object.' },
@@ -108,11 +108,11 @@ export const CASES: Entry[] = [
     ],
     demo: 'pentest', demoNote: ['Sample target modelled on the real findings', 'Client name withheld'],
     link: ask('Internal Pentest (redacted report)'),
-    seo: { title: 'Yaoting Wang | Internal Penetration Test', description: 'Grey-box penetration test of a staging web app and APIs: 14 validated findings including IDOR, missing role checks and session replay.' },
+    seo: { title: 'Yaoting Wang | Internal Penetration Test', description: 'A team grey-box penetration test of a staging web app and APIs; my part was the access-control findings: IDOR, a missing role check and session replay.' },
   },
   {
     id: 'X-006', slug: 'splunk-soc-lab', kind: 'case', title: 'Splunk SOC Detection Lab',
-    kicker: 'Case file · detection engineering · home lab', year: '2023',
+    kicker: 'Project · detection engineering · home lab', year: '2023',
     summary: 'Attack scenarios turned into SPL detections over Windows, Sysmon and firewall logs, with a triage runbook for each.',
     roles: ['soc'], slot: { lane: 3, row: 9 },
     facts: [['Context', 'Home lab'], ['Data', 'Windows Event Logs · Sysmon · firewall'], ['Detections', 'Brute force · privilege escalation · lateral movement'], ['Mapping', 'MITRE ATT&CK']],
@@ -126,7 +126,7 @@ export const CASES: Entry[] = [
   },
   {
     id: 'X-005', slug: 'threat-modelling-viva', kind: 'case', title: 'Threat Modelling · VIVA',
-    kicker: 'Case file · risk · architecture', year: '2025',
+    kicker: 'Project · risk · architecture', year: '2025',
     summary: 'STRIDE across a non-profit’s web app, database, server and network: 12 threats found, rated, and remediated.',
     roles: ['grc'], slot: { lane: 4, row: 12 },
     facts: [['My role', 'Assessor and remediator'], ['Method', 'STRIDE · CVSS'], ['Scope', 'App · database · server · network'], ['Result', '12 / 12 remediated']],
@@ -142,23 +142,25 @@ export const CASES: Entry[] = [
   },
   {
     id: 'X-008', slug: 'enterprise-campus-network', kind: 'case', title: 'Enterprise Campus Network',
-    kicker: 'Case file · network & security · capstone', year: '2022',
-    summary: 'Six of us joined four separate sites into one network over MPLS. I configured the routers, switches, firewalls and VPN tunnels, and the segmentation that keeps one bad machine from reaching the rest.',
+    kicker: 'Project · network & security · capstone', year: '2022',
+    // user, 2026-10-01: a team of six; the user did every layer hands-on, routing to IPS
+    summary: 'A four-site enterprise network built from scratch by a team of six, and I worked every layer of it: routing and switching, firewalls and VPNs, the servers, and the SIEM and IPS that watch it all.',
     roles: ['it', 'soc'], slot: { lane: 5, row: 12 },
-    facts: [['My role', 'One of six; routers, switches, firewalls and VPN tunnels'], ['Sites', '4, joined over an MPLS L3VPN'], ['Security', 'Segmentation and access rules'], ['Monitoring', 'Splunk · FortiSIEM']],
-    stack: ['MPLS L3VPN', 'VLAN', 'OSPF', 'ACL', 'PAT', 'DNS / DHCP', 'Firewalls', 'Splunk', 'FortiSIEM'],
+    facts: [['My part', 'Every layer, hands-on'], ['Routing', 'OSPF · MPLS L3VPN · VLAN · ACL · PAT'], ['Security', 'Firewalls · VPN · segmentation · IPS'], ['Operations', 'Servers · Splunk · FortiSIEM']],
+    stack: ['OSPF', 'MPLS L3VPN', 'VLAN', 'ACL', 'PAT', 'Firewalls', 'VPN', 'IPS', 'DNS / DHCP', 'Splunk', 'FortiSIEM'],
     sections: [
-      { eyebrow: '01 · Build', title: 'Four sites, one network', body: 'As a six-person team we designed and deployed an MPLS L3VPN joining four separate sites. I configured the routers, switches, next-generation firewalls and VPN tunnels, with VLANs, OSPF, ACLs, PAT, DNS and DHCP underneath.' },
-      { eyebrow: '02 · Contain', title: 'One bad machine stays one', body: 'We defined segmentation and access rules so that a compromised machine in one zone cannot reach the rest, while staff keep working across all four sites. Limiting the blast radius without stopping operations was the point of the design.' },
-      { eyebrow: '03 · Hand over', title: 'Logged, drawn, handed over', body: 'Network and security logs flowed into Splunk and FortiSIEM in one place, and we left network diagrams and documentation for whoever would run it next.' },
+      { eyebrow: '01 · Build', title: 'Four sites, one network, from the cable up', body: 'As a six-person team we designed and built an enterprise network joining four separate sites over an MPLS L3VPN. I configured the routing and switching underneath it: OSPF, VLANs, ACLs and PAT.' },
+      { eyebrow: '02 · Defend', title: 'An edge that holds, and a breach that stays small', body: 'I set up the next-generation firewalls, the VPN tunnels between sites and the segmentation rules, so a compromised machine in one zone cannot reach the rest while staff keep working across all four sites.' },
+      { eyebrow: '03 · Run', title: 'A network someone can operate', body: 'I stood up the servers the network depends on (DNS, DHCP) and the monitoring that watches it: an IPS on the traffic, and every device’s logs in Splunk and FortiSIEM. We left diagrams and documentation for whoever runs it next.' },
+      { eyebrow: '04 · Range', title: 'One project, every job in it', body: 'The same build covers the work of several roles.', points: ['Network administration: routing, switching, MPLS between sites.', 'Firewall and VPN administration: the edge and the tunnels.', 'Systems: the servers everything else relies on.', 'Security monitoring: a SIEM and an IPS over the whole network.'] },
     ],
     demo: 'network', demoNote: ['Lab replay · zones and hosts illustrative', 'Built in a virtual lab, 2022'],
     link: ask('Enterprise Campus Network'),
-    seo: { title: 'Yaoting Wang | Enterprise Campus Network', description: 'A four-site MPLS L3VPN network built by a team of six: routers, switches, firewalls and VPN tunnels, segmentation that limits the blast radius, and logs in Splunk and FortiSIEM.' },
+    seo: { title: 'Yaoting Wang | Enterprise Campus Network', description: 'A four-site enterprise network built from scratch by a team of six: OSPF, MPLS L3VPN, VLANs, ACLs and PAT; firewalls, VPNs and segmentation; servers; and a SIEM and IPS monitoring it all.' },
   },
   {
     id: 'X-009', slug: 'pwnscan', kind: 'case', title: 'PwnScan',
-    kicker: 'Case file · IoT exposure · SFU CMPT 783', year: '2026', era: 'Top 3 project, SFU Master of Cybersecurity (CMPT 783), 2026.',
+    kicker: 'Project · IoT exposure · SFU CMPT 783', year: '2026', era: 'Top 3 project, SFU Master of Cybersecurity (CMPT 783), 2026.',
     summary: 'Finds every device on a network without agents, fingerprints the IoT ones, and ranks their CVEs by how likely they are to be exploited.',
     roles: ['it', 'soc'], slot: { lane: 5, row: 15 },
     facts: [['Team', 'Three; I built discovery, fingerprinting and risk scoring'], ['Discovery', 'ARP · mDNS · SSDP'], ['Risk', 'CVSS × EPSS × exposure'], ['Recognition', 'Top 3, CMPT 783']],
@@ -176,7 +178,7 @@ export const CASES: Entry[] = [
 export const SERVICE: Entry[] = [
   {
     id: 'SR-01', slug: 'coast-capital', kind: 'service', title: 'Information Security Co-op', org: 'Coast Capital Savings',
-    dates: 'Jun 2026 – Feb 2027', place: 'Hybrid, Canada', kicker: 'Service record · financial services',
+    dates: 'Jun 2026 – Feb 2027', place: 'Hybrid, Canada', kicker: 'Experience · financial services',
     summary: 'Security risk assessments for internal projects and third-party vendors at a Canadian credit union.',
     roles: ['grc', 'cloud'], slot: { lane: 4, row: 15 },
     facts: [['Internal assessments', '50+ projects'], ['Vendor reviews', '20+ vendors'], ['Evidence reviewed', 'ISO 27001 · SOC 2 Type II · PCI · pentest reports'], ['Platform', 'Archer']],
@@ -189,7 +191,7 @@ export const SERVICE: Entry[] = [
   },
   {
     id: 'SR-02', slug: 'vibesmeet', kind: 'service', title: 'Cybersecurity & DevSecOps Intern', org: 'VibesMeet LLC',
-    dates: 'Feb 2025 – Jul 2025', place: 'Remote, USA', kicker: 'Service record · startup cloud',
+    dates: 'Feb 2025 – Jul 2025', place: 'Remote, USA', kicker: 'Experience · startup cloud',
     summary: 'Put security checks into a startup’s CI pipeline, tightened its AWS access, and cut its monthly AWS bill by about 30%.',
     roles: ['cloud', 'ai'], slot: { lane: 2, row: 15 },
     facts: [['CI security', 'Trivy · GitGuardian · Semgrep in GitHub Actions'], ['Cloud', 'AWS Security Hub · IAM least privilege'], ['Cost', '~30% lower monthly AWS spend'], ['Access', 'Joiner / leaver IAM process']],
@@ -202,7 +204,7 @@ export const SERVICE: Entry[] = [
   },
   {
     id: 'SR-03', slug: 'bcit-cyber-security-office', kind: 'service', title: 'Cybersecurity Analyst Intern', org: 'BCIT Cyber Security Office',
-    dates: 'May 2024 – Aug 2024', place: 'Burnaby, BC', kicker: 'Service record · higher education',
+    dates: 'May 2024 – Aug 2024', place: 'Burnaby, BC', kicker: 'Experience · higher education',
     summary: 'Built BCIT’s security awareness programme from scratch, validated 20+ policies against NIST and ISO, and wrote the IR playbooks.',
     roles: ['grc', 'soc'], slot: { lane: 4, row: 9 },
     facts: [['Awareness', '1,000+ staff and students'], ['Phishing', '~15% fewer successful attempts in later simulations'], ['Policy', '20+ policies and standards validated'], ['IR', '4 playbooks + investigation lab']],
@@ -214,7 +216,7 @@ export const SERVICE: Entry[] = [
   },
   {
     id: 'SR-04', slug: 'viva-it', kind: 'service', title: 'IT & Security Coordinator', org: 'Vancouver International Volunteer Association',
-    dates: 'Oct 2024 – Present', place: 'Vancouver, BC', kicker: 'Service record · non-profit · freelance',
+    dates: 'Oct 2024 – Present', place: 'Vancouver, BC', kicker: 'Experience · non-profit · freelance',
     summary: 'The only IT person for 500+ staff and volunteers: accounts, devices, websites, domains and certificates.',
     roles: ['it', 'grc'], slot: { lane: 5, row: 9 },
     facts: [['Scope', 'Sole IT contact, 500+ people'], ['Platforms', 'Microsoft 365 · databases · devices'], ['Web', 'Sites with admin CMS · DNS · SSL'], ['Services', '3+ public services kept renewed']],
@@ -265,7 +267,7 @@ export const CREDENTIALS: Entry[] = [
 ]
 /** A few words for a file, used wherever an evidence link would otherwise be a bare ID. */
 const SHORT: Record<string, string> = {
-  'YW-000': 'Subject file', 'X-000': 'SENTINEL-1', 'X-001': 'MCP scanner', 'X-002': 'SecureInsight', 'X-003': 'Pentest', 'X-004': 'TELUS hackathon',
+  'YW-000': 'Profile', 'X-000': 'SENTINEL-1', 'X-001': 'MCP scanner', 'X-002': 'SecureInsight', 'X-003': 'Pentest', 'X-004': 'TELUS hackathon',
   'X-005': 'Threat model', 'X-006': 'Splunk lab', 'X-007': 'Password vault', 'X-008': 'Campus network', 'X-009': 'PwnScan',
   'SR-01': 'Coast Capital', 'SR-02': 'VibesMeet', 'SR-03': 'BCIT', 'SR-04': 'VIVA IT', 'ED-01': 'Master’s, SFU', 'ED-02': 'BTech, BCIT', 'ED-03': 'Diploma, BCIT', 'CT-01': 'Certifications',
 }
@@ -276,12 +278,12 @@ function titleOf(id: string) {
   return e ? (e.kind === 'service' ? e.org! : e.title) : id
 }
 
-// Layout: each drawer's records stand together, a short run of lit drives from its centre outward
-// (files first, then education, service records, skills, credentials), and the drawers' centres
-// step down the field on a diagonal, so the overview reads as one band of light crossing the
-// archive. A new entry only needs its lane; its row is assigned here.
+// Layout: each drawer's records stand together in one run, kind by kind (jobs, then projects,
+// education, then the short skill keys), so like sits with like; the drawers' centres step down
+// the field on a diagonal, so the overview reads as one band of light crossing the archive.
+// A new entry only needs its lane; its row is assigned here.
 // X-000 sits a little beyond the end of its run: an easter egg to find, not the first thing the eye lands on
-const ORDER: Record<string, number> = { subject: 0, case: 1, education: 2, service: 3, visitor: 4, skill: 5, credential: 6, restricted: 7 }
+const ORDER: Record<string, number> = { subject: 0, service: 1, case: 2, education: 3, visitor: 4, credential: 5, skill: 6, restricted: 7 }
 const CENTRE = 16, DIAGONAL = 3
 function layout(list: Entry[]) {
   const lanes = new Map<number, Entry[]>()
@@ -290,8 +292,9 @@ function layout(list: Entry[]) {
     group.sort((a, b) => ORDER[a.kind] - ORDER[b.kind])
     const centre = CENTRE + Math.round((lane - (LANES_N - 1) / 2) * DIAGONAL)
     const run = group.filter((e) => e.kind !== 'restricted'), egg = group.filter((e) => e.kind === 'restricted')
-    run.forEach((e, i) => { const k = Math.ceil(i / 2) * (i % 2 ? 1 : -1); e.slot = { lane, row: centre + k } })
-    const end = Math.ceil(run.length / 2) + 3
+    const first = centre - Math.floor((run.length - 1) / 2)
+    run.forEach((e, i) => { e.slot = { lane, row: first + i } })
+    const end = run.length - Math.floor((run.length - 1) / 2) + 2
     egg.forEach((e, i) => { e.slot = { lane, row: centre + end + i } })
   }
   return list

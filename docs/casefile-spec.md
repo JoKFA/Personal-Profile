@@ -672,3 +672,227 @@ verify 与 E2E 全绿；1440 与 390@3x ≥ 57 fps；截图确认选中的盘和
 2. **ED-01 "Powers of Ten"** (approved in principle). One continuous zoom, from an instruction to a host, a domain, an app, a network, a pipeline and cloud, across zones, and out to a financial institution. Use the confirmed course facts in §24.2 without splitting them by course.
 3. Interim demos to replace: `WaysIn.tsx` (YW-000) and `Quorum.tsx` (ED-01).
 4. Later: the case-file polish round, X-SITE content (user to provide), SENTINEL labs (postponed), and a real iPhone check (user).
+
+## 25. 第六轮：主档案 "The Archive Is the Defence" + 档案类型可辨（2026-10-01）
+
+> **2026-10-02：主档案的短片部分（§25.3）已被 `docs/subject-space-spec.md`（进入硬盘的工作空间）取代**；旧短片代码（DefenceFilm、film.ts、defence.ts、survey 机位）已删除。§25.4 类型可辨与图例不变。
+
+用户决定（2026-10-01）：三个问题全按推荐——"挡住"用光墙截断（盘不升高）；不加第 7 招；每个会话首次打开播完整片，之后直接显示终帧 + Replay。另提出：档案场里 skills / projects / experience / education 分不出来，全混在一起。
+
+### 25.1 目标
+- **A. 主档案短片**：打开 YW-000 时，镜头升到档案场上空；六次真实攻击依次射向一道由他真实工作组成的防线，每次撞上对应硬盘发出的光后熄灭。终帧常驻、可点。**任何人看一遍就懂："攻击来了，他做过的事把它挡住了。"**
+- **B. 类型可辨**：在总览里不看字也能分出工作经历、项目、学历、技能；看字时用的是普通人的词。
+
+### 25.2 非目标
+- 不改抽屉 = 求职方向的结构（P4 的决定），不改 "Hiring for" 的逻辑。
+- 不做 SFU "Powers of Ten"（下一步）。不改其他档案的打开方式。
+
+### 25.3 A：短片设计（按实际实现）
+**构图：六条缝、一道墙。** 档案场的抽屉之间有缝（lane 之间约 0.2 宽）。六块防守盘按"同类排在一起"的新布局落在不同的行：X-001 (1,10) · SR-02 (2,13) · X-003 (3,16) · SR-01 (4,18) · SR-03 (4,19) · X-008 (5,22)。每次攻击是一束红光，沿防守盘旁边的那条缝从上方射下来，停在那块盘前；六个停止点高低错落，连成一道墙。"Your data"（一块封存的空盘，橄榄色细框）在墙的后面。从上往下读：外面 → 墙 → 数据。
+- 哪条缝归哪次攻击由 `motion/film.ts` `planDefence()` 从真实布局算出：每次攻击一条缝，尽量少经过其他防守盘；数据盘取墙后的空格。布局变了，片子跟着变。
+- 原方案"红光沿缝隙折线走、盘升起"在 spike 中被替换：缝是档案场本身的结构，红光在缝里走正是 PV 里"光从缝里漏出来"的语言；盘不动，只用光（遵守"用光不用高度"）。
+
+**易懂的三个支架（保留）：** 先亮出目标；前两招慢放（2.2 s）教会模式，后四招 1.3 s；每招一句人话。防守盘在攻击到达**之前**亮起（防御先在那里），红光撞在光上熄灭。
+
+**攻击顺序（编号已在 attack.mitre.org 核对，2026-10-01）：**
+
+| # | 攻击 | 阶段 · 编号 | 挡住它的盘 · 证据 |
+|---|---|---|---|
+| 1 | Phishing email | Get in · T1566 | SR-03 Awareness programme · ~15% fewer phishing successes |
+| 2 | Broken access in a web app | Get in · T1190 | X-003 Pentest of the app · 14 validated findings |
+| 3 | Risky vendor | Get in · T1199 Trusted Relationship | SR-01 Vendor risk reviews · 20+ vendor reviews |
+| 4 | Poisoned AI tool | Get in · MITRE ATLAS | X-001 MCP security scanner · 60+ servers tested |
+| 5 | Leaked cloud key | Steal keys · T1552 | SR-02 Secret checks in CI · Every merge scanned |
+| 6 | One machine infects the rest | Spread · TA0008 | X-008 Network segmentation · A breach stays small |
+
+**分镜（`motion/film.ts`，一个时钟驱动光和字）：**
+| 镜头 | 时间 | 画面 |
+|---|---|---|
+| 升起 | 0–1.8 s | YW-000 的 LED 闪两下，盘不弹出。镜头从档案视角（yaw 59° / 俯 19°）摇臂升到 yaw 8° / 俯 62°（手机 70°），缝在屏幕上竖直排开；场面压平（波浪归零），绘制窗口扩大到 12×64，远处看不见的螺丝和镶条不画；其他记录只留微光。标题 "Six ways attackers get into a company." |
+| 目标 | 1.8–2.4 s | "Your data" 的橄榄色细框和字亮起。 |
+| 第 1–6 招 | 2.6 s 起，2.2 / 2.2 / 1.3 ×4 s | 攻击名出现在缝的上端（小字 "Get in · T1566"）→ 红光加速射下（白热的头 + 发光的尾，超过 1 的亮度会泛光）→ 到达前防守盘亮起、缝里立起一片暖光帘 → 撞击闪光，红光熄灭，留下一条暗红细线（正常混合，在象牙底上看得见）→ "Stopped by …" 写出。计数 "n / 6 stopped"。 |
+| 终帧 | 约 12.5 s 起常驻 | 标题换成 "Six ways in. / **Each one stopped by work I did.**"；"Your data · untouched"。悬停任一 "Stopped by" → 这一招的线、光帘、盘、字变亮，其余五招退后；点击 → 打开该档案。Replay；播放时可 "Skip to the end"。 |
+
+**实现：** `scene/defence.ts`（红光、光帘、闪光、数据框，都在主场景里）· `archive.ts` 的 survey（摇臂、跟踪、窗口、按片子时钟给每块盘打光）· `ui/DefenceFilm.tsx`（每帧把字投影到档案上）。首次播放记在 `sessionStorage` `yw.film`，之后直接终帧；reduced-motion 直接终帧。
+**手机：** 片子是档案页的第一屏（档案场透出来）；六个红色编号标在每条缝的起点，下面一个编号列表随片子逐条勾上 "Stopped by …"；往下滚时钉在档案上的标记淡出，正文有自己的底色。
+
+### 25.4 B：类型可辨（按实际实现）
+1. **形状**：技能和证书是半长的"短钥匙"（实例 x 缩放 0.5；选中时 hero 也缩，印字预先拉宽两倍以抵消）。总览里 22 枚短钥匙退后，16 份完整档案站在前面。
+2. **端头**：工作经历 = **墨色**端头与顶边；学历 = 香槟色端头；项目 = 象牙（不变）。spike 中先试了香槟色给工作经历，结果和"有记录的盘发暖光"混在一起看不出来，改成墨色。
+3. **普通人的词**：`KIND_NAME` 一处定义：Experience / Project / Education / Skill / Certifications / Profile；面板、档案页、盘上印字、Index、无 WebGL 页统一。第一个抽屉改名 "Profile & Education"。
+4. **图例兼筛选**：左下角（地图放图例的位置），与右下页脚同一条基线，半透明：`▬ Experience 4 · ▬ Projects 9 · ▬ Education 3 · ▪ Skills 22`，小图形与盘形一致；悬停/聚焦只亮这一类（与 Hiring for 叠加取交集），点击固定。手机放在角色栏下面一行。计数随 lens 变化。
+5. **抽屉内顺序**：工作经历 → 项目 → 学历 → 证书 → 技能，连续排列。
+6. 俯视（片子）时形状和端头渐隐成统一的盘，片子只讲墙。
+7. 顺手修复：指针在 HUD 按钮上时不再悬停到下面的盘。
+
+### 25.5 假设台账
+| # | 假设 | 状态 |
+|---|---|---|
+| H1 | 俯视取景能在 1440×900 左侧约 58% 内框住六条缝、墙和数据盘，字不互相压 | ✅ spike 截图；E2E 检查六个 "Stopped by" 两两不重叠且都在正文栏左边 |
+| H2 | 俯视时绘制窗口覆盖画面不露边 | ✅ 窗口在 survey 时扩到 12×64（平时 8×44 不变） |
+| H3 | 片子中 ≥ 57 fps | 本机 Edge 截图时测得终帧 100–144 fps；E2E fps 测试加了"片子播放中"和"终帧"两项（1440 与 390@3x） |
+| H4 | 六条事实已确认 | ✅ 沿用已上线 WAYS_IN 的事实，证据句缩短但不加新事实；numbers 测试覆盖 |
+| H5 | ATT&CK 编号 | ✅ attack.mitre.org 核对 T1566 / T1190 / T1199 / T1552 / TA0008；AI 工具只标 "ATLAS" 不写编号 |
+| H6 | 实例矩阵 x 缩放、端头按实例着色 | ✅ `stage.set(..., form)` |
+| H7 | 选中的技能盘也是半长 | ✅ `heroGroup.scale.x` + 印字预拉宽 |
+
+### 25.6 验收
+- verify 全绿；本阶段末跑一次 E2E（新增：片子跑完 6/6、六个停止标签不重叠且在正文栏左边、点击打开对应档案、同一会话第二次打开直接终帧；图例悬停只亮一类；HUD 不重叠检查包含图例；fps 包含片子）。
+- 证据：Edge 录制的完整视频（桌面 + 手机）、终帧截图、总览截图、fps。
+- reviewer 子代理按本节独立审查。
+
+## 26. 第七轮：首访即一部片子——身份 → 入场 → 主档案 → 授权（2026-10-01）
+
+### 26.1 用户决定（2026-10-01）
+- 第六轮短片的概念保留，细节不满意：气泡字、笔直向下的红光"没有设计感"；数字在短片、右栏、项目档案三处重复，"显得蠢、小气"。短片的任务是让人一看就知道做的是有质量、有水平的工作，并引导访客去探索整个网站，不重复事实数据。
+- 入场：没有真正理解 PV。PV 的入场只有约 2 秒，核心是**一道浪潮带出所有档案，然后收敛、聚焦到最需要看的那一份**；波和运镜是联动的。我做的是与镜头无关的"无意义波动"。
+- 首访顺序：入场 → 主档案第一次自动升起、解密 → 主档案短片 → 交给访客探索（先自动展示，再探索）。
+- **"Hiring for" 整个去掉**（抽屉本身就是方向）。首访的角色提示和导览一并去掉。
+- **IAM 放进主档案的展示**：要清晰易懂。
+- 高度可以用在运动中（浪、收敛），静止时归平，相关性仍用光。
+- 反向侦察由我设计，唯一要求：概念清楚、易懂、看得清，不要快到看不清；这是网站第一站，UI 风格、易用性和代表性都要考虑。
+- 文案：不放数字，用措辞给分量。
+  - Broken access 这一招改为体现 Cloud IAM 的概念和项目（不用 pentest）。用户：pentest 不是强项，那个项目只参与了其中的 finding；现在 AI 自动化渗透更快，懂得 pentest 要找什么、证明什么即可。
+  - 网络项目 X-008 不只是 segmentation：从零搭建整个网络，包括 OSPF、segmentation、VLAN、ACL、PAT、MPLS（CCNP 乃至 CCIE 级别的概念），还有防火墙、服务器，以及用 SIEM 和 IPS 监控和管理整个网络。**全部亲手做过**（六人团队）。要用这一个项目体现能做所有相关工作。
+  - 第二招与"泄露的云密钥"合并为一招 Cloud IAM（SR-02）；空出的一招给检测（X-002 SecureInsight）。
+
+### 26.2 事实更正（用户 2026-10-01 确认）
+- **X-003**：团队项目。用户勾选的个人部分是三个访问控制类 finding（IDOR、admin export 缺角色检查、登出后 token 可重放），但此前说"参与其中两个"。网站上不写数量，只写"my part: the access-control findings"。不再写 "Tester and report author"，也不再写 "14 validated findings" 作为个人成果。
+- **X-008**：六人团队，用户亲手做了全部：路由与交换（OSPF、VLAN、segmentation、ACL、PAT、MPLS L3VPN）、防火墙、服务器（DNS / DHCP 等）、SIEM（Splunk、FortiSIEM）、IPS。不写成证书（不说 CCNP / CCIE），只写这些技术本身。
+
+### 26.3 PV 入场的语法（逐帧研究 PV 26.5–34 s，帧在 `.codex-runtime/design/pv/`）
+| 时间 | 发生了什么 | 语法 |
+|---|---|---|
+| 27.0–27.5 | logo 被横向撕裂（扫描线错位） | 剪辑用"信号撕裂"，不用淡入淡出 |
+| 27.6–28.4 | 低机位贴近，档案卡填满画面，一道浪卷过，强运动模糊 | 浪潮把档案带出来；镜头跟着浪走 |
+| 28.5–29.4 | 打字 "SELECTING FILES…"，发丝引线 + 四个小方点 | 浪 = 搜索 |
+| 29.4–30.2 | 再次撕裂，切到更高、更斜的机位，前后景大面积虚化 | 剪辑换角度 + 景深带 |
+| 30.6–31.6 | 浪收拢成一道斜坡，卡片像台阶一样升向 X-001，顶点停住；打字 "FILE NUMBER: X-001" | **浪的终点就是焦点**：高度形成引导线 |
+| 31.6–33 | 其余回落，被选中的留在高处，推近，背景虚掉 | 搜索结束，剩一个答案 |
+
+### 26.4 首访的整部片子
+用 IAM 的四步讲：**识别 → 申请 → 简报 → 最小权限授权**。访客一进来就被当成一个需要授权的身份，整个网站就是一次访问控制。
+
+| 段 | 时长 | 画面 | 易懂的支点 |
+|---|---|---|---|
+| ① 识别（反向侦察） | 约 6.5 s，三屏，每屏一句大字、停留 ≥ 2 s | 1."Windows · Edge · Vancouver · 2:37 PM"（浏览器 30 ms 内读到，未上传）→ 2. 同一行字下，红色细线标出攻击者会怎么用（exploit / 发信时间 / 诱饵语言）→ 3. "I look at systems the way an attacker would. Then I close the gaps." + 名字。底部一行小字：ACCESS REQUEST · V-xxxx · scope: pending | 一次只说一件事；左右双栏取消 |
+| ② 撕裂进场 + 浪潮 | 约 2 s | 横向撕裂切进档案场；低机位、贴近；一道浪沿排卷来，镜头与浪同速；"SELECTING FILES…" | 镜头跟浪 |
+| ③ 收敛 | 约 1.6 s | 再一次撕裂切到档案角度；浪收成台阶，升向 YW-000；"FILE NUMBER: YW-000" 停留 | 浪的终点 = 焦点 |
+| ④ 主档案升起、解密 | 约 2.5 s | 与其他档案相同：弹出、转向、解密光扫过；停一下 | 和点开任何档案一样 |
+| ⑤ 简报（攻防短片，下一步重做） | 约 15 s | 见 26.5 | |
+| ⑥ 授权 | 约 2.5 s | "ACCESS GRANTED · read-only · scope: portfolio · expires when you leave"；一道解密浪从主档案扫过全场，档案变得可读，交棒 | 最小权限 = 打开网站的方式 |
+
+- 首访前全场是密文；④ 只解密 YW-000；⑥ 解密全场。回访：② ③ 照播（入场本身），不自动打开主档案，全场已可读。
+- 任何时刻按任意键或点击：跳到当前段的结尾状态（不逼人看完）。
+- 撕裂用后处理 pass（按横带随机错位），浪是 `waves.ts` 里的纯函数，镜头直接由浪的前锋位置驱动。
+
+### 26.5 短片（⑤）重做方向（在 ①–④ 确认后做）
+- 去掉气泡：PV 式打字 + 发丝引线 + 小方点，一次一行，靠近当前镜头焦点。
+- 红光：一道"红色的浪"沿缝卷来（与入场同一种浪的语言），途经的盘轻颤；防守盘先亮，光把它截断、打散；不是直线。
+- 每招一个镜头（撕裂切到防守盘附近，景深带），最后拉高到全景，六道光墙成一条线。
+- 文案（无数字）：
+
+| 攻击 | 挡住它的工作 |
+|---|---|
+| Phishing email · T1566 | An awareness programme I built for an entire institute (SR-03) |
+| Risky vendor · T1199 | Third-party risk reviews at a Canadian financial institution (SR-01) |
+| Poisoned AI tool · ATLAS | A scanner that tests AI-agent tools before agents touch them (X-001) |
+| A leaked cloud key · T1552 / T1078.004 | Least-privilege IAM and secret scanning: a stolen key opens almost nothing (SR-02) |
+| Malware on a laptop · T1204 | AI-assisted detection that writes the analyst's first triage note (X-002) |
+| One machine infects the rest · TA0008 | An enterprise network built from scratch: routing, firewalls, IPS and a SIEM watching all of it (X-008) |
+
+### 26.6 假设台账
+| # | 假设 | 状态 |
+|---|---|---|
+| H1 | 低机位、贴近的镜头（俯约 8°、span 约 4）在现有场景下有 PV 的质感（不穿模、不露底） | 待验证（spike） |
+| H2 | 镜头直接由浪的前锋驱动（不经弹簧），运动模糊 pass 能给出 PV 的速度感 | 待验证 |
+| H3 | 撕裂作为后处理 pass 不掉帧 | 待验证 |
+| H4 | 去掉 lens 后 sealAll / rekey 仍可实现"首访全场密文，⑥ 解密" | ✅ `model/archive.ts`：`sealAll` + `rekey(…, 'all')` 本来就是入场解密浪 |
+| H5 | T1078.004（Valid Accounts: Cloud Accounts）、T1204（User Execution）编号 | 待核对 |
+
+### 26.7 验收（本轮分两次给用户看）
+- 第一次（①–④）：录制首访视频，与 PV 26.5–34 s 并排对比；截图 ① 的三屏。
+- 第二次（⑤–⑥）：完整首访视频（桌面 + 手机）。
+- 阶段末：verify + E2E（去掉 lens / tour 的测试改写），fps ≥ 58，reviewer 审查。
+
+### 26.8 修订（2026-10-01，用户："浪潮和收敛没有 PV 的感觉；反向侦察失去了 UI 的统一和高级感，像 PPT"）
+重新逐帧看 PV（27.6–31.8 s 每 0.2 s；开头 6.5–23.5 s）。之前的理解错在：
+- 浪潮段**没有第二次撕裂**，是一个连续镜头；机位不是贴地平视，而是从近乎沿抽屉方向（卡片侧边成竖条）开始，边推进边转到档案角度（卡面展开），同时减速。
+- 浪是行内依次起伏的斜向涟漪，主浪与镜头同速；镜头减速时涟漪平息，最后一道浪在目标那一列堆成一道长缓坡，顶端是档案。全场统一象牙色，前 1.5 s 强烈横向拖影，上下雾化。
+- 开头是 IAM 认证的 UI：淡线稿底纹、居中一行极小的状态字、标志按笔画画出、标志左移后右侧逐条打出 "- ID CONFIRMED / REQUEST RECEIVED"、圆环收拢在请求上、"WELCOME TO" + 高亮条揭出名字；左上 lockup、右下署名常驻，与档案场是同一套框架。
+
+实现（`waves.ts` `searchWave`、`archive.ts` 入场镜头、`ui/Gate.tsx`）：
+- 入场：撕裂只在识别 → 档案场之间用一次。镜头 yaw 84° → 59°、俯 26° → 19°、span 0.8 → 1，一条 easeOut 曲线同时驱动镜头位置和主浪；运动模糊 ×3.2（仅行进中）；入场期间所有盘统一象牙色、记录不发光，曝光 +0.1，景深带更窄；随后归位。
+- 识别开场：ACCESS PERMISSION REQUIRED → YW 标志按笔画画出 → lockup 与右下 "ACCESS REQUEST V-xxxx —" 出现 → 标志左移，右侧逐条：VISITOR IDENTIFIED · V-xxxx / 浏览器事实（附 "read by this page in N ms · nothing left your browser"）/ 红色 ENOUGH TO AIM AN ATTACK（附 exploit · 发信时间 · 诱饵语言）/ REQUEST RECEIVED · READ ACCESS · SCOPE PENDING → 访客指纹圆环（由 hash 生成）收拢，REQUEST LOGGED → WELCOME TO + 高亮条揭出 YAOTING WANG + "I look at systems the way an attacker would. Then I close the gaps." 场景在最后一条状态时开始构建。约 15 s，任意键跳过。
+
+### 26.9 被否决的方案（2026-10-01）
+- "You are filed"（访客盘写入、封存）：用户评价"一般"。
+- "你的请求就是那道浪"：光带 + "YOU" 标签跟随光头 + GRANTED 四角框。用户："那个 you 的标签和光带毫无用处，甚至不如最开始的反侦察，那个好歹有 attack profile 的感觉。" 教训：移动的指示物本身不承载安全含义；原版的价值在视角翻转（网站用攻击者的眼光看访客）。
+
+### 26.10 开场定稿：攻击画像（约 5 s）+ 光点打进档案场（约 2 s）
+用户要求：总长压到 5 s；视觉要比原版好；左侧大字本身撞进卡片变成字段；卡片是我们的风格又不破坏信息；结尾不是淡出，而是画像变成光点击中档案场、引出浪潮，衔接入场，这段 2 s。
+
+实现（`ui/Gate.tsx`、`styles/gate.css`）：
+| 时间 | 画面 |
+|---|---|
+| 0–0.5 s | lockup（与档案场 HUD 同位置同样式）+ 画像卡升起。卡片 = 硬盘盘面：磨砂象牙底、两端象牙端头、蚀刻走线、香槟镶条；卡头 `TARGET PROFILE · V-xxxx`，三个字段 System / Local time / Language |
+| 0.3–2.4 s | 三句大字逐句出现（"You're on **Windows · Edge 154**."、"It's **7:32 PM, Vancouver**."、"Your browser speaks **Chinese**."）；每句的粗体值本身飞进卡片对应字段（复制体从句子位置缩放平移到字段），落下时字段闪香槟色、卡片被撞一下 |
+| 2.4–3.6 s | 卡头翻成红色 ATTACK PROFILE，三个字段下写出红色用法：match a known exploit / time the phishing email / write the lure in it；左侧 "Put together, that's an **attack profile**." |
+| 3.6–5 s | 左侧加 "I look at systems the way an attacker would. **Then I close the gaps.**"；一道扫描线扫过卡片，字段原地变密文，用法划掉，卡头变橄榄色 SEALED · NEVER LEFT YOUR BROWSER |
+| 静止帧 | 档案场在这时才构建（同步约 2 s：搭建 0.76 s + 预编译着色器 1.4 s；放在动画中会卡顿），读最后那句话的时间里完成 |
+| 2 s 交接 | 文字淡出，卡片向中心收成一个光点；遮罩褪去，露出停在入场第一帧的档案场（`holdEntrance`）；光点沿弧线落到浪的起点（`entranceOrigin`），击中处一圈光环扩散，浪从那里开始（`releaseEntrance`），镜头随浪推进，浪落定直接变成主界面形态 |
+
+随后：入场结束签发只读权限（解密光前从主档案向外扩散），主档案自动打开并播放攻防短片。回访不播开场，直接入场。任意键跳到交接。
+附带修复：生产构建首帧会闪出给爬虫用的纯文本（`prerender.css` 在开启脚本时隐藏，无脚本时照常显示）。
+
+## 28. 主档案：可用的专业视觉展览（2026-10-01）
+
+> **2026-10-02：后续重做见 `docs/subject-space-spec.md`**（v2：门 → 内景 → 六个 2.5D 领域图版，已在真实应用内实现）。
+
+**本轮接入已撤回（用户 2026-10-02 否决）。** 用户认可的是演示中的表达效果，不是原型整套UI、构图载体或直接替换正式主档案。整块原型面板与既有网站不属于同一种界面语法；模型在真实观看尺度下也过小、不可读。已恢复本轮开始时的主档案入口与 DefenceFilm，新增组件/模型/脚本移至 `.codex-runtime/design/profile-demo/blender-study/`，不参与正式网站构建。
+
+后续设计约束：以现有档案实体、材质、排版、开档方式为基准，将已认可的展示效果重新设计成档案内部的表达。先在真实网站背景和实际观看尺度中呈现关键帧，证明专业对象、内容层级与整体风格成立；不能以独立demo获认可替代正式界面设计验收，不能先接入再补一致性。以下内容保留为被撤回实施的记录，不代表批准的正式界面方案。
+
+撤回证据：真实 `/?intro` 的浏览器检查输出 `{ restoredFilm: 6, prototypeInSite: 0 }`，恢复原 DefenceFilm，新的主体面板不在正式页面。项目契约类型检查/eslint/64测试/build通过，`smoke: ok — 18 routes, 4 assets served`。Blender研究脚本输出位置也改为研究目录，防止后续实验默认写入正式assets。
+
+用户认可 `study-v2.html` 的实体展开 → 内部响应展示 → 证据收纳方向。此次实施保留这种构图和交互，统一到网站现有 Manrope / JetBrains Mono、象牙磨砂、香槟边缘、蚀刻线、橄榄状态、小面积风险红。领域对象必须能被专业人士辨认，也要通过动作和短文案让普通访客读懂；禁止通用方块代替领域概念。
+
+| 领域 | 专业对象与动作 | 来源和边界 |
+|---|---|---|
+| 网络 | 路由器、RJ45交换机、服务器、实际端口与线缆；VLAN通路、ACL边界、监控支路 | X-008 六人团队，用户各层亲手参与；不只讲segmentation |
+| Cloud IAM | 身份凭据、Action/Resource权限策略、对象存储与计算资源；收窄权限，不把云画成实体云朵 | SR-02 AWS权限审查；示例策略，不冒充实际生产配置 |
+| AI工具安全 | MCP tools/list工具描述、恶意指令、Docker隔离运行环境、检测报告；检查发生在agent使用前 | X-001 MCP Security Framework；不将inspection说成保证所有工具安全 |
+| 检测研判 | 终端、Wazuh事件、重复事件缓存、LLM初步研判记录；告警保留，分析员决定 | X-002 SecureInsight；使用已验证的暴力破解场景，避免杜撰EDR自动阻断 |
+| 安全意识 | 真实邮件结构、发件域、链接域差异、识别与报告操作 | SR-03 BCIT意识项目；降低风险，不宣称邮件自动拦截 |
+| 风险评估 | 供应商请求、SOC2/ISO证据资料、评估记录与风险矩阵；请求保持待决 | SR-01 Coast Capital；全部示例资料，不展示保密客户数据 |
+
+Blender负责可辨认的设备、薄层文档载体及材质细节，浏览器负责权限路径、事件流、真实可读字段和交互状态。六领域各自有语义明确的动作，不用同一条红线穿六个箱子。终帧六入口打开既有对应档案，保留身份、联系、履历信息的可访问入口，关闭回档案场；支持跳过、暂停、重播、低动态与手机。
+
+非目标：不重做已认可的反侦察/入场，不改履历事实，不引入真实云/API授权，不升级Blender或引入外部模型库。
+
+假设台账：Blender 5.2.1 LTS 在本机可启动（已验证 `blender.exe --version`）；现有 GLTFLoader可复用（已验证 `scene/model.ts`）；专业模型的材质与可读性（待真实WebGL spike）；新主档案退出后恢复既有导航/深链接（待E2E）。验收：真实首访从入场进入新主档案，六领域有不同专业对象且可读、可控、可跳转，手机不溢出；本机实际模型加载有非零mesh数；项目verify和相关E2E通过；fresh-context reviewer对照本节审查。视觉满意度以用户看实拍为准，不以测试替代。
+
+## 27. 入场视觉打磨（2026-10-01）
+
+**目标**：只打磨反侦察与波浪聚焦两个阶段。以本地 PV 帧为参考，建立精密读数的排版、具有方向的细线、象牙磨砂材质与单一运动焦点。保留真实浏览器读数 → 攻击画像 → 封存、文字进入字段、画像收成光点触发浪潮、主档案自动打开的行为。
+
+**非目标**：不修改主档案攻防短片、履历内容、API、权限机制，不增加新的依赖、音效或暗色主题。
+
+| 假设 | 状态与证据 |
+|---|---|
+| 浏览器事实与状态接口可复用 | 已验证：`Gate.tsx` / `visitor.ts`，基线 64 个单测通过 |
+| 初始化会阻塞动画 | 已知风险：项目 memory 与 §26.10；仍在封存静帧准备场景 |
+| 入场独立调光能减弱棕色梳齿，同时保留厚度 | 已验证：本机真实 WebGL spike 与 0.7/1.8/3.5 s 采样；入口象牙调光延续到待打开的静帧，首次打开时连续归零，关闭文件后不再施加 |
+| 手机可保持同样的阅读层级 | 已验证：390×844 与 390×650 实拍与 E2E；短屏攻击卡片底边 559 px，Skip 顶边 581.3 px，三个用途全部 fits=true；禁止 ellipsis 放行 |
+
+**验收**：真实入口 `/?intro` 在桌面与手机播放，采样收集/攻击/封存/浪潮/聚焦；没有空字段飞行残影、可读用途截断或跳过后的残余动画。回访与深链接维持原有行为，reduced-motion 使用静帧与 Continue。运行项目 verify command、相关 E2E，并由 fresh-context reviewer 对照本节审查。
+
+**视觉决定**：读数轨道与飞行引线表达数据位置，移除弹跳与装饰电路；浅层磨砂画像承载累积事实，攻击用途采用小面积锈红，封存结论成为主要文字。三项用途全部显现后约留 1.5 s 阅读时间。画像先收成细线再收成光点，落点由实际场景投影提供，不额外叠加屏幕光环。波浪改为一个主峰与衰减尾波；限制运动拖影、放宽中段清晰区域，镜头最终将焦点归给选中档案。入口导航暂时隐藏，细线读数从 Selecting files 转到 File YW-000。
+
+**独立审查**：fresh-context reviewer 首轮发现 StrictMode 重挂载让字段提前可见、旧宽度检查允许省略；均已修复，复审 PASS。开发入口第一句可见时读取三个目标字段 computed visibility 均为 hidden，飞入后实拍字段累积显示。主档案短片、内容与其设计未修改。
+
+**复现入口证据**：`npm run test:e2e -- --project=desktop-1440 --project=phone-390 --project=phone-short --grep 'entry:|entrance:|reduced motion'`。三视口的完整首访、飞行中跳过、回访波浪共 9 项通过；截图保存于 `.codex-runtime/design/entrance/art-directed/`。旧测试助手对 Continue 的 3 s 点击超时曾静默吞错，已改为明确等待 15 s 并点击，不把未操作的静帧当流程错误。低动态与导航最终补验结果另记。
+
+**验证记录**：项目 verify 五步已运行：类型检查、eslint、64/64 单测、生产构建通过，真实 serving smoke 输出 `smoke: ok — 18 routes, 4 assets served`。已有构建 warning：archive 同时静态/动态引入、主 bundle 超过 500 kB。
+
+**最终补验**：`npm run test:e2e -- --project=desktop-1440 --project=phone-390 --project=phone-short --grep 'reduced motion|deep links|back and forward'` 输出 `7 passed (2.2m)`。结合三视口首访/跳过/回访的 9 项，16 项相关验收均有通过证据。未宣称运行全量 E2E 或 Safari；视觉判断以本机 Chromium 实拍为依据。

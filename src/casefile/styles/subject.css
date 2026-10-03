@@ -40,3 +40,13 @@
 .course-out em { font: 600 12px/1.2 var(--sans); font-style: normal; color: var(--acc-text); border-bottom: 1px solid var(--acc); }
 .course-out button:hover em { color: var(--ink); }
 @media (max-width: 899px) { .course { grid-template-columns: 1fr; } .course-out { grid-column: 1; } }
+
+/* the two certifications that open doors, set where they are seen first: under the role line */
+.file-creds { list-style: none; margin: 18px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 10px 12px; }
+.file-creds li { display: inline-flex; align-items: center; gap: 12px; padding: 9px 18px 9px 10px; border: 1px solid var(--hair2); background: color-mix(in srgb, #fff 34%, transparent); }
+.file-creds svg { width: 34px; height: 34px; flex: none; fill: none; stroke: var(--ink); stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.file-creds svg path { stroke: var(--acc-text); stroke-width: 2; }
+.file-creds svg .dot { fill: var(--glow); stroke: none; }
+.file-creds b { display: block; font: 800 15px/1.1 var(--sans); letter-spacing: .01em; color: var(--ink); }
+.file-creds .lbl { display: block; margin-top: 5px; font-size: 9.5px; }
+@media (max-width: 899px) { .file-creds { margin-top: 14px; gap: 8px; flex-wrap: nowrap; } .file-creds li { padding: 7px 10px 7px 7px; gap: 8px; flex: 1 1 0; min-width: 0; } .file-creds svg { width: 28px; height: 28px; } .file-creds b { font-size: 14px; } .file-creds .lbl { letter-spacing: .06em; font-size: 8.5px; white-space: nowrap; } }

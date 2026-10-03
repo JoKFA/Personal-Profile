@@ -114,10 +114,13 @@ const TRANS = /* glsl */ `{
  * the gaps (after RhineLabUI's array shell). The selected drive, lifted out, is not graded.
  */
 const GRADE_V = 'varying float vGrade;\n'
+/** Entrance-only material direction; zero restores the existing archive and file materials. */
+export const ENTRY_IVORY = { value: 0 }
 function grade(sh: THREE.WebGLProgramParametersWithUniforms) {
+  sh.uniforms.uEntryIvory = ENTRY_IVORY
   sh.vertexShader = GRADE_V + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\nvGrade = position.y / 3.7;')
-  sh.fragmentShader = GRADE_V + sh.fragmentShader.replace('#include <color_fragment>',
-    '#include <color_fragment>\ndiffuseColor.rgb *= mix(vec3(0.34, 0.24, 0.15), vec3(1.0, 0.97, 0.92), smoothstep(0.05, 1.0, vGrade));')
+  sh.fragmentShader = GRADE_V + 'uniform float uEntryIvory;\n' + sh.fragmentShader.replace('#include <color_fragment>',
+    '#include <color_fragment>\ndiffuseColor.rgb *= mix(mix(vec3(0.34, 0.24, 0.15), vec3(1.0, 0.97, 0.92), smoothstep(0.05, 1.0, vGrade)), mix(vec3(0.68, 0.66, 0.62), vec3(1.0), smoothstep(0.0, 1.0, vGrade)), uEntryIvory);')
 }
 
 /** The ivory carrier frame: opaque, satin, a soft clearcoat on the radiused edge. */

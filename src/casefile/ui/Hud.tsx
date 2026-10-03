@@ -1,68 +1,47 @@
 // Archive HUD. Only what helps a reader see what Yaoting can do (spec G13): the name, the
-// selected drive's panel, the "Hiring for" lens, and one quiet footer line. Everything else is
+// selected drive's panel, the legend, and one quiet footer line. Everything else is
 // on demand (Index). A hairline leader connects the selected drive to its panel (spec D2).
 import { useEffect, useRef, useState } from 'react'
 import { CONTACT, ENTRIES } from '../data/entries'
-import { DRAWER_ROLE, DRAWERS, ROLES, roleById } from '../data/roles'
+import { DRAWERS } from '../data/roles'
 import { entryById } from '../data/entries'
-import type { Entry, Lens } from '../data/types'
+import { KIND_NAME, type Entry } from '../data/types'
 import { wrap, LANES } from '../motion/grid'
 import { sealedId } from '../model/archive'
+import { inGroup, type KindGroup } from '../scene/archive'
 import { useCtx, useSnapshot } from './context'
 
 const pad = (n: number) => String(n).padStart(2, '0')
-const kindLabel = (e: Entry) => ({ service: 'Service record', education: 'Education', case: 'Case file', subject: 'Subject file', restricted: 'Restricted', visitor: 'Visitor file', skill: 'Skill', credential: 'Credential' } as const)[e.kind]
+const kindLabel = (e: Entry) => KIND_NAME[e.kind]
 const small = (e: Entry) => e.kind === 'skill' || e.kind === 'credential'
 
-export function Hud({ statusLine, hidden, offer, onOfferDone }: { statusLine: { html: string; key: number } | null; hidden: boolean; offer: boolean; onOfferDone: () => void }) {
-  const { archive, open, status } = useCtx()
+export function Hud({ statusLine, hidden, arriving }: { statusLine: { html: string; key: number } | null; hidden: boolean; arriving: boolean }) {
+  const { archive, open } = useCtx()
   const s = useSnapshot()
   const [index, setIndex] = useState(false)
   const [contact, setContact] = useState(false)
-  const [tour, setTour] = useState(false)
-  const tourContact = useRef(false), contactBtn = useRef<HTMLButtonElement>(null)
   const [hint, setHint] = useState(() => { try { return localStorage.getItem('yw.hint') !== '1' } catch { return true } })
   useEffect(() => { if (!hint || hidden) return; const h = setTimeout(() => { setHint(false); try { localStorage.setItem('yw.hint', '1') } catch { /* */ } }, 12000); return () => clearTimeout(h) }, [hint, hidden])
   useEffect(() => { const k = (e: KeyboardEvent) => { if (e.key === '/' && s.mode === 'archive') { e.preventDefault(); setIndex((v) => !v) } else if (e.key === 'Escape') { setIndex(false); setContact(false) } }; addEventListener('keydown', k); return () => removeEventListener('keydown', k) }, [s.mode])
-  // the first-visit offer goes away with the first thing the visitor does
-  // (the baseline is taken when the offer appears, i.e. after the entry selected the subject file)
-  const firstSel = useRef<string | null>(null)
-  useEffect(() => {
-    const now = `${s.sel.lane}:${s.sel.row}:${s.lens}`
-    if (!offer) { firstSel.current = null; return }
-    if (firstSel.current === null) { firstSel.current = now; return }
-    if (!tour && now !== firstSel.current) onOfferDone()
-  }, [offer, tour, s.sel.lane, s.sel.row, s.lens, onOfferDone])
-  useEffect(() => { if (!offer || hidden) return; const h = setTimeout(onOfferDone, 16000); return () => clearTimeout(h) }, [offer, hidden, onOfferDone])
 
   const e = s.entry, lane = wrap(s.sel.lane, LANES), drawer = DRAWERS[lane]
   const locked = archive.isLocked(e), dead = archive.isShredded(e)
-  const setLens = (l: Lens) => {
-    archive.setLens(l)
-    if (l !== 'all') archive.showDrawer(DRAWER_ROLE.indexOf(l))
-    status(l === 'all' ? 'Viewing as <b>any role</b> · everything readable' : `Viewing as <b>${roleById(l).name}</b> · ${roleById(l).seats}`, 4200)
-  }
-  const lensName = s.lens === 'all' ? 'any role' : roleById(s.lens).name
   const hide = hidden || s.mode !== 'archive'
 
   return (
     <div className={`hud ${hidden ? '' : 'on'} ${s.mode !== 'archive' ? 'dim' : ''}`} aria-hidden={hidden}>
       <div className="hud-lock"><div className="a">YAOTING WANG</div><div className="b">ANALYST &amp; ENGINEER<span className="loc"> · VANCOUVER, BC</span></div><div className="c">SECURITY <b>PORTFOLIO</b></div></div>
       <div className="hud-top">
-        <button ref={contactBtn} className="hud-index-btn" aria-expanded={contact} onClick={() => { tourContact.current = false; setContact((v) => !v); setIndex(false) }}><span>Contact</span></button>
+        <button className="hud-index-btn" aria-expanded={contact} onClick={() => { setContact((v) => !v); setIndex(false) }}><span>Contact</span></button>
         <button className="hud-index-btn" aria-expanded={index} onClick={() => { setIndex((v) => !v); setContact(false) }}><span aria-hidden="true">⌕</span><span>Index</span><kbd>/</kbd></button>
       </div>
       {index && <IndexPanel onPick={(id) => { setIndex(false); archive.jumpTo(id) }} />}
       {contact && <ContactPanel />}
 
       <Leader entry={e} hidden={hide} />
+      <SearchReadout hidden={hidden || !arriving} />
       <section className={`panel ${hide || index || contact ? 'hide' : ''} ${e && !s.plain ? 'sealed' : ''} ${!e ? 'empty' : ''}`} aria-live="polite">
-        {offer && !statusLine && !tour ? (
-          <div className="panel-status offer lbl">
-            <span>Hiring for a specific role? Pick it {innerWidth < 900 ? 'above' : 'below'}.</span>
-            <button onClick={() => { setTour(true) }}>Or take the {TOUR_SECONDS}-second tour <span aria-hidden="true">→</span></button>
-          </div>
-        ) : <div className="panel-status lbl" key={statusLine?.key ?? 0} dangerouslySetInnerHTML={{ __html: statusLine?.html ?? '' }} />}
+        <div className="panel-status lbl" key={statusLine?.key ?? 0} dangerouslySetInnerHTML={{ __html: statusLine?.html ?? '' }} />
         <div className="panel-body" key={`${s.sel.lane}:${s.sel.row}:${s.plain}:${dead}:${s.captured}`}>
           <div className="panel-eyebrow lbl"><span>{e ? kindLabel(e) : 'No record'}</span>{e?.kind === 'restricted' && <span className="kind x">Restricted</span>}</div>
           <div className="panel-id"><span>{e && s.plain ? (e.kind === 'service' ? 'RECORD' : e.kind === 'skill' ? 'SKILL' : e.kind === 'credential' ? 'CREDENTIAL' : 'FILE') : 'DRIVE'}</span> {e ? e.id : sealedId(s.sel)}</div>
@@ -81,7 +60,7 @@ export function Hud({ statusLine, hidden, offer, onOfferDone }: { statusLine: { 
           ) : e && s.plain ? (
             <>
               <h2 className="panel-title">{locked ? '[REDACTED]' : e.title}</h2>
-              <div className="panel-sub">{e.kind === 'service' || e.kind === 'education' ? `${e.org} · ${e.dates}` : e.year ? `${e.kicker.replace(/^Case file · /, '')} · ${e.year}` : e.kicker}</div>
+              <div className="panel-sub">{e.kind === 'service' || e.kind === 'education' ? `${e.org} · ${e.dates}` : e.year ? `${e.kicker.replace(/^Project · /, '')} · ${e.year}` : e.kicker}</div>
               <p className="panel-sum">{e.summary}</p>
               {(dead || locked) && <dl className="policy"><dt className="lbl">{dead ? 'Status' : 'Access'}</dt><dd className="x">{dead ? 'Crypto-shredded · key zeroized' : 'Held by an AI guard · SENTINEL-1'}</dd></dl>}
               <button className="go" onClick={open}><b>{dead ? 'Restore & open' : locked ? 'Request clearance' : 'Open'}</b><kbd>ENTER</kbd><span aria-hidden="true">→</span></button>
@@ -89,12 +68,7 @@ export function Hud({ statusLine, hidden, offer, onOfferDone }: { statusLine: { 
           ) : e ? (
             <>
               <h2 className="panel-title muted">Sealed</h2>
-              <p className="panel-sum">{s.lens === 'all' ? 'Decrypting…' : `Not part of the ${lensName} file.`}</p>
-              <dl className="policy">
-                <dt className="lbl">Access</dt><dd>{e.roles === 'all' ? 'Everyone' : e.roles.map((r) => roleById(r).name).join(' · ')}</dd>
-                <dt className="lbl">Least privilege</dt><dd>You&rsquo;re viewing as {lensName}</dd>
-              </dl>
-              {e.roles !== 'all' && <button className="go acc" onClick={open}><b>View as {roleById(e.roles[0]).name}</b><kbd>ENTER</kbd><span aria-hidden="true">→</span></button>}
+              <p className="panel-sum">{s.granted ? 'Decrypting…' : 'Your read access is issued at the end of the briefing.'}</p>
             </>
           ) : (
             <>
@@ -109,7 +83,7 @@ export function Hud({ statusLine, hidden, offer, onOfferDone }: { statusLine: { 
         </div>
       </section>
 
-      <div className={`hud-sel ${hide || tour ? 'hide' : ''}`}>
+      <div className={`hud-sel ${hide ? 'hide' : ''}`}>
         <div className="lbl">Drawer {pad(lane + 1)} of {pad(DRAWERS.length)}</div>
         <div className="drawer-nav">
           <button aria-label="Previous drawer" onClick={() => archive.move(-1, 0)}>←</button>
@@ -120,25 +94,10 @@ export function Hud({ statusLine, hidden, offer, onOfferDone }: { statusLine: { 
       </div>
       <HoverLabel />
 
-      {tour && <Tour onEnd={() => {
-        setTour(false); onOfferDone()
-        if (tourContact.current) { setContact(false); tourContact.current = false }
-        requestAnimationFrame(() => contactBtn.current?.focus({ preventScroll: true }))
-      }} openContact={() => { tourContact.current = true; setContact(true) }} />}
-      <nav className={`lens ${hide || tour ? 'hide' : ''}`} aria-label="Hiring for">
-        <span className="lbl">Hiring for</span>
-        <div className="lens-list">
-          {[...ROLES.map((r) => [r.id, r.name] as const), ['all', 'Any role'] as const].map(([id, name], i) => (
-            <span key={id} className="lens-item">{i > 0 && <i aria-hidden="true">/</i>}
-              <button aria-pressed={s.lens === id} className={s.lens === id ? 'on' : ''} onClick={(ev) => { setLens(id); if (ev.detail > 0) ev.currentTarget.blur() }}>{name}</button>
-            </span>
-          ))}
-        </div>
-        <span className="lbl cnt">{s.readable} readable</span>
-      </nav>
+      <KindKey hidden={hide} />
 
-      {hint && !hide && !tour && <div className="hud-hint lbl">← → drawers / ↑ ↓ drives / enter open / click a drive</div>}
-      <div className={`hud-foot lbl ${tour ? 'hide' : ''}`}>
+      {hint && !hide && <div className="hud-hint lbl">← → drawers / ↑ ↓ drives / enter open / click a drive</div>}
+      <div className="hud-foot lbl">
         <span className="risk" data-lvl={s.riskLevel} tabIndex={0} aria-describedby="risk-tip"><span className="rb"><i style={{ width: `${s.risk}%` }} /></span>risk {pad(s.risk)}
           <span className="tip" id="risk-tip" role="tooltip">How suspicious this session looks to this site’s behaviour analytics (UEBA). Denied drives, rapid scanning and shredding raise it; it cools down on its own.</span>
         </span>
@@ -147,6 +106,73 @@ export function Hud({ statusLine, hidden, offer, onOfferDone }: { statusLine: { 
       </div>
     </div>
   )
+}
+
+// The legend, in the corner a map keeps it: what each drive shape means. Hover (or focus) a kind
+// and only those drives stay lit; click to keep it.
+const KINDS: [KindGroup, string][] = [['service', 'Experience'], ['case', 'Projects'], ['education', 'Education'], ['skill', 'Skills']]
+function Glyph({ k }: { k: KindGroup }) {
+  const short = k === 'skill', end = k === 'service' ? 'ink' : k === 'education' ? 'gold' : null
+  return (
+    <svg className={`kk-g ${k}`} width="22" height="8" viewBox="0 0 22 8" aria-hidden="true">
+      <rect className="b" x={short ? 5.5 : 0.5} y="1.5" width={short ? 11 : 21} height="5" rx="1" />
+      {end && <><rect className={end} x="0.5" y="1.5" width="2.5" height="5" /><rect className={end} x="19" y="1.5" width="2.5" height="5" /></>}
+    </svg>
+  )
+}
+function KindKey({ hidden }: { hidden: boolean }) {
+  const { archive } = useCtx()
+  const s = useSnapshot()
+  const [pinned, setPinned] = useState<KindGroup | null>(null)
+  const show = (k: KindGroup | null) => archive.setKindFocus(k ?? pinned)
+  useEffect(() => () => archive.setKindFocus(null), [archive])
+  return (
+    <div className={`kind-key lbl ${hidden ? 'hide' : ''}`} role="group" aria-label="What the drives hold" onMouseLeave={() => show(null)}>
+      {KINDS.map(([k, name]) => {
+        const n = ENTRIES.filter((e) => inGroup(e, k) && archive.isReadable(e)).length
+        return (
+          <button key={k} className={s.kindFocus === k ? 'on' : ''} aria-pressed={pinned === k}
+            onMouseEnter={() => show(k)} onFocus={() => show(k)} onBlur={() => show(null)}
+            onClick={() => { const next = pinned === k ? null : k; setPinned(next); archive.setKindFocus(next) }}>
+            <Glyph k={k} /><span>{name}</span><b>{n}</b>
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
+// A temporary readout follows the entrance's selection, then yields to the file panel.
+function SearchReadout({ hidden }: { hidden: boolean }) {
+  const { archive, reduced } = useCtx()
+  const root = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (hidden || reduced) return
+    let raf = 0
+    const draw = () => {
+      const r = root.current, age = archive.entranceAge()
+      raf = requestAnimationFrame(draw)
+      if (!r) return
+      if (archive.entranceDone()) { r.style.opacity = '0'; return }
+      const W = innerWidth, H = innerHeight, phone = W < 900
+      const x = phone ? W * 0.43 : W * 0.57, y = phone ? H * 0.49 : H * 0.53
+      const path = r.querySelector('path'), mark = r.querySelector('rect'), text = r.querySelector<HTMLElement>('span')
+      const target = archive.anchor(), found = age >= 2.65
+      const ax = found && target ? Math.max(16, Math.min(x - 16, target.x)) : x - 24
+      const ay = found && target ? Math.max(H * 0.22, Math.min(H * 0.7, target.y)) : y + 18
+      path?.setAttribute('d', 'M' + ax + ',' + ay + ' L' + (x - 12) + ',' + (y + 18) + ' H' + (W - Math.max(24, W * 0.033)))
+      mark?.setAttribute('x', String(ax - 1.5)); mark?.setAttribute('y', String(ay - 1.5))
+      if (text) {
+        text.style.transform = 'translate(' + x + 'px,' + y + 'px)'
+        const value = found ? 'File ' + (archive.selected?.id ?? '') : 'Selecting files…'
+        text.textContent = value.slice(0, Math.max(0, Math.floor((found ? age - 2.65 : age - 0.25) * 24)))
+      }
+      r.style.opacity = String(Math.min(1, Math.max(0, (age - 0.3) * 3)))
+    }
+    raf = requestAnimationFrame(draw)
+    return () => cancelAnimationFrame(raf)
+  }, [archive, hidden, reduced])
+  return reduced ? null : <div className="search-readout" ref={root} aria-hidden="true"><svg><path /><rect width="3" height="3" /></svg><span /></div>
 }
 
 // hairline from the selected drive to the panel; redraws on every selection
@@ -183,16 +209,14 @@ function Leader({ entry, hidden }: { entry: Entry | null; hidden: boolean }) {
 
 function IndexPanel({ onPick }: { onPick: (id: string) => void }) {
   const { archive } = useCtx()
-  const s = useSnapshot()
   const groups: [string, Entry[]][] = [
-    ['Subject', ENTRIES.filter((e) => e.kind === 'subject' || e.kind === 'visitor')],
-    ['Service records', ENTRIES.filter((e) => e.kind === 'service')],
+    ['Profile', ENTRIES.filter((e) => e.kind === 'subject' || e.kind === 'visitor')],
+    ['Experience', ENTRIES.filter((e) => e.kind === 'service')],
     ['Education', ENTRIES.filter((e) => e.kind === 'education')],
-    ['Case files', ENTRIES.filter((e) => e.kind === 'case' || e.kind === 'restricted')],
+    ['Projects', ENTRIES.filter((e) => e.kind === 'case' || e.kind === 'restricted')],
   ]
   return (
     <div className="index" role="dialog" aria-label="Archive index">
-      <div className="lbl index-lens">{s.lens === 'all' ? 'Everything · viewing as any role' : `Relevant to ${roleById(s.lens).name}`}</div>
       {groups.map(([name, list]) => (
         <div key={name} className="index-group">
           <div className="lbl index-h">{name}</div>
@@ -201,8 +225,8 @@ function IndexPanel({ onPick }: { onPick: (id: string) => void }) {
             return (
               <button key={e.id} onClick={() => onPick(e.id)}>
                 <span className="n">{e.id}</span>
-                <span className="t">{archive.isLocked(e) ? '[REDACTED]' : e.kind === 'service' ? e.org : e.title}<small>{e.kind === 'service' ? e.title : e.kind === 'education' ? `${e.org} · ${e.dates}` : e.year ? `${e.kicker.replace(/^Case file · /, '')} · ${e.year}` : e.kicker}</small></span>
-                <span className={`st ${plain ? '' : 'x'} ${s.lens !== 'all' && plain ? 'rel' : ''}`}>{archive.isShredded(e) ? 'shredded' : s.lens === 'all' ? '' : plain ? 'relevant' : 'sealed'}</span>
+                <span className="t">{archive.isLocked(e) ? '[REDACTED]' : e.kind === 'service' ? e.org : e.title}<small>{e.kind === 'service' ? e.title : e.kind === 'education' ? `${e.org} · ${e.dates}` : e.year ? `${e.kicker.replace(/^Project · /, '')} · ${e.year}` : e.kicker}</small></span>
+                <span className={`st ${plain ? '' : 'x'}`}>{archive.isShredded(e) ? 'shredded' : plain ? '' : 'sealed'}</span>
               </button>
             )
           })}
@@ -252,48 +276,6 @@ function ContactPanel() {
       <a href={CONTACT.linkedin} target="_blank" rel="noopener noreferrer"><span className="n">LinkedIn</span><span className="t">in/yaoting-wang</span><span aria-hidden="true">↗</span></a>
       <a href={CONTACT.github} target="_blank" rel="noopener noreferrer"><span className="n">GitHub</span><span className="t">github.com/JoKFA</span><span aria-hidden="true">↗</span></a>
     </nav>
-  )
-}
-
-// A 40-second guided tour for visitors short on time: selects (never opens) five stops and says
-// in one line why each matters. Any key or click outside the bar ends it.
-// Stops quote the files' own summaries, so any figure in them is the sourced one in entries.ts.
-const lower1 = (t: string) => t.charAt(0).toLowerCase() + t.slice(1)
-const said = (id: string) => entryById.get(id)?.summary ?? ''
-const TOUR: { id: string | null; say: string }[] = [
-  { id: 'YW-000', say: 'Start here: the subject file. Security learned from the network up: routing, then detection, pipelines, and AI agents.' },
-  { id: 'SR-01', say: `Current work: ${lower1(said('SR-01'))}` },
-  { id: 'X-001', say: `AI security: ${lower1(said('X-001'))}` },
-  { id: 'X-000', say: 'The only black drive is held by an LLM guard. Try to talk your way past it: a live prompt-injection lab.' },
-  { id: null, say: 'Every drive opens with Enter or a click. To get in touch, the contact is top right.' },
-]
-const STOP_MS = 7600
-const TOUR_SECONDS = Math.round((TOUR.length * STOP_MS) / 1000)
-function Tour({ onEnd, openContact }: { onEnd: () => void; openContact: () => void }) {
-  const { archive } = useCtx()
-  const [i, setI] = useState(0)
-  const bar = useRef<HTMLDivElement>(null)
-  // the HUD re-renders every second (clock): keep the callbacks in refs so a stop's timer is not reset
-  const cb = useRef({ onEnd, openContact })
-  useEffect(() => { cb.current = { onEnd, openContact } })
-  useEffect(() => {
-    const stop = TOUR[i]
-    if (stop.id) archive.jumpTo(stop.id); else cb.current.openContact()
-    const h = setTimeout(() => (i + 1 < TOUR.length ? setI(i + 1) : cb.current.onEnd()), STOP_MS)
-    return () => clearTimeout(h)
-  }, [i, archive])
-  useEffect(() => {
-    const quit = (e: Event) => { if (bar.current?.contains(e.target as Node)) return; cb.current.onEnd() }
-    const key = (e: KeyboardEvent) => { if (e.key !== 'Tab' && e.key !== 'Shift') cb.current.onEnd() }
-    addEventListener('pointerdown', quit, true); addEventListener('keydown', key)
-    return () => { removeEventListener('pointerdown', quit, true); removeEventListener('keydown', key) }
-  }, [])
-  return (
-    <div ref={bar} className="tour" role="status" aria-live="polite">
-      <div className="tour-p" aria-hidden="true">{TOUR.map((_, k) => <i key={k} className={k < i ? 'done' : k === i ? 'on' : ''} style={k === i ? { animationDuration: `${STOP_MS}ms` } : undefined} />)}</div>
-      <div className="tour-t"><span className="lbl">{String(i + 1).padStart(2, '0')} / {String(TOUR.length).padStart(2, '0')}</span><p key={i}>{TOUR[i].say}</p></div>
-      <button className="lbl" onClick={onEnd}>End tour ✕</button>
-    </div>
   )
 }
 

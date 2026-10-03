@@ -11,7 +11,7 @@ import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPa
 import { BokehPass } from 'three/examples/jsm/postprocessing/BokehPass.js'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { LANES, ROWS } from '../motion/grid'
-import { bodyMaterial, driveParts, etchMaterial, etchUniforms, frameMaterial, hardwareMaterials, LED, TRANSLUCENCY } from './drive'
+import { bodyMaterial, driveParts, ENTRY_IVORY, etchMaterial, etchUniforms, frameMaterial, hardwareMaterials, LED, TRANSLUCENCY } from './drive'
 import { SMAAPass } from 'three/examples/jsm/postprocessing/SMAAPass.js'
 import { RectAreaLightUniformsLib } from 'three/examples/jsm/lights/RectAreaLightUniformsLib.js'
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js'
@@ -29,6 +29,9 @@ const ZERO = new THREE.Matrix4().makeScale(0, 0, 0)
 // X-000, the one black drive, in RhineLabUI's dark register: cool slate shell, darker caps, an ink core
 const DARK = new THREE.Color(0x58616a), DARK_CAP = new THREE.Color(0x3b4247), WHITE = new THREE.Color(1, 1, 1), SHADE = new THREE.Color(), CORE_DARK = new THREE.Color(0x1d272c).multiplyScalar(1 / 0.5)
 
+/** what kind of record a drive holds, told by its shape and end caps: sx = length, ox = shift, cap = end-cap tint */
+export interface Form { sx: number; ox: number; cap: THREE.Color | null }
+export const PLAIN: Form = { sx: 1, ox: 0, cap: null }
 export interface Atlas { canvas: HTMLCanvasElement; texture: THREE.CanvasTexture; cell: (i: number) => { x: number; y: number; w: number; h: number } }
 /** Label atlas: 8 × 16 cells, transparent; only the printed ID sits on the drive. 0–55 cipher IDs, 64+ records. */
 export const CIPHER_CELLS = 56
@@ -58,7 +61,8 @@ export function createStage(canvas: HTMLCanvasElement, quality: Quality) {
   const camera = new THREE.PerspectiveCamera(3, innerWidth / innerHeight, 40, 220)
 
   scene.environmentIntensity = 0.22
-  scene.add(new THREE.HemisphereLight(0xfff1e2, 0x8f6e4c, 0.24))
+  const hemi = new THREE.HemisphereLight(0xfff1e2, 0x8f6e4c, 0.24)
+  scene.add(hemi)
   const key = new THREE.DirectionalLight(0xfff0dc, 1.25); key.position.set(9, 13, -9)   // behind the field: faces read in shade, the resin glows
   key.castShadow = quality.shadows > 0
   Object.assign(key.shadow.camera, { left: -16, right: 16, top: 15, bottom: -15, near: 0.1, far: 50 })
@@ -131,6 +135,8 @@ export function createStage(canvas: HTMLCanvasElement, quality: Quality) {
   }
   coreMat.customProgramCacheKey = () => 'core-lamp'
   const core = mk(P.core, coreMat, false), body = mk(P.body, bodyMat), face = mk(P.face, faceEtch, false), top = mk(P.top, topEtch, false)
+  const baseBody = bodyMat.color.clone(), baseCore = coreMat.color.clone(), baseFace = faceEtch.color.clone()
+  const ivoryBody = new THREE.Color(0xf8f3ec), ivoryCore = new THREE.Color(0xb9b1a5), ivoryFace = new THREE.Color(0xc1b8a9)
   // the packed field stays quiet (after RhineLabUI's array): no tabs, grips or printed labels;
   // the selected drive carries all of them
   const hard = mk(mergeGeometries([P.tab, ...P.grips]), HW.tab), labels = mk(P.label, labelMat, false)
@@ -146,8 +152,9 @@ export function createStage(canvas: HTMLCanvasElement, quality: Quality) {
 
   const composer = new EffectComposer(renderer)
   composer.addPass(new RenderPass(scene, camera))
+  let aoPass: GTAOPass | null = null
   if (quality.ao) {
-    const ao = new GTAOPass(scene, camera, innerWidth, innerHeight)
+    const ao = aoPass = new GTAOPass(scene, camera, innerWidth, innerHeight)
     ao.updateGtaoMaterial({ radius: 0.35, distanceExponent: 1.5, thickness: 0.6, scale: 1, samples: 16 }); ao.blendIntensity = 0.85
     composer.addPass(ao)
   }
@@ -198,7 +205,7 @@ export function createStage(canvas: HTMLCanvasElement, quality: Quality) {
   const resize = () => { renderer.setSize(innerWidth, innerHeight, false); composer.setSize(innerWidth, innerHeight); bloom.setSize(innerWidth / 2, innerHeight / 2); camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix() }
   addEventListener('resize', resize)
 
-  const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), p = new THREE.Vector3(), one = new THREE.Vector3(1, 1, 1), zero = new THREE.Vector3()
+  const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), p = new THREE.Vector3(), sc = new THREE.Vector3(), zero = new THREE.Vector3(), CAPC = new THREE.Color()
   return {
     renderer, scene, camera, composer, atlas, pick: body, N,
     /** swap the procedural stand-ins for the precision model's coarse groups */
@@ -207,12 +214,12 @@ export function createStage(canvas: HTMLCanvasElement, quality: Quality) {
       swap(body, 'Frosted_Shell'); body.geometry.setAttribute('aClear', clearAttr); body.geometry.setAttribute('aLamp', lampAttr); swap(glass, 'Ivory_Frame'); swap(core, 'Diffuser'); core.geometry.setAttribute('aLamp', lampAttr); swap(screws, 'Titanium'); swap(inlay, 'Champagne')
     },
     /** led: null = off · glow 0/1 · dark = X-000 */
-    set(i: number, x: number, y: number, z: number, tilt: number, labelCell: number, led: THREE.Color | null, hidden: boolean, glow: number, dark: boolean, ledKind: 'long' | 'double' | 'dot' = 'long', shade = 1, topGlow = glow, clear = 0, lamp = 0) {
-      e.set(tilt, 0, 0); q.setFromEuler(e); p.set(x, y, z)
-      m4.compose(p, q, hidden ? zero : one); body.setMatrixAt(i, m4)
+    set(i: number, x: number, y: number, z: number, tilt: number, labelCell: number, led: THREE.Color | null, hidden: boolean, glow: number, dark: boolean, ledKind: 'long' | 'double' | 'dot' = 'long', shade = 1, topGlow = glow, clear = 0, lamp = 0, form: Form = PLAIN) {
+      e.set(tilt, 0, 0); q.setFromEuler(e); p.set(x + form.ox, y, z); sc.set(form.sx, 1, 1)
+      m4.compose(p, q, hidden ? zero : sc); body.setMatrixAt(i, m4)
       for (const [k, l] of Object.entries(ledSets)) l.setMatrixAt(i, k === ledKind && led ? m4 : ZERO)   // an unlit slit is not drawn
       const w = shade < 1 ? SHADE.setScalar(shade) : WHITE
-      body.setColorAt(i, dark ? DARK : w); glass.setColorAt(i, dark ? DARK_CAP : w); face.setColorAt(i, dark ? DARK : w); top.setColorAt(i, dark ? DARK : w); core.setColorAt(i, dark ? CORE_DARK : w)
+      body.setColorAt(i, dark ? DARK : w); glass.setColorAt(i, dark ? DARK_CAP : form.cap ? CAPC.copy(form.cap).multiplyScalar(shade) : w); face.setColorAt(i, dark ? DARK : w); top.setColorAt(i, dark ? DARK : form.cap ? CAPC : w); core.setColorAt(i, dark ? CORE_DARK : w)
       ledSets[ledKind].setColorAt(i, led ?? LED.off)
       cellAttr.setX(i, labelCell); glowAttr.setX(i, glow); topGlowAttr.setX(i, topGlow); clearAttr.setX(i, clear); lampAttr.setX(i, lamp)
     },
@@ -224,12 +231,25 @@ export function createStage(canvas: HTMLCanvasElement, quality: Quality) {
       etchUniforms(faceEtch).uTime.value = etchUniforms(topEtch).uTime.value = time
     },
     /** trace-light bloom (0 = off) and scene exposure, both animated by the read */
+    /** contact shading on or off (it is off while the camera closes in on the drive: its depth range no longer fits) */
+    setAo(on: boolean) { if (aoPass) aoPass.enabled = on },
     setBloom(strength: number) { bloom.strength = strength; bloom.enabled = strength > 0.01 },
+    /** shadows on or off for this scene's light (the renderer's own switch is shared with the interior and is left alone) */
+    setShadows(on: boolean) { key.castShadow = on },
     setExposure(x: number) { renderer.toneMappingExposure = x },
+    /** Optical ivory while searching; the file exhibition keeps its own original lighting. */
+    setEntranceLight(k: number) {
+      ENTRY_IVORY.value = k
+      bodyMat.color.copy(baseBody).lerp(ivoryBody, k)
+      coreMat.color.copy(baseCore).lerp(ivoryCore, k)
+      faceEtch.color.copy(baseFace).lerp(ivoryFace, k)
+      hemi.intensity = 0.24 + 0.2 * k; fill.intensity = 0.6 + 0.18 * k; side.intensity = 0.75 - 0.42 * k
+    },
     /** the key light sits behind the field so faces read in shade; an open file gets a reading light on its face */
     /** the selection light: where it stands, what it looks at, how bright */
     /** the selection light: a drive-shaped panel at (x, y, z) facing (tx, ty, tz) */
-    setSlotLight(x: number, y: number, z: number, gap: number, intensity: number) {
+    setSlotLight(x: number, y: number, z: number, gap: number, intensity: number, width = 4.6) {
+      slots[0].width = slots[1].width = width
       slots[0].position.set(x, y, z + gap); slots[0].lookAt(x, y, z)
       slots[1].position.set(x, y, z - gap); slots[1].lookAt(x, y, z)
       for (const s of slots) s.intensity = intensity

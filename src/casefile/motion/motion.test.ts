@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { columnStrength, field, idleWave, PULSE_LIFE, selectionWave, settlingWave, smooth, type FieldState } from './waves'
+import { columnStrength, ENTRANCE, ENTRANCE_END, field, idleWave, PULSE_LIFE, selectionWave, settlingWave, smooth, type FieldState } from './waves'
 import { damp, spring } from './spring'
 import { nearest, nearestCell, wrap } from './grid'
 
@@ -88,5 +88,26 @@ describe('grid', () => {
     expect(wrap(-1, 9)).toBe(8)
     expect(nearest(0, 30, 32)).toBe(32)
     expect(nearestCell({ lane: 5, row: 12 }, { lane: 0, row: 12 })).toEqual({ lane: -1, row: 12 })
+  })
+})
+
+describe('entrance: the search becomes the resting archive', () => {
+  // the archive at the selected file (row 0, lane 0) and around it, with nothing else moving
+  const at = (row: number, lane: number, entry: number) => field(row, lane, { shoulder: 0, laneFocus: 0, idleGain: 0, pulseGain: 0, pulses: [], time: 0, entry })
+  const rest = (row: number, lane: number) => at(row, lane, 0)
+  it('ends exactly in the resting shape', () => {
+    for (const [r, l] of [[0, 0], [3, 0], [-3, 0], [8, 0], [0, 1], [5, 2]]) expect(at(r, l, ENTRANCE_END + 0.01)).toBeCloseTo(rest(r, l), 6)
+  })
+  it('never piles up above the resting shape and then drops back to it', () => {
+    for (let r = -10; r <= 10; r++) {
+      for (let a = ENTRANCE.travel - ENTRANCE.morph; a <= ENTRANCE_END; a += 1 / 60) {
+        expect(at(r, 0, a), `row ${r} at ${a.toFixed(2)} s`).toBeLessThanOrEqual(Math.max(rest(r, 0), 0) + 0.15)
+      }
+    }
+  })
+  it('moves smoothly frame to frame while it arrives', () => {
+    for (let r = -10; r <= 10; r += 2) {
+      for (let a = 0.4; a < ENTRANCE_END; a += 1 / 60) expect(Math.abs(at(r, 0, a + 1 / 60) - at(r, 0, a)), `row ${r} at ${a.toFixed(2)} s`).toBeLessThan(0.12)
+    }
   })
 })

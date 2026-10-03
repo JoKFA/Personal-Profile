@@ -1,5 +1,8 @@
 import { createContext, useContext, useSyncExternalStore, type MutableRefObject } from 'react'
-import type { Archive, Snapshot } from '../scene/archive'
+import type { Archive, Handoff, Snapshot } from '../scene/archive'
+import type { Clock } from '../space/clock'
+import type { Runtime } from '../space/runtime'
+import type { Space } from '../space/scene'
 import type { Visitor } from '../visitor'
 
 export interface Ctx {
@@ -14,6 +17,10 @@ export interface Ctx {
   record: (s: string) => void
   /** the open file registers its exit animation here; closing waits for it */
   exitRef: MutableRefObject<null | (() => Promise<void>)>
+  /** the interior (null until it is built, or if it could not be) and the running show; `cut` is set while the interior is the subject file's exhibit */
+  space: { space: Space; clock: Clock } | null
+  runtime: MutableRefObject<Runtime | null>
+  cut: Handoff | null
 }
 export const ArchiveContext = createContext<Ctx | null>(null)
 export const useCtx = () => { const c = useContext(ArchiveContext); if (!c) throw new Error('no archive'); return c }

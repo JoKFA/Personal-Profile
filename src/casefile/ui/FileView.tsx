@@ -7,18 +7,19 @@ import { CERTIFICATIONS, CONTACT, entryById, shortName } from '../data/entries'
 import { EDUCATION_ENTRIES } from '../data/education'
 import { CHAPTERS, HEADLINE, KEY_NUMBERS, PRINCIPLES, type Chapter } from '../data/story'
 import { DRAWERS, roleById } from '../data/roles'
-import type { Entry } from '../data/types'
+import { KIND_NAME, type Entry } from '../data/types'
 import { Demo } from './demos'
 import { useCtx, useSnapshot } from './context'
 import { redact, scramble, wipe, WIPE_PASSES } from './effects'
 import '../styles/subject.css'
 import { quadMatrix } from './project'
+import { SpaceExhibit } from './SpaceExhibit'
 
 const STAGE = { w: 640, h: 452 }
 type Tab = { id: string; label: string; body: ReactNode }
 
 export function FileView({ entry: e }: { entry: Entry }) {
-  const { archive, visitor, reduced, close, auditLog: audit, exitRef } = useCtx()
+  const { archive, visitor, reduced, close, auditLog: audit, exitRef, cut } = useCtx()
   const snap = useSnapshot()
   const root = useRef<HTMLDivElement>(null), stage = useRef<HTMLDivElement>(null), title = useRef<HTMLHeadingElement>(null)
   const [tab, setTab] = useState(0)
@@ -41,7 +42,7 @@ export function FileView({ entry: e }: { entry: Entry }) {
     const r = root.current!, before = document.activeElement as HTMLElement | null
     const trap = (ev: KeyboardEvent) => {
       if (ev.key !== 'Tab') return
-      const f = [...r.querySelectorAll<HTMLElement>('button, a[href], input, [tabindex="0"]')].filter((x) => !x.hasAttribute('disabled') && x.offsetParent !== null)
+      const f = [...r.querySelectorAll<HTMLElement>('button, a[href], input, [tabindex="0"]')].filter((x) => !x.hasAttribute('disabled') && x.offsetParent !== null && !x.closest('[inert]') && getComputedStyle(x).visibility !== 'hidden')
       if (!f.length) return
       const first = f[0], last = f[f.length - 1]
       if (ev.shiftKey && (document.activeElement === first || document.activeElement === r)) { ev.preventDefault(); last.focus() }
@@ -106,7 +107,7 @@ export function FileView({ entry: e }: { entry: Entry }) {
       )}
       {e.demoNote && <div className="file-demonote lbl"><span>{e.demoNote[0]}</span><span>{e.demoNote[1]}</span></div>}
 
-      <div className="file-no"><div className="n">{e.id}</div><div className="lbl">{({ service: 'Service record', education: 'Education', subject: 'Subject file', restricted: 'Restricted', visitor: 'Visitor file', case: 'Case file', skill: 'Skill', credential: 'Credential' } as const)[e.kind]}{e.year ? ` · ${e.year}` : ''}</div></div>
+      {e.kind !== 'subject' && <div className="file-no"><div className="n">{e.id}</div><div className="lbl">{KIND_NAME[e.kind]}{e.year ? ` · ${e.year}` : ''}</div></div>}
 
       <article className="file-meta">
         {shredStep !== null && (
@@ -121,6 +122,17 @@ export function FileView({ entry: e }: { entry: Entry }) {
         <h1 ref={title}>{heading}</h1>
         <div className="file-kicker" data-redact>{e.kind === 'service' ? `${e.title} · ${e.dates} · ${e.place}` : e.kind === 'education' ? `${e.org} · ${e.dates} · ${e.place}` : e.kicker}</div>
         {e.era && <div className="file-era lbl" data-redact>{e.era}</div>}
+        {e.kind === 'subject' && (
+          <ul className="file-creds" aria-label="Certifications">
+            {([['Cisco', 'CCNA'], ['CompTIA', 'Security+']] as const).map(([org, name]) => (
+              <li key={name}>
+                <svg viewBox="0 0 36 36" aria-hidden="true"><circle cx="18" cy="18" r="16" /><path d="M10.5 18.5l5 5 10-11" /><circle className="dot" cx="31" cy="7" r="2.2" /></svg>
+                <span><b data-redact>{name}</b><span className="lbl" data-redact>{org} · certified</span></span>
+              </li>
+            ))}
+          </ul>
+        )}
+        {e.kind === 'subject' && cut && <SpaceExhibit jump={goTo} />}
         <p className="file-sum" data-redact>{e.kind === 'subject' ? HEADLINE : e.summary}</p>
         {e.facts.length > 0 && (
           <dl className="file-facts">{e.facts.map(([k, v]) => <div key={k}><dt className="lbl">{k}</dt><dd data-redact>{v}</dd></div>)}</dl>
@@ -133,6 +145,7 @@ export function FileView({ entry: e }: { entry: Entry }) {
           {e.link && <a className="file-cta" href={e.link.href} target={e.link.href.startsWith('http') ? '_blank' : undefined} rel="noopener"><span>{e.link.label}</span><span aria-hidden="true">↗</span></a>}
           {e.related?.map((id) => { const r = entryById.get(id)!; return <button key={id} className="file-rel" onClick={() => goTo(id)}><span className="lbl">{r.id}</span>{r.kind === 'service' ? r.org : r.title}</button> })}
         </div>
+        {e.kind === 'subject' && cut && <SpaceExhibit jump={goTo} part="index" />}
       </article>
 
     </div>

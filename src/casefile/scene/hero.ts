@@ -26,6 +26,7 @@ export function createHero(transmission: boolean) {
   const label = mk(P.label, new THREE.MeshBasicMaterial({ map: labelTex, transparent: true, depthWrite: false }), false)
 
   let dark = false
+  const ivory = skins.white.body.color.clone()
   return {
     group, labelCanvas, labelTex,
     /** materials not on screen at first (the black skin) with the geometry they go on, for precompiling */
@@ -42,6 +43,8 @@ export function createHero(transmission: boolean) {
       skins.white.glass.roughness = 0.27 - 0.24 * k; skins.white.glass.clearcoatRoughness = 0.25 - 0.2 * k
       skins.black.glass.roughness = 0.5 - 0.3 * k
     },
+    /** the end caps tell the kind of record (ink: a job, champagne: education); null = ivory */
+    setCap(c: THREE.Color | null) { skins.white.body.color.copy(ivory); if (c) skins.white.body.color.multiply(c) },
     /** the printed label hides while a demo is projected onto the face */
     setLabel(visible: boolean) { label.visible = visible },
     setDark(d: boolean) {
