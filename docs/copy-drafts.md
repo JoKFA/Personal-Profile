@@ -71,3 +71,24 @@
 03 VibesMeet：
 04 PwnScan：
 ```
+
+---
+
+## 4. 评审标出的句子（第 0 轮，四个评审都引用）
+
+这些由你改写（S5）。入场那几句如果 S2 选了“直接落地”，会随入场一起移走，不必改。
+
+| 句子 | 位置 | 你的版本 |
+|---|---|---|
+| Build the network. Control the crossing. | `src/casefile/space/content.ts:43` | |
+| The SIEM keeps the decision（第 4 步） | `src/casefile/space/content.ts:44` | |
+| Business traffic keeps flowing. The crossing attempt is stopped and recorded. | `src/casefile/space/content.ts:51` | |
+| Security learned from the network up: routing, then detection, then pipelines, then AI agents. | `src/casefile/data/story.ts:7`（即上面第 2 节的论点句） | |
+| Master of Cybersecurity at SFU. Security work across AI systems, cloud pipelines, detection, risk and networks, with the evidence kept. | `src/casefile/data/entries.ts:13` | |
+| Decision-ready risk | `src/casefile/data/entries.ts:186` | |
+| Infrastructure first（一位评审） | `src/casefile/data/story.ts:13` | |
+| What your browser reveals. What an attacker could use. | `src/casefile/ui/Gate.tsx:182`（入场） | |
+| Put together, that’s an attack profile. | `src/casefile/ui/Gate.tsx:169`（入场） | |
+| Processed locally. Nothing sent.（一位评审） | `src/casefile/ui/Gate.tsx:178`（入场） | |
+
+内景其余五个领域的标题、步骤和结果句是同一种写法（`space/content.ts`），评审只看到了第一个领域；改写时一并看。
