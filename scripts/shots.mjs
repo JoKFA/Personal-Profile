@@ -4,6 +4,7 @@
 //   node scripts/shots.mjs                      → shots/<commit>/, low quality (no GPU needed)
 //   node scripts/shots.mjs --quality high       → real quality on a GPU machine (ANGLE d3d11, as in e2e)
 //   node scripts/shots.mjs --only F3,F7          → a subset
+//   node scripts/shots.mjs --query entry=c --out shots/entry-c   → extra URL parameters (prototypes)
 //   SHOTS_CHROMIUM=/path/to/chrome node scripts/shots.mjs
 //
 // Low quality uses SwiftShader with `?quality=low` and reduced motion: the layout and the copy are
@@ -20,6 +21,7 @@ const low = quality === 'low'
 const commit = (() => { try { return execSync('git rev-parse --short HEAD').toString().trim() } catch { return 'dev' } })()
 const out = path.resolve(arg('out', `shots/${commit}`))
 const only = arg('only', '')?.split(',').filter(Boolean)
+const query = new URLSearchParams(arg('query', ''))
 const PORT = 4181
 const LONG = 15 * 60_000   // SwiftShader can take minutes per frame
 
@@ -38,9 +40,12 @@ const archiveUp = async (page) => {
   await page.waitForTimeout(1500)
 }
 const landed = async (page) => {
-  // a first visit: leave the entry, then the entrance opens the subject file by itself
+  // a first visit: leave the entry; the entrance then settles in the archive or opens the subject file by itself
   await page.locator('.gate-skip').click({ timeout: LONG })
-  await fn(page, () => window.__cf?.getSnapshot().mode === 'file' && document.querySelector('.file--subject h1')?.textContent)
+  await fn(page, () => {
+    const a = window.__cf, s = a?.getSnapshot()
+    return !document.querySelector('.gate') && s && ((s.mode === 'file' && document.querySelector('.file-meta h1')?.textContent) || (s.mode === 'archive' && a.settled() && !document.querySelector('.cf--arriving')))
+  })
   await page.waitForTimeout(4000)
 }
 // each frame also works on its own (`--only F5`): it first waits for the archive
@@ -108,7 +113,9 @@ async function shoot(g) {
   page.on('pageerror', (e) => errors.push(String(e)))
   let t0 = Date.now(), done = 0
   try {
-    await page.goto(`http://127.0.0.1:${PORT}${g.path ?? '/'}${low ? '?quality=low' : ''}`, { waitUntil: 'load', timeout: LONG })
+    const params = new URLSearchParams(query)
+    if (low) params.set('quality', 'low')
+    await page.goto(`http://127.0.0.1:${PORT}${g.path ?? '/'}${params.size ? `?${params}` : ''}`, { waitUntil: 'load', timeout: LONG })
     t0 = Date.now()
     for (const [id, wait] of g.frames) {
       await wait(page, t0)

@@ -1,0 +1,48 @@
+/* Entry prototypes A / C (plan §S2): the reader meets Yaoting first; the archive builds behind.
+   Shares the entry's lockup, rail, plate and light (gate.css). */
+.land-wrap { position: absolute; inset: 0; }
+.land .gz-rail { top: 24%; }
+.land-stage { position: absolute; left: var(--g); right: var(--g); top: 27%; bottom: 16%; display: grid; grid-template-columns: minmax(0, 1fr) min(560px, 42vw); gap: 6vw; align-items: center; }
+
+/* one sentence; weight is the only emphasis */
+.land-thesis { margin: 0; max-width: 15em; font: 300 clamp(30px, 3.35vw, 52px)/1.13 var(--sans); letter-spacing: -.035em; color: var(--ink); }
+.land-thesis b, .land-thesis span { display: block; }
+.land-thesis b { font-weight: 650; margin-bottom: .2em; }
+.land-meta { margin: 30px 0 0; font: 500 13px/1.5 var(--sans); color: var(--label); }
+.land-profile { margin-top: 16px; padding: 10px 0 4px; border-bottom: 1px solid var(--hair2); font: 650 11.5px/1 var(--sans); letter-spacing: .1em; text-transform: uppercase; }
+.land-profile span, .land-row .arr { display: inline-block; transition: transform .25s var(--ease-in); }
+.land-profile:hover span, .land-row:hover .arr, .land-row:focus-visible .arr { transform: translateX(5px); }
+
+/* Start here: the plate holds the four files, each with the proof a reader sees before opening it */
+.land-card { aspect-ratio: auto; padding-bottom: 18px; }
+.land-list { list-style: none; margin: 6px 0 12px; padding: 0; }
+.land-row { display: grid; grid-template-columns: 26px minmax(0, 1fr) auto 16px; column-gap: 12px; row-gap: 6px; align-items: baseline; padding: 15px 0; border-bottom: 1px solid var(--hair); color: var(--ink); text-decoration: none; }
+.land-list li:last-child .land-row { border-bottom: 0; }
+.land-row .n { font: 500 11px/1.4 var(--mono); color: var(--acc-text); }
+.land-row .t { font: 650 clamp(15px, 1.25vw, 18px)/1.25 var(--sans); letter-spacing: -.015em; }
+.land-row .k { font: 500 10px/1.3 var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--label); }
+.land-row .l { grid-column: 2 / 4; font: 400 12.5px/1.45 var(--mono); color: var(--ink2); }
+.land-row .arr { grid-row: 1 / 3; grid-column: 4; align-self: center; }
+.land-row:hover .t { text-decoration: underline; text-underline-offset: 4px; text-decoration-thickness: 1px; }
+.land .gz-foot { grid-template-columns: 4px 1fr; }
+.land .gz-foot i { background: var(--acc-text); }
+
+.land-demo { position: absolute; left: var(--g); bottom: var(--bottom); min-height: 44px; padding: 10px 0; font: 500 12px/1 var(--sans); color: var(--label); }
+.land-demo:hover { color: var(--ink); }
+/* C waits for the reader: entering is the page's one action */
+.land--c .gz-skip { font: 700 12px/1 var(--sans); letter-spacing: .12em; text-transform: uppercase; color: var(--ink); border-bottom: 1.5px solid var(--ink); }
+
+@media (max-width: 1100px) and (min-width: 900px) { .land-stage { grid-template-columns: minmax(0, 1fr) min(480px, 46vw); gap: 4vw; } }
+@media (max-width: 899px) {
+  .land { overflow-y: auto; overscroll-behavior: contain; }
+  .land-wrap { position: relative; inset: auto; min-height: 100%; display: flex; flex-direction: column; padding: calc(var(--top) + 64px) var(--g) var(--bottom); }
+  .land .gz-rail { position: relative; top: auto; left: auto; right: auto; margin: 22px 0 26px; }
+  .land-stage { position: static; display: flex; flex-direction: column; gap: 24px; }
+  .land-thesis { font-size: clamp(26px, 7vw, 34px); }
+  .land-meta { margin-top: 18px; }
+  .land-card { padding: 18px 20px 14px; }
+  .land-row { padding: 12px 0; column-gap: 10px; }
+  .land-row .l { font-size: 12px; }
+  .land .gz-skip { position: static; order: 1; align-self: flex-start; margin-top: 26px; }
+  .land-demo { position: static; order: 2; align-self: flex-start; margin-top: 6px; }
+}

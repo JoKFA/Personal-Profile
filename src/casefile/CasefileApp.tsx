@@ -3,11 +3,13 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { entryById, entryBySlug, ENTRIES } from './data/entries'
+import { SELECTED } from './data/story'
 import type { Entry } from './data/types'
 import type { Archive, Handoff } from './scene/archive'
 import type { Clock } from './space/clock'
 import type { Runtime } from './space/runtime'
 import type { Space } from './space/scene'
+import type { Pick } from './ui/Landing'
 import { ArchiveContext, type Ctx } from './ui/context'
 import { Hud } from './ui/Hud'
 import { NoWebGL } from './ui/NoWebGL'
@@ -22,6 +24,8 @@ const FileView = lazy(() => import('./ui/FileView').then((m) => ({ default: m.Fi
 const loadSpace = () => import('./space/boot')
 // the entry (and GSAP with it) only loads for a first visit
 const Gate = lazy(() => import('./ui/Gate').then((m) => ({ default: m.Gate })))
+// entry prototypes, plan §S2: `?entry=a|c` meets the reader with Yaoting's page instead of the browser readout
+const Landing = lazy(() => import('./ui/Landing').then((m) => ({ default: m.Landing })))
 
 const sha256 = async (s: string) => {
   try { return [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s)))].map((b) => b.toString(16).padStart(2, '0')).join('') } catch { return '' }
@@ -38,6 +42,11 @@ export default function CasefileApp() {
   const visitor = useMemo(() => reconVisitor(), [])
   const reduced = useMemo(() => typeof matchMedia !== 'undefined' && matchMedia('(prefers-reduced-motion: reduce)').matches, [])
   const location = useLocation(), navigate = useNavigate()
+  const landing = useMemo(() => { const v = new URLSearchParams(location.search).get('entry'); return v === 'a' || v === 'c' ? v : null }, [location.search])
+  /** the landing's choice, read when the entrance starts (synchronously, so a ref): 'profile' opens the subject file after it */
+  const picked = useRef<Pick['to'] | null>(null)
+  /** the reader asked for the browser readout: the original entry plays instead */
+  const [readout, setReadout] = useState(false)
   const [gate, setGate] = useState(() => {
     try { return new URLSearchParams(location.search).has('intro') || localStorage.getItem('yw.entry') !== '1' } catch { return true }
   })
@@ -238,6 +247,11 @@ export default function CasefileApp() {
   const originAt = useCallback(() => archiveRef.current?.entranceOrigin() ?? null, [])
   const onStrike = useCallback(() => archiveRef.current?.releaseEntrance(), [])
   const onGateDone = useCallback(() => setGateLeaving(false), [])
+  const onPick = useCallback((p: Pick) => {
+    picked.current = p.to
+    if (p.to === 'readout') setReadout(true)
+    if (p.to === 'file') { pendingSlug.current = p.slug; navigate({ pathname: `/projects/${p.slug}`, search: location.search }) }
+  }, [navigate, location.search])
   // entry finished → archive
   const onEntered = useCallback(() => {
     setGate(false)
@@ -247,10 +261,13 @@ export default function CasefileApp() {
     // a first visit without a deep link: the archive stays sealed, the entrance finds the subject
     // file and opens it, and read access is issued when its briefing ends (spec §26.4)
     const first = firstVisit.current && !target
-    archive.enter(target?.id ?? 'YW-000', first)
-    autoOpen.current = first
+    // the landing has already introduced Yaoting: the archive opens on the first selected file,
+    // unless the reader asked for the full profile (or watched the browser readout instead)
+    const met = landing !== null && picked.current !== 'readout' && picked.current !== 'profile'
+    archive.enter(target?.id ?? (met ? SELECTED[0].id : 'YW-000'), first)
+    autoOpen.current = first && !met
     pendingSlug.current = null
-  }, [archive])
+  }, [archive, landing])
   const onEnteredRef = useRef(onEntered)
   useEffect(() => { onEnteredRef.current = onEntered }, [onEntered])
   // the entrance plays from the moment the archive is first visible
@@ -344,7 +361,9 @@ export default function CasefileApp() {
           {file && <Suspense fallback={null}><FileView entry={file} key={file.id} /></Suspense>}
         </ArchiveContext.Provider>
       )}
-      {(gate || gateLeaving) && <Suspense fallback={null}><Gate visitor={visitor} reduced={reduced} sceneReady={sceneReady || noGL} onTitle={() => setLoadScene(true)} onReveal={onReveal} originAt={originAt} onStrike={onStrike} onDone={onGateDone} /></Suspense>}
+      {(gate || gateLeaving) && <Suspense fallback={null}>{landing && !readout
+        ? <Landing variant={landing} reduced={reduced} sceneReady={sceneReady || noGL} onTitle={() => setLoadScene(true)} onPick={onPick} onReveal={onReveal} originAt={originAt} onStrike={onStrike} onDone={onGateDone} />
+        : <Gate visitor={visitor} reduced={reduced} sceneReady={sceneReady || noGL} onTitle={() => setLoadScene(true)} onReveal={onReveal} originAt={originAt} onStrike={onStrike} onDone={onGateDone} />}</Suspense>}
       <noscript>{ENTRIES.map((e) => e.title).join(' · ')}</noscript>
     </div>
   )
