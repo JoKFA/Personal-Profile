@@ -8,8 +8,9 @@ import { entryById } from '../data/entries'
 import { KIND_NAME, type Entry } from '../data/types'
 import { wrap, LANES } from '../motion/grid'
 import { ENTRANCE } from '../motion/waves'
+import { SELECTED } from '../data/story'
 import { sealedId } from '../model/archive'
-import { inGroup, type KindGroup } from '../scene/archive'
+import type { KindGroup } from '../scene/archive'
 import { Brief } from './Brief'
 import { useCtx, useSnapshot } from './context'
 
@@ -68,7 +69,6 @@ export function Hud({ statusLine, hidden, arriving }: { statusLine: { html: stri
             <>
               <h2 className="panel-title">{locked ? '[REDACTED]' : e.title}</h2>
               <div className="panel-sub">{e.kind === 'service' || e.kind === 'education' ? `${e.org} · ${e.dates}` : e.year ? `${e.kicker.replace(/^Project · /, '')} · ${e.year}` : e.kicker}</div>
-              <p className="panel-sum">{e.summary}</p>
               {(dead || locked) && <dl className="policy"><dt className="lbl">{dead ? 'Status' : 'Access'}</dt><dd className="x">{dead ? 'Crypto-shredded · key zeroized' : 'Held by an AI guard · SENTINEL-1'}</dd></dl>}
               <button className="go" onClick={open}><b>{dead ? 'Restore & open' : locked ? 'Request clearance' : 'Open'}</b><kbd>ENTER</kbd><span aria-hidden="true">→</span></button>
             </>
@@ -97,20 +97,14 @@ export function Hud({ statusLine, hidden, arriving }: { statusLine: { html: stri
           <span>{drawer.name}</span>
           <button aria-label="Next drawer" onClick={() => archive.move(1, 0)}>→</button>
         </div>
-        <div className="lbl pos">{posInDrawer(lane, e)}</div>
+        <DrawerMeter lane={lane} entry={e} />
       </div>
       <HoverLabel />
 
       <KindKey hidden={hide} />
 
       {hint && !hide && <div className="hud-hint lbl">← → drawers / ↑ ↓ drives / enter open / click a drive</div>}
-      <div className="hud-foot lbl">
-        <span className="risk" data-lvl={s.riskLevel} tabIndex={0} aria-describedby="risk-tip"><span className="rb"><i style={{ width: `${s.risk}%` }} /></span>risk {pad(s.risk)}
-          <span className="tip" id="risk-tip" role="tooltip">How suspicious this session looks to this site’s behaviour analytics (UEBA). Denied drives, rapid scanning and shredding raise it; it cools down on its own.</span>
-        </span>
-        <PrivacyStat />
-        <button aria-label="Replay the intro" title="Replay the intro" onClick={() => { try { localStorage.removeItem('yw.entry') } catch { /* */ } location.reload() }}>↺</button>
-      </div>
+      <SessionLine granted={s.granted} />
     </div>
   )
 }
@@ -135,16 +129,13 @@ function KindKey({ hidden }: { hidden: boolean }) {
   useEffect(() => () => archive.setKindFocus(null), [archive])
   return (
     <div className={`kind-key lbl ${hidden ? 'hide' : ''}`} role="group" aria-label="What the drives hold" onMouseLeave={() => show(null)}>
-      {KINDS.map(([k, name]) => {
-        const n = ENTRIES.filter((e) => inGroup(e, k) && archive.isReadable(e)).length
-        return (
-          <button key={k} className={s.kindFocus === k ? 'on' : ''} aria-pressed={pinned === k}
-            onMouseEnter={() => show(k)} onFocus={() => show(k)} onBlur={() => show(null)}
-            onClick={() => { const next = pinned === k ? null : k; setPinned(next); archive.setKindFocus(next) }}>
-            <Glyph k={k} /><span>{name}</span><b>{n}</b>
-          </button>
-        )
-      })}
+      {KINDS.map(([k, name]) => (
+        <button key={k} className={s.kindFocus === k ? 'on' : ''} aria-pressed={pinned === k}
+          onMouseEnter={() => show(k)} onFocus={() => show(k)} onBlur={() => show(null)}
+          onClick={() => { const next = pinned === k ? null : k; setPinned(next); archive.setKindFocus(next) }}>
+          <Glyph k={k} /><span>{name}</span>
+        </button>
+      ))}
     </div>
   )
 }
@@ -222,11 +213,14 @@ function Leader({ entry, hidden }: { entry: Entry | null; hidden: boolean }) {
 
 function IndexPanel({ onPick }: { onPick: (id: string) => void }) {
   const { archive } = useCtx()
+  // start here: the selected files first, in their order; the visitor's own file last
   const groups: [string, Entry[]][] = [
-    ['Profile', ENTRIES.filter((e) => e.kind === 'subject' || e.kind === 'visitor')],
+    ['Start here', SELECTED.map((x) => entryById.get(x.id)!)],
+    ['Profile', ENTRIES.filter((e) => e.kind === 'subject')],
     ['Experience', ENTRIES.filter((e) => e.kind === 'service')],
-    ['Education', ENTRIES.filter((e) => e.kind === 'education')],
     ['Projects', ENTRIES.filter((e) => e.kind === 'case' || e.kind === 'restricted')],
+    ['Education', ENTRIES.filter((e) => e.kind === 'education')],
+    ['You', ENTRIES.filter((e) => e.kind === 'visitor')],
   ]
   return (
     <div className="index" role="dialog" aria-label="Archive index">
@@ -274,11 +268,37 @@ function HoverLabel() {
   return <div ref={ref} className="hover-label" aria-hidden="true" />
 }
 
-/** "3 of 7 in this drawer": where the selection sits among the drawer's records. */
-function posInDrawer(lane: number, e: Entry | null) {
-  const rows = ENTRIES.filter((x) => x.slot.lane === lane).map((x) => x.slot.row).sort((a, b) => a - b)
-  if (!e) return `${rows.length} records in this drawer`
-  return `${rows.indexOf(e.slot.row) + 1} of ${rows.length} in this drawer`
+/** Where the selection sits in its drawer, read like an instrument: the number large and thin, a tick per record. */
+function DrawerMeter({ lane, entry }: { lane: number; entry: Entry | null }) {
+  const { archive } = useCtx()
+  const list = ENTRIES.filter((x) => x.slot.lane === lane).sort((a, b) => a.slot.row - b.slot.row)
+  const at = entry ? list.findIndex((x) => x.id === entry.id) : -1
+  return (
+    <div className="meter">
+      <div className="meter-n" aria-label={at >= 0 ? `${at + 1} of ${list.length} in this drawer` : `${list.length} records in this drawer`}>
+        <span className="n">{at >= 0 ? pad(at + 1) : '––'}</span><span className="of">/ {pad(list.length)}</span>
+      </div>
+      <div className="meter-ticks">{list.map((x, i) => (
+        <button key={x.id} className={i === at ? 'on' : ''} aria-label={x.kind === 'service' ? x.org : x.title} title={x.kind === 'service' ? x.org : x.title} onClick={() => archive.jumpTo(x.id)} />
+      ))}</div>
+    </div>
+  )
+}
+
+/** The session, as the system sees it: its state, the visitor's number, the time, a way to start over. */
+function SessionLine({ granted }: { granted: boolean }) {
+  const { visitor } = useCtx()
+  const [now, setNow] = useState(() => new Date())
+  useEffect(() => { const h = setInterval(() => setNow(new Date()), 1000); return () => clearInterval(h) }, [])
+  return (
+    <div className="hud-foot lbl">
+      <span className="sess"><i aria-hidden="true" />{granted ? 'Session authorized · read only' : 'Session pending'}</span>
+      <span className="sep" aria-hidden="true">/</span><span>{visitor.id}</span>
+      <span className="sep" aria-hidden="true">/</span><time className="clock">{now.toLocaleTimeString('en-GB')}</time>
+      <span className="sep" aria-hidden="true">/</span>
+      <button title="Replay the intro" onClick={() => { try { localStorage.removeItem('yw.entry') } catch { /* */ } location.reload() }}>Replay ↺</button>
+    </div>
+  )
 }
 
 function ContactPanel() {
@@ -292,22 +312,3 @@ function ContactPanel() {
   )
 }
 
-// The recon claims nothing leaves the browser; this lets anyone check it. Counted live in the page:
-// requests to any other origin, and cookies. The link runs Mozilla's header scan on this host.
-const OBSERVATORY = `https://developer.mozilla.org/en-US/observatory/analyze?host=${typeof location !== 'undefined' ? location.hostname : ''}`
-function PrivacyStat() {
-  const [n, setN] = useState({ third: 0, cookies: 0 })
-  useEffect(() => {
-    const f = () => {
-      const third = performance.getEntriesByType('resource').filter((r) => { try { const u = new URL(r.name, location.href); return (u.protocol === 'http:' || u.protocol === 'https:') && u.origin !== location.origin } catch { return false } }).length
-      const cookies = document.cookie ? document.cookie.split(';').filter((c) => c.trim()).length : 0
-      setN((o) => (o.third === third && o.cookies === cookies ? o : { third, cookies }))
-    }
-    f(); const h = setInterval(f, 4000); return () => clearInterval(h)
-  }, [])
-  return (
-    <span className="privacy" title="Counted live in this page">
-      <b>{n.third}</b> trackers · <b>{n.cookies}</b> cookies · <a href={OBSERVATORY} target="_blank" rel="noopener noreferrer">headers ↗</a>
-    </span>
-  )
-}

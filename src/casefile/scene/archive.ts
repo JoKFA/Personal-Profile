@@ -706,12 +706,12 @@ export class Archive {
       // the light front after a lens change, travelling out from the selection
       const dist = Math.hypot((c.row - this.sel.row) * 0.55, (c.lane - this.sel.lane) * 2.2), front = (t - this.lensAt) * 11
       const sweep = this.reduced || t - this.lensAt > 3 ? 0 : Math.exp(-((dist - front) ** 2) / 2.5) * Math.exp(-(t - this.lensAt) * 0.6)
-      // the overview is the main view: a record stands in light, an empty drive sits in warm shade;
-      // under a lens, records the lens does not pick join the shade
+      // the overview is one ivory field (after the PV, spec §29.3): a record is told by the light inside
+      // it, an empty drive by a breath of shade; under a lens, the drives it does not pick step back
       const isRecord = !!e && e.kind !== 'restricted' && !this.destroyed.has(e.id)
       const lit = !this.narrowed ? (isRecord ? 1 : 0) : r
       // eased per entry (decrypt flips, lens changes): the light glides, it never jumps
-      let shade = isSel ? 1 : 1 - 0.48 * (1 - lit), lamp = isSel ? 0 : this.lampOf(e, r, sweep)
+      let shade = isSel ? 1 : 1 - (this.narrowed ? 0.36 : 0.12) * (1 - lit), lamp = isSel ? 0 : this.lampOf(e, r, sweep)
       if (e && !this.reduced) {
         const le = this.lightEase.get(e.id) ?? [lamp, shade], k2 = 1 - Math.exp(-dt * 4)
         le[0] += (lamp - le[0]) * k2; le[1] += (shade - le[1]) * k2; this.lightEase.set(e.id, le); lamp = le[0]; shade = le[1]
@@ -769,7 +769,7 @@ export class Archive {
     // high-key, after the PV; brighter still while the entrance searches
     // the archive arrives out of the white: over-exposed at first, settling to its own light
     const arrived = age < ENTRANCE_END ? smooth((age - ENTRANCE.found) / (ENTRANCE_END - ENTRANCE.found)) : 1
-    S.setEntranceLight(this.entryLook * (1 - this.detail) * (1 - 0.15 * arrived))
+    S.setEntranceLight((1 - this.detail) * (1 - 0.15 * arrived))
     S.setExposure(0.86 - 0.24 * this.focus.value + (age < ENTRANCE_END ? 0.1 * (1 - arrived) + 0.3 * (1 - smooth(age / 1.3)) : 0))
     S.setFaceLight(this.detail)
     // depth of field: focus on the selected drive; the closer the camera has pushed in (an open

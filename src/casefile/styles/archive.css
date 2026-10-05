@@ -107,7 +107,16 @@ body.cf-body { margin: 0; background: var(--bg); color: var(--ink); font-family:
 @media (max-width: 899px) { .leader { display: none; } }
 
 .hud-sel { left: var(--g); bottom: calc(var(--bottom) + 104px); }
-.hud-sel .pos { margin-top: 12px; }
+/* the drawer meter: where you are, read like an instrument */
+.meter { margin-top: 18px; display: grid; gap: 10px; }
+.meter-n { display: flex; align-items: baseline; gap: 10px; }
+.meter-n .n { font: 200 clamp(38px, 3.6vw, 56px)/.9 var(--sans); letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+.meter-n .of { font: 500 12px/1 var(--mono); letter-spacing: .08em; color: var(--label); }
+.meter-ticks { display: flex; gap: 0; height: 22px; align-items: stretch; }
+.meter-ticks button { width: 12px; position: relative; }
+.meter-ticks button::before { content: ""; position: absolute; left: 50%; top: 6px; bottom: 6px; width: 1px; background: var(--hair2); transition: background .2s ease, top .2s ease, bottom .2s ease; }
+.meter-ticks button:hover::before { background: var(--ink2); }
+.meter-ticks button.on::before { top: 0; bottom: 0; width: 2px; margin-left: -.5px; background: var(--ink); }
 .hud-sel::before { content: ""; position: absolute; inset: -40px -70px -36px -50px; z-index: -1; pointer-events: none;
   background: radial-gradient(ellipse 58% 56% at 40% 50%, color-mix(in srgb, var(--bg) 64%, transparent) 0%, color-mix(in srgb, var(--bg) 36%, transparent) 55%, transparent 100%);
   -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px);
@@ -141,11 +150,15 @@ body.cf-body { margin: 0; background: var(--bg); color: var(--ink); font-family:
 .kk-g .b { fill: #efe7da; stroke: rgba(22, 23, 26, .38); stroke-width: 1; }
 .kk-g .ink { fill: #47494d; }
 .kk-g .gold { fill: #d9a95c; }
-.hud-foot { right: var(--g); bottom: var(--bottom); display: flex; gap: 18px; align-items: center; white-space: nowrap; opacity: .55; transition: opacity .3s ease; }
-.hud-foot:hover, .hud-foot:focus-within { opacity: 1; }
-.hud-foot b { color: var(--ink); font-weight: 600; }
+.privacy b { color: var(--ink); font-weight: 600; }
 .privacy a { text-decoration: none; color: var(--ink2); } .privacy a:hover { color: var(--ink); }
-.hud-foot button { letter-spacing: inherit; text-transform: inherit; font: inherit; color: var(--label); } .hud-foot button:hover { color: var(--acc-text); }
+/* the session line (after the PV's "session authorized · name / time / reinitialize"): the system's own frame */
+.hud-foot { right: var(--g); bottom: var(--bottom); display: flex; gap: 12px; align-items: center; white-space: nowrap; color: var(--label); }
+.hud-foot .sess { display: inline-flex; gap: 8px; align-items: center; color: var(--ink2); }
+.hud-foot .sess i { width: 5px; height: 5px; background: var(--ink); }
+.hud-foot .sep { opacity: .5; }
+.hud-foot .clock { font-variant-numeric: tabular-nums; }
+.hud-foot button { letter-spacing: inherit; text-transform: inherit; font: inherit; color: var(--label); } .hud-foot button:hover { color: var(--ink); }
 .risk { position: relative; display: inline-flex; gap: 8px; align-items: center; cursor: help; }
 .risk .tip { position: absolute; right: 0; bottom: calc(100% + 12px); width: 300px; padding: 12px 14px; white-space: normal; text-transform: none; letter-spacing: 0; font: 400 12.5px/1.5 var(--sans); color: var(--ink);
   background: color-mix(in srgb, var(--bg) 94%, transparent); backdrop-filter: blur(12px); border-top: 1px solid var(--ink); opacity: 0; transform: translateY(4px); pointer-events: none; transition: opacity .2s ease, transform .2s ease; }
@@ -225,9 +238,21 @@ body.cf-body { margin: 0; background: var(--bg); color: var(--ink); font-family:
 .file > * { pointer-events: auto; }
 .file-bar { position: absolute; left: 0; right: 0; top: 0; height: 64px; display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 0 var(--g); animation: fadein .5s ease .2s both; }
 .file-back { display: inline-flex; gap: 10px; align-items: center; font: 700 11.5px/1 var(--sans); letter-spacing: .1em; text-transform: uppercase; min-height: 44px; }
-.file-wm b { color: var(--ink); font-weight: 500; }
 .file-shred { font: 700 11px/1 var(--sans); letter-spacing: .1em; text-transform: uppercase; padding: 11px 16px; border: 1px solid var(--hair2); transition: border-color .2s ease, color .2s ease; }
 .file-shred:hover { border-color: var(--alert); color: var(--alert); }
+/* the way on: the next file, named */
+.file-next { display: inline-flex; gap: 12px; align-items: baseline; min-height: 44px; padding: 0; text-align: right; }
+.file-next .t { font: 700 12px/1 var(--sans); letter-spacing: .1em; text-transform: uppercase; }
+.file-next span[aria-hidden] { display: inline-block; transition: transform .25s var(--ease-in); }
+.file-next:hover span[aria-hidden] { transform: translateX(4px); }
+.file-demonote .tlp { color: var(--ink); border: 1px solid var(--hair2); padding: 3px 5px 2px; letter-spacing: .08em; }
+.file-demonote { align-items: baseline; }
+/* V-FILE: what this site does with you */
+.session { display: grid; gap: 18px; margin: 0; }
+.session > div { display: grid; grid-template-columns: 150px minmax(0, 1fr); gap: 16px; }
+.session dd { margin: 0; display: grid; gap: 4px; color: var(--ink2); font-size: 14px; line-height: 1.5; }
+.session dd b { color: var(--ink); font-weight: 600; }
+@media (max-width: 899px) { .session > div { grid-template-columns: minmax(0, 1fr); gap: 4px; } }
 .file-stage-wrap { position: fixed; inset: 0; pointer-events: none; }
 .file-stage { position: absolute; left: 0; top: 0; transform-origin: 0 0; pointer-events: auto; }
 /* projection: the page comes out of the face behind a bright scan line, top to bottom */
@@ -300,7 +325,7 @@ body.cf-body { margin: 0; background: var(--bg); color: var(--ink); font-family:
 
 @media (max-width: 899px) {
   .file { overflow-y: auto; pointer-events: auto; background: color-mix(in srgb, var(--bg) 70%, transparent); }
-  .file-wm { display: none; } .file-bar .wide, .file-bar kbd { display: none; } .file-bar button { white-space: nowrap; }
+  .file-bar .wide, .file-bar kbd, .file-next .t { display: none; } .file-bar button { white-space: nowrap; }
   .file-bar { position: sticky; background: color-mix(in srgb, var(--bg) 88%, transparent); backdrop-filter: blur(12px); z-index: 2; }
   .file-stage-wrap { position: relative; inset: auto; padding: 12px var(--g) 0; pointer-events: auto; }
   .file-stage { position: relative; width: 100% !important; height: auto !important; transform: none !important; }

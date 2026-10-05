@@ -1,7 +1,8 @@
 // Public routes and their SEO copy, read straight from the archive data (Node ≥ 22.18 strips
 // TypeScript types on import). Adding an entry to src/casefile/data/entries.ts adds its route,
 // sitemap line and prerendered page.
-import { ENTRIES, SUBJECT } from '../src/casefile/data/entries.ts'
+import { CERTIFICATIONS, CONTACT, ENTRIES, SUBJECT } from '../src/casefile/data/entries.ts'
+import { SELECTED, THESIS } from '../src/casefile/data/story.ts'
 
 const pages = ENTRIES.filter((e) => (e.kind === 'case' || e.kind === 'service' || e.kind === 'education' || e.kind === 'restricted') && e.seo)
 
@@ -14,3 +15,4 @@ export const routes = [
   ...pages.map((e) => ({ route: `/projects/${e.slug}`, entry: e, title: e.seo.title, description: e.seo.description })),
 ]
 export const entries = ENTRIES
+export { CERTIFICATIONS, CONTACT, SELECTED, THESIS }

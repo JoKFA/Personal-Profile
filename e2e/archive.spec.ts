@@ -61,13 +61,18 @@ test('full flow: read access, open, close, shred, deny, SENTINEL', async ({ page
   await closeFile(page)
   await expect(page).toHaveURL(/\/$/)
 
-  // crypto-shred: three passes, key zeroized, the drive reads SHREDDED
+  // a file's way on is the next file, named; nothing to shred there
   await openDrive(page, 'X-003')
+  await expect(page.locator('.file-next')).toBeVisible()
+  await expect(page.locator('.file-shred')).toHaveCount(0)
+  await closeFile(page)
+  // crypto-shred lives in the visitor's own file: three passes, key zeroized, the drive reads SHREDDED
+  await openDrive(page, 'V-FILE')
   await page.locator('.file-shred').click()
   await expect(page.locator('.shred-banner')).toContainText('Pass 1 of 3')
   await expect(page.locator('.shred-banner')).toContainText('Key zeroized', { timeout: 8000 })
   await page.waitForFunction(() => (window as unknown as Win).__cf.getSnapshot().mode === 'archive', null, { timeout: 15_000 })
-  await page.evaluate(() => (window as unknown as Win).__cf.jumpTo('X-003')); await page.waitForTimeout(800)
+  await page.evaluate(() => (window as unknown as Win).__cf.jumpTo('V-FILE')); await page.waitForTimeout(800)
   await expect(page.locator('.panel .go')).toContainText('Restore')
 
   // deny: an empty drive raises the visitor's risk
@@ -250,7 +255,7 @@ test('open never clips, close is quick, every shred step stays readable', async 
   expect(await page.evaluate(() => (window as unknown as Win).__cf.stalled)).toBe(false)
 
   // crypto-shred: each pass and the zeroized key stay on screen long enough to read
-  await openDrive(page, 'X-003')
+  await openDrive(page, 'V-FILE')
   await page.waitForTimeout(1200)
   await page.evaluate(() => {
     const w = window as unknown as { __sb: [number, string][] }; w.__sb = []
