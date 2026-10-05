@@ -94,3 +94,12 @@
 | Processed locally. Nothing sent.（一位评审） | `src/casefile/ui/Gate.tsx:178`（入场） | |
 
 内景其余五个领域的标题、步骤和结果句是同一种写法（`space/content.ts`），评审只看到了第一个领域；改写时一并看。
+
+---
+
+## 5. 第 1 轮评审对落地屏文案的意见（S2，入场方向 C）
+
+- **事实准确性（优先）**：`Now I test AI agents and assess risk at a Canadian credit union.` 两位评审都读成“在信用社测 AI agent”。MCP 扫描器是你自己的项目，不是 Coast Capital 的工作；改写时把两件事分开，并直接写出 Coast Capital Savings。
+- 经理认为第一句 `I learned security from the network up.` 是经历不是观点，可以换成一句对工作的判断（由你决定）。
+- `Top 3 in CMPT 783`：外人不认识课程号，例如改成 `Top 3 in an SFU graduate course`。
+- `checks on every merge`：没说是什么检查，例如 `Trivy, GitGuardian and Semgrep on every merge`（事实库里有）。
