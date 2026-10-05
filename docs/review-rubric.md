@@ -2,6 +2,7 @@
 
 > 用法见 `docs/curation-plan.md` §3。每轮：`npm run build && node scripts/shots.mjs`，然后为两个角色各开一个**全新、无上下文**的评审，把下面的提示词原样交给它，`{SHOTS}` 换成本轮截图目录。两个角色每项取较低分，写入 `docs/review-log.md`。
 > 评审只看截图和纯文本，不看代码、不看对话、不看上一轮分数。
+> **R9（质感）由你最终裁定**：评审的 R9 只作参考。第 1 轮证明了只量清晰度会把页面推向“清楚但廉价”。
 
 ---
 
@@ -61,6 +62,11 @@ R6 Restraint (all frames)
 R7 Wording (all frames and T1)
    Start at 10. Quote every sentence that reads as if an AI wrote it (stock phrasing, empty triads,
    "not X but Y", vague abstractions, slogans). Subtract 1 per sentence.
+R9 Craft (first frames, F1-F4)
+   9-10 one strong focal image and art-directed typography: it looks like a studio site or a product
+        film, and you would remember it tomorrow
+   6-8  tidy but generic: it could be a good template
+   <=5  looks cheap: a plain page with a card or a list and no focal image
 R8 Text version (T1 only)
    First write a 3-sentence summary of this person and name their 3 strongest pieces of evidence,
    using T1 alone. Then score:
