@@ -270,39 +270,27 @@ test('open never clips, close is quick, every shred step stays readable', async 
   expect(errors).toEqual([])
 })
 
-test('entry: your facts land in an attack profile, which is sealed and falls into the archive', async ({ page }, info) => {
+test('entry: your browser is read as a fingerprint, profiled, sealed, and the archive slides in', async ({ page }, info) => {
   const errors = watchErrors(page)
   const phone = info.project.name.startsWith('phone')
   await page.goto('/?intro')
-  // the hook: the first fact is said large and lands in the card within about two seconds
-  await expect(page.locator('.gz-s').first()).toBeVisible({ timeout: 5000 })
-  const size = await page.locator('.gz-s').first().evaluate((el) => parseFloat(getComputedStyle(el).fontSize))
-  expect(size).toBeGreaterThanOrEqual(phone ? 24 : 30)
-  await expect(page.locator('.gz-f .v').first()).toBeVisible({ timeout: 2500 })
-  // the turn: an attack profile, with what an attacker would do written under three fields
-  await expect(page.locator('.gz-card.attack .gz-h')).toContainText('ATTACK PROFILE', { timeout: 4000 })
-  const aims = await page.locator('.gz-aim').allTextContents()
-  expect(aims.filter((t) => t.trim().length > 8).length).toBe(3)
-  await expect.poll(() => page.locator('.gz-aim').last().evaluate((el) => Number(getComputedStyle(el).opacity))).toBeGreaterThan(0.95)
-  for (const el of await page.locator('.gz-aim').all()) {
-    expect(await el.evaluate((e) => e.scrollWidth <= e.clientWidth + 1), await el.textContent() ?? '').toBe(true)
+  // read: the scan reaches the readings; each value resolves from cipher into a real one
+  await expect(page.locator('.fp-cap1')).toBeVisible({ timeout: 5000 })
+  const size = await page.locator('.fp-cap1').evaluate((el) => parseFloat(getComputedStyle(el).fontSize))
+  expect(size).toBeGreaterThanOrEqual(phone ? 24 : 28)
+  // profile: every reading carries what an attacker does with it, readable and inside the screen
+  await expect(page.locator('.fp-cap2')).toBeVisible({ timeout: 6000 })
+  await expect.poll(() => page.locator('.fp-mi .a').last().evaluate((el) => Number(getComputedStyle(el).opacity))).toBeGreaterThan(0.95)
+  const vw = page.viewportSize()!
+  for (const el of await page.locator('.fp-mi').all()) {
+    const b = (await el.boundingBox())!
+    expect(b.x >= 0 && b.x + b.width <= vw.width && b.y + b.height <= vw.height, await el.textContent() ?? '').toBe(true)
   }
-  await page.screenshot({ path: `.codex-runtime/design/entrance/art-directed/${info.project.name}-attack.png` })
-  // the defender: sealed, nothing left the browser; the card stays inside the screen
-  await expect(page.locator('.gz-card.sealed .gz-h')).toContainText('PROFILE SEALED', { timeout: 4000 })
-  await expect(page.locator('.gz-foot')).toContainText('Nothing sent.')
-  const card = await page.locator('.gz-card').boundingBox(), vw = page.viewportSize()!
-  expect(card && card.x >= 0 && card.x + card.width <= vw.width && card.y + card.height <= vw.height).toBe(true)
-  const skip = await page.locator('.gz-skip').boundingBox()
-  if (phone) expect(card && skip && card.y + card.height < skip.y).toBe(true)
-  for (const el of await page.locator('.gz-f .v, .gz-aim, .gz-h span').all()) {
-    const fits = await el.evaluate((e) => e.scrollWidth <= e.clientWidth + 1)
-    expect(fits, await el.textContent() ?? '').toBe(true)
-  }
-  await page.waitForTimeout(300)
-  await page.screenshot({ path: `.codex-runtime/design/entrance/art-directed/${info.project.name}-sealed.png` })
-  // then into the archive: the swell settles on the subject file, which opens by itself (spec §29);
-  // closing it lands on home, the four selected files lit and called out
+  // seal: the readings turn to cipher, the print becomes its SHA-256, which is printed in full
+  await expect(page.locator('.fp-cap3')).toBeVisible({ timeout: 4000 })
+  await expect.poll(() => page.locator('.fp-hash code').textContent(), { timeout: 4000 }).toMatch(/^[0-9a-f]{8}( [0-9a-f]{8}){3}\n[0-9a-f]{8}( [0-9a-f]{8}){3}$/)
+  await page.screenshot({ path: `.codex-runtime/design/entrance/fingerprint/${info.project.name}-sealed.png` })
+  // then into the archive: the swell settles on the subject file, which opens by itself (spec §29)
   await page.waitForFunction(() => (window as unknown as Win).__cf?.getSnapshot().mode === 'file' && !!document.querySelector('.file--subject'), null, { timeout: 40_000 })
   await expect(page.locator('.gate')).toHaveCount(0)
   await closeFile(page)
@@ -311,13 +299,13 @@ test('entry: your facts land in an attack profile, which is sealed and falls int
   expect(errors).toEqual([])
 })
 
-test('entry: skipping during a value flight leaves no moving text or gate behind', async ({ page }) => {
+test('entry: skipping lands on the sealed print and leaves no gate behind', async ({ page }) => {
   const errors = watchErrors(page)
   await page.goto('/?intro')
-  await page.locator('.gz-flight').first().waitFor({ state: 'attached', timeout: 5000 })
+  await expect(page.locator('.fp-cap1')).toBeVisible({ timeout: 5000 })
   await page.keyboard.press('Escape')
   await page.waitForFunction(() => { const s = (window as unknown as Win).__cf?.getSnapshot(); return s?.mode === 'archive' || s?.mode === 'opening' || s?.mode === 'file' }, null, { timeout: 30_000 })
-  await expect(page.locator('.gz-flight, .gate')).toHaveCount(0)
+  await expect(page.locator('.gate')).toHaveCount(0)
   expect(await page.evaluate(() => (window as unknown as Win).__cf.getSnapshot().entry?.id)).toBe('YW-000')
   expect(errors).toEqual([])
 })

@@ -1,0 +1,30 @@
+/* The entry (spec §30): one lit sheet of paper. The print is the only large thing; the readings sit in
+   a column beside it like a forensic comparison chart; the sentence sits low on the left. */
+.fp .fp-canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.fp .fp-labels > *, .fp .fp-say > * { position: absolute; left: 0; top: 0; visibility: hidden; opacity: 0; will-change: transform, opacity; }
+.fp-phase { position: absolute; right: var(--g); top: calc(var(--top) + 4px); display: flex; gap: 14px; align-items: baseline; z-index: 5; }
+.fp-phase .fp-ph-n { color: var(--ink); }
+
+.fp-exh { display: flex; justify-content: space-between; gap: 16px; white-space: nowrap; }
+.fp-mi { width: 270px; }
+.fp-mi .h { display: flex; gap: 12px; align-items: baseline; }
+.fp-mi .h .n { color: var(--ink); }
+.fp-mi .v { margin-top: 6px; font: 600 17px/1.25 var(--sans); letter-spacing: -.015em; white-space: nowrap; font-variant-numeric: tabular-nums; color: var(--ink); }
+.fp-mi .v.cipher { font: 400 13.5px/1.6 var(--mono); letter-spacing: .02em; color: var(--ink2); }
+.fp-mi .a { margin-top: 5px; font: 500 12px/1.3 var(--mono); color: #a33b22; white-space: nowrap; }
+
+.fp-cap { margin: 0; font: 300 clamp(28px, 3.1vw, 48px)/1.06 var(--sans); letter-spacing: -.035em; white-space: nowrap; color: var(--ink); }
+.fp-cap b { font-weight: 650; }
+.fp-sub { margin: 0; font: 400 15px/1.5 var(--sans); color: var(--ink2); max-width: 34em; }
+.fp-hash { display: grid; justify-items: center; row-gap: 7px; }
+.fp-hash code { font: 400 12px/1.6 var(--mono); letter-spacing: .04em; color: var(--ink); white-space: pre; }
+
+@media (max-width: 759px) {
+  .fp-mi { width: auto; }
+  .fp-mi .v { font-size: 14px; white-space: normal; }
+  .fp-mi .a { font-size: 10.5px; line-height: 1.35; white-space: normal; }
+  .fp-cap { font-size: clamp(24px, 6.6vw, 30px); white-space: normal; width: calc(100vw - 2 * var(--g)); }
+  .fp-sub { font-size: 13.5px; width: calc(100vw - 2 * var(--g)); }
+}
+/* the name stays on the sheet from the first frame (the PV's lockup never moves) */
+.fp .gz-lock { visibility: visible; opacity: 1; z-index: 5; }
