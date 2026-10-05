@@ -49,9 +49,10 @@ export const KEY_NUMBERS: [string, string, string][] = [
 ]
 
 
-/** The entry's one sentence: `lead` is set heavier than `rest` (weight is the only emphasis; olive
- *  means "readable" and nothing else). Draft wording until the user rewrites it (docs/copy-drafts.md). */
-export const THESIS = { lead: 'I learned security from the network up.', rest: 'Now I test AI agents and assess risk at a Canadian credit union.' }
+/** Home's one sentence: `lead` is set heavier than `rest` (weight is the only emphasis; olive means
+ *  "readable" and nothing else). Draft wording until the user rewrites it (docs/copy-drafts.md); the
+ *  credit union and the AI-agent tooling are kept apart, since the scanner is a personal project. */
+export const THESIS = { lead: 'I learned security from the network up.', rest: 'Now I assess risk at a Canadian credit union, and build tools that test AI agents.' }
 
 /** Start here: the four files a first visit is pointed at, in this order (user 2026-10-05, plan D2).
  *  `tag` says what kind of work and when; `line` is the proof a reader sees before opening the file. */
