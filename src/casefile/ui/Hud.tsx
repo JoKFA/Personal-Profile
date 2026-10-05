@@ -30,7 +30,7 @@ export function Hud({ statusLine, hidden, arriving }: { statusLine: { html: stri
 
   return (
     <div className={`hud ${hidden ? '' : 'on'} ${s.mode !== 'archive' ? 'dim' : ''}`} aria-hidden={hidden}>
-      <div className="hud-lock"><div className="a">YAOTING WANG</div><div className="b">ANALYST &amp; ENGINEER<span className="loc"> · VANCOUVER, BC</span></div><div className="c">SECURITY <b>PORTFOLIO</b></div></div>
+      <div className="hud-lock"><div className="a">YAOTING WANG</div><div className="b">SECURITY ANALYST<span className="loc"> · VANCOUVER, BC</span></div></div>
       <div className="hud-top">
         <button className="hud-index-btn" aria-expanded={contact} onClick={() => { setContact((v) => !v); setIndex(false) }}><span>Contact</span></button>
         <button className="hud-index-btn" aria-expanded={index} onClick={() => { setIndex((v) => !v); setContact(false) }}><span aria-hidden="true">⌕</span><span>Index</span><kbd>/</kbd></button>

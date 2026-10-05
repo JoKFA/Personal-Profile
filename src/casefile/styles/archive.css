@@ -45,7 +45,6 @@ body.cf-body { margin: 0; background: var(--bg); color: var(--ink); font-family:
 .hud-lock { left: var(--g); top: var(--top); line-height: 1; }
 .hud-lock .a { font-weight: 800; font-size: clamp(20px, 2.15vw, 33px); }
 .hud-lock .b { font-weight: 700; font-size: clamp(9.5px, .82vw, 12.5px); letter-spacing: .12em; margin-top: 9px; }
-.hud-lock .c { font-weight: 300; font-size: clamp(18px, 1.95vw, 30px); letter-spacing: .1em; margin-top: 7px; } .hud-lock .c b { font-weight: 800; }
 .hud-top { right: var(--g); top: var(--top); display: flex; gap: 26px; }
 .hud-index-btn { display: inline-flex; gap: 9px; align-items: center; font: 600 11.5px/1 var(--sans); letter-spacing: .08em; text-transform: uppercase; padding: 8px 0; }
 
@@ -166,7 +165,7 @@ body.cf-body { margin: 0; background: var(--bg); color: var(--ink); font-family:
 
 /* phone: name + Index / role lens / scene / bottom card (spec G5) */
 @media (max-width: 899px) {
-  .hud-lock .c, .hud-lock .loc { display: none; } .hud-lock .a { font-size: 18px; } .hud-lock { top: 18px; } .hud-top { top: 12px; }
+  .hud-lock .loc { display: none; } .hud-lock .a { font-size: 18px; } .hud-lock { top: 18px; } .hud-top { top: 12px; }
   .lens { left: 0; right: 0; top: 76px; bottom: auto; transform: none; padding: 0 var(--g); overflow-x: auto; scrollbar-width: none; }
   .lens.hide { transform: translateY(-6px); }
   .lens::-webkit-scrollbar { display: none; }

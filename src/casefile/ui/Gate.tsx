@@ -160,7 +160,7 @@ export function Gate({ visitor, reduced, sceneReady, onTitle, onReveal, originAt
         Put together, that is an attack profile: enough to match a known exploit, time a phishing email and write its lure in your language. Nothing left your browser.
         This is the security portfolio of Yaoting Wang: I look at systems the way an attacker would, then I close the gaps.
       </p>
-      <div className="gz-lock" aria-hidden="true"><div className="a">YAOTING WANG</div><div className="b">ANALYST &amp; ENGINEER · VANCOUVER, BC</div><div className="c">SECURITY <b>PORTFOLIO</b></div></div>
+      <div className="gz-lock" aria-hidden="true"><div className="a">YAOTING WANG</div><div className="b">SECURITY ANALYST<span className="loc"> · VANCOUVER, BC</span></div></div>
       <div className="gz-rail" aria-hidden="true"><span>Browser readout</span><span className="gz-read-step">0 / {facts.length}</span></div>
       <svg className="gz-link" aria-hidden="true"><path pathLength="1" /></svg>
       <div className="gz-stage" aria-hidden="true">

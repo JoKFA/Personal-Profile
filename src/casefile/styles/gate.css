@@ -4,8 +4,6 @@
 .gz-lock { position: absolute; left: var(--g); top: var(--top); line-height: 1; color: var(--ink); visibility: hidden; opacity: 0; }
 .gz-lock .a { font-weight: 800; font-size: clamp(20px, 2.15vw, 33px); }
 .gz-lock .b { font-weight: 700; font-size: clamp(9.5px, .82vw, 12.5px); letter-spacing: .12em; margin-top: 9px; }
-.gz-lock .c { font-weight: 300; font-size: clamp(18px, 1.95vw, 30px); letter-spacing: .1em; margin-top: 7px; }
-.gz-lock .c b { font-weight: 800; }
 
 .gz-rail { position: absolute; top: 27%; left: var(--g); right: var(--g); height: 1px; background: var(--hair2); transform-origin: left; }
 .gz-rail::before, .gz-rail::after { content: ""; position: absolute; width: 3px; height: 3px; background: var(--ink); top: -1px; }
@@ -71,7 +69,7 @@
   .gz-caption { bottom: var(--bottom); font-size: 10.5px; line-height: 1.5; max-width: 50%; }
 }
 @media (max-height: 700px) and (max-width: 899px) {
-  .gz-lock .b { display: none; } .gz-lock .c { font-size: 16px; }
+  .gz-lock .loc { display: none; }
   .gz-rail { top: 20%; } .gz-stage { top: 22%; bottom: 14%; gap: 12px; grid-template-rows: minmax(90px, 1fr) auto; }
   .gz-say { height: 100px; font-size: 26px; } .gz-card { padding: 16px 22px 12px; }
   .gz-fields { margin: 14px 0; gap: 10px; } .gz-f .v { font-size: 14px; } .gz-aim { font-size: 11.5px; }

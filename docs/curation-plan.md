@@ -46,7 +46,8 @@
 
 | # | 决策 | 结果 |
 |---|---|---|
-| D1 | 头衔 | **保持 Security Analyst & Engineer**，三处统一：左上角、副标题、Looking for 用同一套方向词（具体措辞随 D3 由你写定） |
+| D1 | 头衔 | **Security Analyst**（2026-10-05 改定：基线评审四位都指出两个头衔并列）。左上角去掉第三行 `SECURITY PORTFOLIO`；方向词三处统一，措辞随 D3 由你写定 |
+| D4 | 可入职日期 | **Full-time from Apr 2027**（与学位结束日期一致） |
 | D2 | 精选 4 个及顺序 | 01 MCP Security Framework · 02 Coast Capital · 03 VibesMeet · 04 PwnScan |
 | D3 | 论点句与 4 条一句话 | 你亲手写；草稿与 AI 味检查在 `docs/copy-drafts.md`（技巧 07） |
 
@@ -95,7 +96,7 @@
 
 ### S7 · 收尾
 
-删除 `?entry=` 原型开关；把定稿的规则写回 `DESIGN.md`；在你的 GPU 机器上跑 `npm run test:e2e`（配置是 Windows + d3d11，云端容器跑不了）并确认 60 fps。
+删除 `?entry=` 原型开关；重拍 `public/og-card.jpg`（现在是旧版截图，仍是旧头衔）；把定稿的规则写回 `DESIGN.md`；在你的 GPU 机器上跑 `npm run test:e2e`（配置是 Windows + d3d11，云端容器跑不了）并确认 60 fps。
 
 ---
 

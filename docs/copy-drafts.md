@@ -12,7 +12,7 @@
 
 ---
 
-## 1. 身份行（D1：保持 Analyst & Engineer，三处统一）
+## 1. 身份行（D1：Security Analyst，已改；方向词待你写定）
 
 现在的三种说法：
 
@@ -22,7 +22,9 @@
 | 副标题（kicker） | `Security Analyst & Engineer · Risk, Cloud & AI Security` |
 | Looking for | `Security Analyst · GRC · Cloud & AI Security` |
 
-草稿：头衔统一为 `Security Analyst & Engineer`，方向词三处都用同一组，例如 `GRC · Cloud · AI Security`（Looking for 可以列岗位，但方向词与副标题一致）。
+已改（2026-10-05）：左上角 `SECURITY ANALYST · VANCOUVER, BC`（去掉 `SECURITY PORTFOLIO`），副标题 `Security Analyst · Risk, Cloud & AI Security`，Available `Full-time from Apr 2027`。
+
+待你写定：方向词三处用同一组，例如 `GRC · Cloud · AI Security`（Looking for 可以列岗位，但方向词与副标题一致）。
 
 你的版本：
 

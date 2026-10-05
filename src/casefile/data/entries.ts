@@ -9,14 +9,14 @@ const MAIL = 'felixwang1222@gmail.com'
 const ask = (subject: string) => ({ label: 'Walkthrough on request', href: `mailto:${MAIL}?subject=${encodeURIComponent(subject)}` })
 
 export const SUBJECT: Entry = {
-  id: 'YW-000', slug: 'profile', kind: 'subject', title: 'Yaoting Wang', kicker: 'Security Analyst & Engineer · Risk, Cloud & AI Security',
+  id: 'YW-000', slug: 'profile', kind: 'subject', title: 'Yaoting Wang', kicker: 'Security Analyst · Risk, Cloud & AI Security',
   summary: 'Master of Cybersecurity at SFU. Security work across AI systems, cloud pipelines, detection, risk and networks, with the evidence kept.',
   roles: 'all', slot: { lane: 0, row: 12 },
-  // availability and targets: resume system (能力画像 · OBJECTIVE.md, 2026-09-24)
-  facts: [['Available', 'Full-time from Feb 2027'], ['Looking for', 'Security Analyst · GRC · Cloud & AI Security'], ['Now', 'Information Security co-op, Coast Capital'], ['Based', 'Vancouver, BC · open to relocating in Canada']],
+  // targets: resume system (能力画像 · OBJECTIVE.md, 2026-09-24); title and availability: user 2026-10-05
+  facts: [['Available', 'Full-time from Apr 2027'], ['Looking for', 'Security Analyst · GRC · Cloud & AI Security'], ['Now', 'Information Security co-op, Coast Capital'], ['Based', 'Vancouver, BC · open to relocating in Canada']],
   // no demo on the drive: the subject file's exhibit is the drive's own work space (space/, docs/subject-space-spec.md)
   numbers: [['50+', 'security assessments'], ['20+', 'vendor risk reviews'], ['60+', 'MCP servers tested'], ['14', 'pentest findings'], ['1,000+', 'people trained'], ['~30%', 'AWS cost cut']],
-  seo: { title: 'Yaoting Wang | Security Portfolio', description: 'Security analyst and engineer, Master of Cybersecurity at SFU: risk assessment at a Canadian financial institution, cloud and DevSecOps, detection, and AI security, with the evidence for each.' },
+  seo: { title: 'Yaoting Wang | Security Portfolio', description: 'Security analyst, Master of Cybersecurity at SFU: risk assessment at a Canadian financial institution, cloud and DevSecOps, detection, and AI security, with the evidence for each.' },
 }
 
 export const CASES: Entry[] = [
