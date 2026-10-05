@@ -22,7 +22,6 @@ const commit = (() => { try { return execSync('git rev-parse --short HEAD').toSt
 const out = path.resolve(arg('out', `shots/${commit}`))
 const only = arg('only', '')?.split(',').filter(Boolean)
 const query = new URLSearchParams(arg('query', ''))
-const PORT = 4181
 const LONG = 15 * 60_000   // SwiftShader can take minutes per frame
 
 const dist = path.resolve('dist')
@@ -97,7 +96,9 @@ const gpu = low
 fs.mkdirSync(out, { recursive: true })
 if (!only?.length || only.includes('T1')) fs.writeFileSync(path.join(out, 'T1-home.txt'), homeText())
 
-const server = await preview({ preview: { port: PORT, strictPort: true, open: false }, logLevel: 'silent' })
+// any free port, so two rounds (two prototypes) can shoot at once
+const server = await preview({ preview: { port: 4181, strictPort: false, open: false }, logLevel: 'silent' })
+const PORT = server.httpServer.address().port
 const failed = []
 async function shoot(g) {
   const phone = g.vp === PHONE
