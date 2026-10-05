@@ -9,7 +9,6 @@ import type { Archive, Handoff } from './scene/archive'
 import type { Clock } from './space/clock'
 import type { Runtime } from './space/runtime'
 import type { Space } from './space/scene'
-import type { Pick } from './ui/Landing'
 import { ArchiveContext, type Ctx } from './ui/context'
 import { Hud } from './ui/Hud'
 import { NoWebGL } from './ui/NoWebGL'
@@ -24,8 +23,6 @@ const FileView = lazy(() => import('./ui/FileView').then((m) => ({ default: m.Fi
 const loadSpace = () => import('./space/boot')
 // the entry (and GSAP with it) only loads for a first visit
 const Gate = lazy(() => import('./ui/Gate').then((m) => ({ default: m.Gate })))
-// entry prototypes, plan §S2: `?entry=a|c` meets the reader with Yaoting's page instead of the browser readout
-const Landing = lazy(() => import('./ui/Landing').then((m) => ({ default: m.Landing })))
 
 const sha256 = async (s: string) => {
   try { return [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s)))].map((b) => b.toString(16).padStart(2, '0')).join('') } catch { return '' }
@@ -42,11 +39,6 @@ export default function CasefileApp() {
   const visitor = useMemo(() => reconVisitor(), [])
   const reduced = useMemo(() => typeof matchMedia !== 'undefined' && matchMedia('(prefers-reduced-motion: reduce)').matches, [])
   const location = useLocation(), navigate = useNavigate()
-  const landing = useMemo(() => { const v = new URLSearchParams(location.search).get('entry'); return v === 'a' || v === 'c' ? v : null }, [location.search])
-  /** the landing's choice, read when the entrance starts (synchronously, so a ref): 'profile' opens the subject file after it */
-  const picked = useRef<Pick['to'] | null>(null)
-  /** the reader asked for the browser readout: the original entry plays instead */
-  const [readout, setReadout] = useState(false)
   const [gate, setGate] = useState(() => {
     try { return new URLSearchParams(location.search).has('intro') || localStorage.getItem('yw.entry') !== '1' } catch { return true }
   })
@@ -75,8 +67,6 @@ export default function CasefileApp() {
   const busy = useRef(false)
   const pendingSlug = useRef(slugFromPath(location.pathname))
   const firstVisit = useRef(gate)
-  /** the entrance opens the subject file by itself once (a first visit) */
-  const autoOpen = useRef(false)
   /** Esc pressed while a file is still opening: honoured the moment it is open (slow devices) */
   const escQueued = useRef(false)
 
@@ -247,27 +237,19 @@ export default function CasefileApp() {
   const originAt = useCallback(() => archiveRef.current?.entranceOrigin() ?? null, [])
   const onStrike = useCallback(() => archiveRef.current?.releaseEntrance(), [])
   const onGateDone = useCallback(() => setGateLeaving(false), [])
-  const onPick = useCallback((p: Pick) => {
-    picked.current = p.to
-    if (p.to === 'readout') setReadout(true)
-    if (p.to === 'file') { pendingSlug.current = p.slug; navigate({ pathname: `/projects/${p.slug}`, search: location.search }) }
-  }, [navigate, location.search])
   // entry finished → archive
   const onEntered = useCallback(() => {
     setGate(false)
     try { localStorage.setItem('yw.entry', '1') } catch { /* private mode */ }
     if (!archive) return
     const target = entryBySlug.get(pendingSlug.current ?? '')
-    // a first visit without a deep link: the archive stays sealed, the entrance finds the subject
-    // file and opens it, and read access is issued when its briefing ends (spec §26.4)
+    // a first visit without a deep link: the archive stays sealed while the entrance plays, and read
+    // access is issued as it settles (spec §26.4). Home is the brief: the lens opens on the selected files.
     const first = firstVisit.current && !target
-    // the landing has already introduced Yaoting: the archive opens on the first selected file,
-    // unless the reader asked for the full profile (or watched the browser readout instead)
-    const met = landing !== null && picked.current !== 'readout' && picked.current !== 'profile'
-    archive.enter(target?.id ?? (met ? SELECTED[0].id : 'YW-000'), first)
-    autoOpen.current = first && !met
+    archive.enter(target?.id ?? SELECTED[0].id, first)
+    if (!target) archive.setBrief(true)
     pendingSlug.current = null
-  }, [archive, landing])
+  }, [archive])
   const onEnteredRef = useRef(onEntered)
   useEffect(() => { onEnteredRef.current = onEntered }, [onEntered])
   // the entrance plays from the moment the archive is first visible
@@ -309,6 +291,8 @@ export default function CasefileApp() {
       if (mode === 'opening') { if (ev.key === 'Escape') escQueued.current = true; return }
       if (mode !== 'archive') return
       const m = ({ ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] } as Record<string, [number, number]>)[ev.key]
+      // from home, the first key steps into the archive (Enter lands on the first selected file)
+      if (archive.brief && (m || ev.key === 'Enter') && !(ev.target instanceof HTMLButtonElement || ev.target instanceof HTMLAnchorElement)) { ev.preventDefault(); archive.setBrief(false); if (m) archive.move(...m); return }
       if (m) { ev.preventDefault(); archive.move(...m) }
       else if (ev.key === 'Enter' && !(ev.target instanceof HTMLButtonElement)) open()
     }
@@ -332,23 +316,27 @@ export default function CasefileApp() {
     }, 100)
     return () => clearInterval(h)
   }, [gate, sceneReady, arriving, archive, audit, visitor.id])
-  // ④ a first visit: once the wave has settled on the subject file, it decrypts and opens by itself
-  useEffect(() => {
-    if (arriving || !archive || !autoOpen.current) return
-    autoOpen.current = false
+  // the home's way into the subject file: its drive opens, and the door takes the camera inside
+  const openProfile = useCallback(() => {
+    if (!archive || archive.getSnapshot().mode !== 'archive') return
     const subject = entryById.get('YW-000')!
-    archive.jumpTo(subject.id); archive.decrypt(subject.id)
-    const h = setTimeout(() => void openEntry(subject), reduced ? 0 : 450)
-    return () => clearTimeout(h)
-  }, [arriving, archive, openEntry, reduced])
+    archive.setBrief(false); archive.jumpTo(subject.id)
+    setTimeout(() => void openEntry(subject), reduced ? 0 : 700)
+  }, [archive, openEntry, reduced])
 
-  const ctx = useMemo<Ctx | null>(() => (archive ? { archive, visitor, reduced, status, open, close, auditLog, record: audit, exitRef, space, runtime: runtimeRef, cut } : null), [archive, visitor, reduced, status, open, close, auditLog, audit, space, cut])
+  const ctx = useMemo<Ctx | null>(() => (archive ? { archive, visitor, reduced, status, open, openProfile, close, auditLog, record: audit, exitRef, space, runtime: runtimeRef, cut } : null), [archive, visitor, reduced, status, open, openProfile, close, auditLog, audit, space, cut])
 
   if (noGL) return <NoWebGL visitor={visitor} />
   return (
     <div className={`cf ${file ? 'cf--file' : ''} ${arriving && !gate && sceneReady ? 'cf--arriving' : ''} ${doorOpen ? 'cf--door' : ''}`} onPointerDown={() => { if (doorOpen) archive?.skipDoor() }}>
       <canvas ref={canvasRef} className={`cf-scene ${!gate && sceneReady ? 'on' : ''}`} aria-label="An archive of encrypted drives. Use the index to browse them as a list."
-        onClick={() => { if (archive?.click() === 'hero') open() }} />
+        onClick={() => {
+          if (!archive) return
+          // from home, a lit drive opens its file; any other drive steps into the archive there
+          const brief = archive.brief, hit = archive.click()
+          if (brief && hit) { archive.setBrief(false); if (SELECTED.some((s) => s.id === archive.selected?.id)) open() }
+          else if (hit === 'hero') open()
+        }} />
       <canvas ref={veilRef} className="cf-veil" aria-hidden="true" />
       <div className="cf-grain" aria-hidden="true" />
       {doorOpen && archive?.doorActive() && <button type="button" className="door-skip lbl" onClick={(ev) => { ev.stopPropagation(); archive?.skipDoor() }}>Skip ›</button>}
@@ -361,9 +349,7 @@ export default function CasefileApp() {
           {file && <Suspense fallback={null}><FileView entry={file} key={file.id} /></Suspense>}
         </ArchiveContext.Provider>
       )}
-      {(gate || gateLeaving) && <Suspense fallback={null}>{landing && !readout
-        ? <Landing variant={landing} reduced={reduced} sceneReady={sceneReady || noGL} onTitle={() => setLoadScene(true)} onPick={onPick} onReveal={onReveal} originAt={originAt} onStrike={onStrike} onDone={onGateDone} />
-        : <Gate visitor={visitor} reduced={reduced} sceneReady={sceneReady || noGL} onTitle={() => setLoadScene(true)} onReveal={onReveal} originAt={originAt} onStrike={onStrike} onDone={onGateDone} />}</Suspense>}
+      {(gate || gateLeaving) && <Suspense fallback={null}><Gate visitor={visitor} reduced={reduced} sceneReady={sceneReady || noGL} onTitle={() => setLoadScene(true)} onReveal={onReveal} originAt={originAt} onStrike={onStrike} onDone={onGateDone} /></Suspense>}
       <noscript>{ENTRIES.map((e) => e.title).join(' · ')}</noscript>
     </div>
   )

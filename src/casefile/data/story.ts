@@ -54,10 +54,10 @@ export const KEY_NUMBERS: [string, string, string][] = [
 export const THESIS = { lead: 'I learned security from the network up.', rest: 'Now I test AI agents and assess risk at a Canadian credit union.' }
 
 /** Start here: the four files a first visit is pointed at, in this order (user 2026-10-05, plan D2).
- *  `line` is the proof a reader sees before opening the file. */
-export const SELECTED: { id: string; line: string }[] = [
-  { id: 'X-001', line: '60+ MCP servers tested · 14 detectors' },
-  { id: 'SR-01', line: '50+ risk assessments · 20+ vendor reviews' },
-  { id: 'SR-02', line: '~30% lower AWS spend · checks on every merge' },
-  { id: 'X-009', line: 'Top 3 in CMPT 783 · CVEs ranked by exploit risk' },
+ *  `tag` says what kind of work and when; `line` is the proof a reader sees before opening the file. */
+export const SELECTED: { id: string; tag: string; line: string }[] = [
+  { id: 'X-001', tag: 'Project · 2025', line: '60+ MCP servers tested · 14 detectors' },
+  { id: 'SR-01', tag: 'Co-op · 2026', line: '50+ risk assessments · 20+ vendor reviews' },
+  { id: 'SR-02', tag: 'Internship · 2025', line: '~30% lower AWS spend · checks on every merge' },
+  { id: 'X-009', tag: 'Project · 2026', line: 'Top 3 in CMPT 783 · CVEs ranked by exploit risk' },
 ]

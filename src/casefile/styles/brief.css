@@ -1,0 +1,52 @@
+/* Home (the brief): the sentence over the archive, four callouts drawn from their drives. No boxes:
+   a soft fog behind the type, hairline leaders, the drives' own light. */
+.hud > .brief { position: fixed; inset: 0; z-index: 10; pointer-events: none; transition: opacity var(--t-enter) var(--ease-in); }
+.brief.hide { opacity: 0; } .brief.hide * { pointer-events: none !important; }
+/* the archive dissolves into warm paper where the sentence sits */
+.brief::before { content: ""; position: absolute; left: 0; top: 0; width: 70vw; height: 62vh; pointer-events: none;
+  background: radial-gradient(ellipse 100% 100% at 0% 0%, color-mix(in srgb, var(--bg) 94%, transparent) 0%, color-mix(in srgb, var(--bg) 80%, transparent) 44%, transparent 76%); }
+
+.brief-leads { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.brief-leads path { fill: none; stroke: var(--ink2); stroke-width: 1; }
+.brief-leads rect { fill: var(--ink); }
+
+.brief-cos { list-style: none; margin: 0; padding: 0; }
+.brief-co { position: absolute; left: 0; top: 0; pointer-events: auto; display: grid; grid-template-columns: auto auto; justify-content: start; align-items: baseline; column-gap: 12px; row-gap: 5px; max-width: 262px; padding: 4px 0; text-align: left; }
+.brief-co::before { content: ""; position: absolute; inset: -26px -44px -24px -34px; z-index: -1; pointer-events: none;
+  background: radial-gradient(ellipse 60% 58% at 45% 50%, color-mix(in srgb, var(--bg) 74%, transparent) 0%, color-mix(in srgb, var(--bg) 44%, transparent) 55%, transparent 100%);
+  -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px);
+  -webkit-mask-image: radial-gradient(ellipse 62% 60% at 45% 50%, #000 45%, transparent 100%); mask-image: radial-gradient(ellipse 62% 60% at 45% 50%, #000 45%, transparent 100%); }
+.brief-co .n { font: 500 11px/1.3 var(--mono); letter-spacing: .1em; color: var(--acc-text); }
+.brief-co .t { grid-column: 1 / -1; font: 700 17px/1.2 var(--sans); letter-spacing: -.015em; color: var(--ink); }
+.brief-co .l { grid-column: 1 / -1; font: 400 12px/1.4 var(--mono); color: var(--ink2); }
+.brief-co:hover .t, .brief-co:focus-visible .t { text-decoration: underline; text-underline-offset: 4px; text-decoration-thickness: 1px; }
+
+.brief-say { position: absolute; left: var(--g); top: calc(var(--top) + 96px); max-width: min(690px, 47vw); pointer-events: auto; }
+.brief-thesis { margin: 0; font: 300 clamp(30px, 3.1vw, 50px)/1.1 var(--sans); letter-spacing: -.035em; color: var(--ink); }
+.brief-thesis b { display: block; font-weight: 680; margin-bottom: .14em; }
+.brief-act { position: absolute; right: var(--g); bottom: var(--bottom); display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 14px 32px; align-items: center; pointer-events: auto; }
+.brief-enter { padding: 13px 0; border-bottom: 1.5px solid var(--ink); font: 700 12px/1 var(--sans); letter-spacing: .12em; text-transform: uppercase; }
+.brief-inside { padding: 13px 0 11px; border-bottom: 1px solid var(--hair2); font: 600 12.5px/1 var(--sans); letter-spacing: .02em; color: var(--ink2); }
+.brief-enter span, .brief-inside span { display: inline-block; transition: transform .25s var(--ease-in); }
+.brief-enter:hover span, .brief-inside:hover span { transform: translateX(5px); }
+.brief-meta { margin: 26px 0 0; }
+
+/* the wave first, then the files: callouts wait for the entrance to settle */
+.brief-cos, .brief-leads { transition: opacity .6s var(--ease-in); }
+.cf--arriving .brief-cos, .cf--arriving .brief-leads { opacity: 0; }
+/* home replaces the browsing HUD; the name, Contact and Index stay, above the home's wash */
+.hud--brief > .hud-lock, .hud--brief > .hud-top, .hud--brief > .index { z-index: 12; }
+.hud--brief > .panel, .hud--brief > .leader, .hud--brief > .hud-sel, .hud--brief > .kind-key, .hud--brief > .hud-foot, .hud--brief > .hud-hint { opacity: 0 !important; pointer-events: none !important; }
+
+@media (max-width: 899px) {
+  .brief::before { width: 100vw; height: 46vh; background: linear-gradient(to bottom, color-mix(in srgb, var(--bg) 92%, transparent) 55%, transparent); }
+  .brief-say { top: calc(var(--top) + 48px); right: var(--g); max-width: none; }
+  .brief-thesis { font-size: clamp(24px, 6.6vw, 30px); }
+  .brief-act { left: var(--g); justify-content: flex-start; gap: 10px 22px; }
+  .brief-meta { display: none; }
+  /* on a phone the callouts are short tags on the drives; the proof lines live in each file */
+  .brief-co { max-width: 180px; min-height: 44px; row-gap: 2px; align-content: center; }
+  .brief-co .k, .brief-co .l { display: none; }
+  .brief-co .t { font-size: 13.5px; }
+  .brief-co::before { inset: -14px -22px -12px -16px; }
+}

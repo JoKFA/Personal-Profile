@@ -42,7 +42,8 @@ body.cf-body { margin: 0; background: var(--bg); color: var(--ink); font-family:
 .hud > * { position: absolute; pointer-events: auto; transition: opacity var(--t-enter) var(--ease-in), transform var(--t-enter) var(--ease-in); }
 .hud .hide { opacity: 0; pointer-events: none; transform: translateY(6px); }
 .cf--file .hud-lock, .cf--file .hud-top, .cf--file .hud-foot, .cf--file .kind-key { opacity: 0; pointer-events: none; }
-.hud-lock { left: var(--g); top: var(--top); line-height: 1; }
+.hud-lock { left: var(--g); top: var(--top); line-height: 1; text-align: left; }
+.hud-lock > span { display: block; }
 .hud-lock .a { font-weight: 800; font-size: clamp(20px, 2.15vw, 33px); }
 .hud-lock .b { font-weight: 700; font-size: clamp(9.5px, .82vw, 12.5px); letter-spacing: .12em; margin-top: 9px; }
 .hud-top { right: var(--g); top: var(--top); display: flex; gap: 26px; }

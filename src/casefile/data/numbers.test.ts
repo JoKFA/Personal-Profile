@@ -54,7 +54,7 @@ const shown = (): string[] => {
   for (const [d, o] of EDUCATION) t.push(d, o)
   for (const e of ENTRIES) for (const c of e.courses ?? []) t.push(c.code, c.title, c.out)
   // the subject file's story, key numbers and the film's six attacks
-  t.push(HEADLINE, THESIS.lead, THESIS.rest, ...SELECTED.map((s) => s.line))
+  t.push(HEADLINE, THESIS.lead, THESIS.rest, ...SELECTED.flatMap((s) => [s.tag, s.line]))
   for (const c of CHAPTERS) t.push(c.title, c.line, ...c.steps.map((s) => s.what))
   for (const p of PRINCIPLES) t.push(p.title, p.body)
   for (const [n, l, w] of KEY_NUMBERS) t.push(n, l, w)

@@ -9,6 +9,7 @@ import { KIND_NAME, type Entry } from '../data/types'
 import { wrap, LANES } from '../motion/grid'
 import { sealedId } from '../model/archive'
 import { inGroup, type KindGroup } from '../scene/archive'
+import { Brief } from './Brief'
 import { useCtx, useSnapshot } from './context'
 
 const pad = (n: number) => String(n).padStart(2, '0')
@@ -27,15 +28,20 @@ export function Hud({ statusLine, hidden, arriving }: { statusLine: { html: stri
   const e = s.entry, lane = wrap(s.sel.lane, LANES), drawer = DRAWERS[lane]
   const locked = archive.isLocked(e), dead = archive.isShredded(e)
   const hide = hidden || s.mode !== 'archive'
+  /** home: the brief replaces the browsing HUD */
+  const brief = s.brief && s.mode === 'archive'
 
   return (
-    <div className={`hud ${hidden ? '' : 'on'} ${s.mode !== 'archive' ? 'dim' : ''}`} aria-hidden={hidden}>
-      <div className="hud-lock"><div className="a">YAOTING WANG</div><div className="b">SECURITY ANALYST<span className="loc"> · VANCOUVER, BC</span></div></div>
+    <div className={`hud ${hidden ? '' : 'on'} ${s.mode !== 'archive' ? 'dim' : ''} ${brief ? 'hud--brief' : ''}`} aria-hidden={hidden}>
+      <button className="hud-lock" aria-label="Yaoting Wang, Security Analyst: home" onClick={() => { if (s.mode === 'archive') { setIndex(false); setContact(false); archive.setBrief(true) } }}>
+        <span className="a">YAOTING WANG</span><span className="b">SECURITY ANALYST<span className="loc"> · VANCOUVER, BC</span></span>
+      </button>
+      <Brief hidden={hidden || !brief || index || contact} />
       <div className="hud-top">
         <button className="hud-index-btn" aria-expanded={contact} onClick={() => { setContact((v) => !v); setIndex(false) }}><span>Contact</span></button>
         <button className="hud-index-btn" aria-expanded={index} onClick={() => { setIndex((v) => !v); setContact(false) }}><span aria-hidden="true">⌕</span><span>Index</span><kbd>/</kbd></button>
       </div>
-      {index && <IndexPanel onPick={(id) => { setIndex(false); archive.jumpTo(id) }} />}
+      {index && <IndexPanel onPick={(id) => { setIndex(false); archive.setBrief(false); archive.jumpTo(id) }} />}
       {contact && <ContactPanel />}
 
       <Leader entry={e} hidden={hide} />

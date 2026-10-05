@@ -11,6 +11,8 @@ export interface Ctx {
   reduced: boolean
   status: (html: string, ms?: number) => void
   open: () => void
+  /** from home: open the subject file, whose door leads inside the drive */
+  openProfile: () => void
   /** leave the file; `to` = the URL to go to next (a related file), default "/" */
   close: (opts?: { shred?: boolean; to?: string }) => void
   auditLog: [string, string][]
