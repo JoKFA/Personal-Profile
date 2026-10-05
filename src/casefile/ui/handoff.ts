@@ -1,42 +1,34 @@
-// The entry's hand-over (spec §26.10): the record on screen folds to a point of light, the page's
-// veil lifts off the archive, and the light falls into it where the wave starts.
+// The entry's way out (spec §29), after the PV's welcome (26.4–26.9 s): the page over-exposes,
+// softens and shrinks a little into a white field, the name staying; the archive appears in that
+// field, held at its first frame, and slides in as the white lifts.
 import gsap from 'gsap'
 
 export interface Handover {
-  /** the entry page: its `--veil` lifts off the archive */
+  /** the entry page: its `--veil` lifts off the archive, its `--wash` is the white field */
   root: HTMLElement
-  /** the record that folds into the light */
+  /** the record on the page */
   card: HTMLElement
-  /** the light (a fixed-position element) */
-  dot: HTMLElement
-  /** the name lockup, which leaves last */
+  /** the name lockup, which stays through the white and leaves last */
   lock: HTMLElement
-  /** everything else on the page, which fades first */
+  /** everything else on the page */
   fade: Element[]
-  originAt: () => { x: number; y: number } | null
   onReveal: () => void
   onStrike: () => void
   onDone: () => void
 }
 
-export function handover({ root, card, dot, lock, fade, originAt, onReveal, onStrike, onDone }: Handover) {
-  const c = card.getBoundingClientRect(), cx = c.left + c.width / 2, cy = c.top + c.height / 2
-  const fall = { k: 0 }
-  gsap.set(dot, { x: cx, y: cy })
+export function handover({ root, card, lock, fade, onReveal, onStrike, onDone }: Handover) {
+  const content = [card, ...fade]
   return gsap.timeline()
-    .to(fade, { autoAlpha: 0, duration: 0.25 }, 0)
-    .to([...card.children], { autoAlpha: 0, duration: 0.18 }, 0)
-    .to(card, { scaleY: 0.004, duration: 0.28, ease: 'power3.in' }, 0.08)
-    .to(card, { scaleX: 0.003, duration: 0.24, ease: 'power3.in' }, 0.32)
-    .set(dot, { autoAlpha: 1 }, 0.48).set(card, { autoAlpha: 0 }, 0.58)
+    .to(root, { '--wash': 1, duration: 0.5, ease: 'power2.in' }, 0)
+    // (an explicit start: from `none`, GSAP would start brightness at 0, a black flash)
+    .fromTo(content, { filter: 'blur(0px) brightness(1) saturate(1)', scale: 1 }, { filter: 'blur(8px) brightness(1.3) saturate(0.5)', scale: 0.965, duration: 0.5, ease: 'power2.in' }, 0)
+    .to(content, { autoAlpha: 0, duration: 0.16 }, 0.36)
+    // under the full white: the archive is there, held at its first frame; then it starts to slide
     .call(onReveal, undefined, 0.5)
-    .to(root, { '--veil': 0, duration: 0.5 }, 0.58)
-    .to(lock, { autoAlpha: 0, duration: 0.25 }, 0.8)
-    .to(fall, { k: 1, duration: 0.65, ease: 'power2.in', onUpdate: () => {
-      const o = originAt() ?? { x: innerWidth * 0.4, y: innerHeight * 0.45 }
-      gsap.set(dot, { x: cx + (o.x - cx) * Math.sin(fall.k * Math.PI / 2), y: cy + (o.y - cy) * fall.k * fall.k })
-    } }, 0.65)
-    .call(onStrike, undefined, 1.3)
-    .to(dot, { autoAlpha: 0, scale: 1.8, duration: 0.2 }, 1.3)
-    .call(onDone, undefined, 1.8)
+    .set(root, { '--veil': 0 }, 0.5)
+    .call(onStrike, undefined, 0.52)
+    .to(root, { '--wash': 0, duration: 0.5, ease: 'power1.out' }, 0.56)
+    .to(lock, { autoAlpha: 0, duration: 0.3 }, 0.95)
+    .call(onDone, undefined, 1.3)
 }

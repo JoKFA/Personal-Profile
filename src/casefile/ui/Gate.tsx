@@ -1,4 +1,4 @@
-// Browser readout → attack profile → sealed record → light entering the archive.
+// Browser readout → attack profile → sealed record → the white field the archive slides into.
 import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import gsap from 'gsap'
 import { ScrambleTextPlugin } from 'gsap/ScrambleTextPlugin'
@@ -13,10 +13,9 @@ function language(tag: string) {
 }
 interface Fact { label: string; before: string; value: string; aim: string }
 
-export function Gate({ visitor, reduced, sceneReady, onTitle, onReveal, originAt, onStrike, onDone }: {
+export function Gate({ visitor, reduced, sceneReady, onTitle, onReveal, onStrike, onDone }: {
   visitor: Visitor; reduced: boolean; sceneReady: boolean
   onTitle: () => void; onReveal: () => void
-  originAt: () => { x: number; y: number } | null
   onStrike: () => void; onDone: () => void
 }) {
   const root = useRef<HTMLDivElement>(null), skipBtn = useRef<HTMLButtonElement>(null)
@@ -115,7 +114,7 @@ export function Gate({ visitor, reduced, sceneReady, onTitle, onReveal, originAt
       if (!sceneReadyRef.current) { st.current.waiting = true; r.classList.add('waiting'); return }
       st.current.leaving = true; st.current.waiting = false; r.classList.remove('waiting'); r.dataset.phase = 'transfer'
       if (reduced) { onReveal(); onStrike(); onDone(); return }
-      out = handover({ root: r, card, dot: q('.gz-dot'), lock: q('.gz-lock'), fade: [q('.gz-say'), q('.gz-skip'), q('.gz-rail'), q('.gz-caption')], originAt, onReveal, onStrike, onDone })
+      out = handover({ root: r, card, lock: q('.gz-lock'), fade: [q('.gz-say'), q('.gz-skip'), q('.gz-rail'), q('.gz-caption')], onReveal, onStrike, onDone })
     }
     leaveRef.current = leave
     if (reduced) {
@@ -163,7 +162,6 @@ export function Gate({ visitor, reduced, sceneReady, onTitle, onReveal, originAt
         </div>
       </div>
       <p className="gz-caption" aria-hidden="true">What your browser reveals.<span>What an attacker could use.</span></p>
-      <i className="gz-dot" aria-hidden="true" />
       <button ref={skipBtn} className="gz-skip gate-skip" onClick={() => leaveRef.current()}><span className="t1">{reduced ? 'Continue ↵' : 'Skip ↵'}</span><span className="t2">Preparing the archive…</span></button>
     </div>
   )

@@ -18,9 +18,11 @@ body.cf-body { margin: 0; background: var(--bg); color: var(--ink); font-family:
 .hud > .search-readout { position: fixed; inset: 0; display: none; opacity: 0; pointer-events: none; transition: none; }
 .cf--arriving .search-readout { display: block; }
 .search-readout svg { position: absolute; width: 100%; height: 100%; }
-.search-readout path { fill: none; stroke: rgba(34, 33, 29, .42); stroke-width: .7; }
+.search-readout path { fill: none; stroke: rgba(34, 33, 29, .7); stroke-width: 1; }
+.search-readout path.lead { stroke: rgba(34, 33, 29, .45); stroke-width: .8; }
 .search-readout rect { fill: var(--ink); }
-.search-readout span { position: absolute; left: 0; top: 0; font: 650 10px/1 var(--sans); letter-spacing: .025em; text-transform: uppercase; color: var(--ink); }
+/* the PV's status type: one size up from the HUD's labels, bold, typed in */
+.search-readout span { position: absolute; left: 0; top: 0; font: 700 clamp(13px, 1.3vw, 20px)/1 var(--sans); letter-spacing: .01em; text-transform: uppercase; white-space: nowrap; color: var(--ink); }
 
 .cf-boot { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 20; white-space: nowrap; color: var(--ink2); animation: fadein .4s ease .2s both; }
 .cf-boot::after { content: ""; display: inline-block; width: 6px; height: 10px; margin-left: 8px; vertical-align: -1px; background: var(--label); animation: blink 1s steps(1) infinite; }
@@ -42,7 +44,8 @@ body.cf-body { margin: 0; background: var(--bg); color: var(--ink); font-family:
 .hud > * { position: absolute; pointer-events: auto; transition: opacity var(--t-enter) var(--ease-in), transform var(--t-enter) var(--ease-in); }
 .hud .hide { opacity: 0; pointer-events: none; transform: translateY(6px); }
 .cf--file .hud-lock, .cf--file .hud-top, .cf--file .hud-foot, .cf--file .kind-key { opacity: 0; pointer-events: none; }
-.hud-lock { left: var(--g); top: var(--top); line-height: 1; text-align: left; }
+/* (a button: `.cf button` would reset its line height; the lockup must sit exactly where the entry's does) */
+.cf .hud-lock { left: var(--g); top: var(--top); line-height: 1; text-align: left; }
 .hud-lock > span { display: block; }
 .hud-lock .a { font-weight: 800; font-size: clamp(20px, 2.15vw, 33px); }
 .hud-lock .b { font-weight: 700; font-size: clamp(9.5px, .82vw, 12.5px); letter-spacing: .12em; margin-top: 9px; }

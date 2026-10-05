@@ -1,7 +1,9 @@
 /* Optical readout: registered typography, a thin plate and its measuring line. */
-.gate.gz { display: block; background: transparent; --veil: 1; }
+.gate.gz { display: block; background: transparent; --veil: 1; --wash: 0; }
 .gate.gz::before { content: ""; position: absolute; inset: 0; background: var(--bg); opacity: var(--veil); }
-.gz-lock { position: absolute; left: var(--g); top: var(--top); line-height: 1; color: var(--ink); visibility: hidden; opacity: 0; }
+/* the way out (after the PV's welcome): the page over-exposes into a white field the archive slides into */
+.gate.gz::after { content: ""; position: absolute; inset: 0; z-index: 4; pointer-events: none; background: #fbfaf7; opacity: var(--wash); }
+.gz-lock { position: absolute; z-index: 5; left: var(--g); top: var(--top); line-height: 1; color: var(--ink); visibility: hidden; opacity: 0; }
 .gz-lock .a { font-weight: 800; font-size: clamp(20px, 2.15vw, 33px); }
 .gz-lock .b { font-weight: 700; font-size: clamp(9.5px, .82vw, 12.5px); letter-spacing: .12em; margin-top: 9px; }
 
@@ -51,8 +53,6 @@
   background: linear-gradient(to bottom, transparent calc(100% - 1px), rgba(255, 254, 244, .98) calc(100% - 1px)); }
 .gz-caption { position: absolute; left: var(--g); bottom: calc(var(--bottom) + 7px); margin: 0; font: 400 12px/1.6 var(--sans); color: var(--label); }
 .gz-caption span { display: block; }
-.gz-dot { position: fixed; left: 0; top: 0; z-index: 6; pointer-events: none; visibility: hidden; opacity: 0; width: 5px; height: 5px; margin: -2.5px; border-radius: 50%; background: #fffdf4;
-  box-shadow: 0 0 8px 2px rgba(255, 242, 210, .9), 0 0 25px 5px rgba(237, 213, 165, .4); }
 .gz .gz-skip { right: var(--g); bottom: var(--bottom); min-height: 44px; padding: 10px 0 10px 16px; font: 500 12px/1 var(--sans); letter-spacing: .035em; text-transform: none; color: var(--ink2); }
 .gz-skip .t2 { display: none; } .gate.waiting .gz-skip .t1 { display: none; } .gate.waiting .gz-skip .t2 { display: inline; }
 

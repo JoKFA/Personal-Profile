@@ -11,7 +11,9 @@ test('webkit: the archive renders, a file opens and closes, no errors', async ({
   await page.goto('/?intro')
   await page.getByRole('button', { name: /Skip|Continue/ }).click({ timeout: 10_000 })
   await page.waitForFunction(() => (window as unknown as Win).__cf?.getSnapshot().mode === 'archive', null, { timeout: 90_000 })
-  // a first visit lands on home (the selected files); step into the archive
+  // a first visit opens the subject file by itself; closing it lands on home; step into the archive
+  await page.waitForFunction(() => (window as unknown as Win).__cf.getSnapshot().mode === 'file', null, { timeout: 60_000 })
+  await page.keyboard.press('Escape')
   await page.waitForFunction(() => (window as unknown as Win).__cf.getSnapshot().brief, null, { timeout: 30_000 })
   await page.getByRole('button', { name: /Enter the archive/ }).click()
   await page.waitForFunction(() => (window as unknown as Win).__cf.getSnapshot().readable > 10, null, { timeout: 20_000 })

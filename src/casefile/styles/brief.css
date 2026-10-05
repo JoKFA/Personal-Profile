@@ -31,9 +31,10 @@
 .brief-enter:hover span, .brief-inside:hover span { transform: translateX(5px); }
 .brief-meta { margin: 26px 0 0; }
 
-/* the wave first, then the files: callouts wait for the entrance to settle */
-.brief-cos, .brief-leads { transition: opacity .6s var(--ease-in); }
-.cf--arriving .brief-cos, .cf--arriving .brief-leads { opacity: 0; }
+/* the entrance first, then home: while the archive slides in and the swell runs, the frame holds
+   only the status line (after the PV); home's sentence and callouts follow once it has settled */
+.cf--arriving .hud > .brief { opacity: 0; transition: none; }
+.cf--arriving .brief * { pointer-events: none !important; }
 /* home replaces the browsing HUD; the name, Contact and Index stay, above the home's wash */
 .hud--brief > .hud-lock, .hud--brief > .hud-top, .hud--brief > .index { z-index: 12; }
 .hud--brief > .panel, .hud--brief > .leader, .hud--brief > .hud-sel, .hud--brief > .kind-key, .hud--brief > .hud-foot, .hud--brief > .hud-hint { opacity: 0 !important; pointer-events: none !important; }

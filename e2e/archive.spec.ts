@@ -18,6 +18,12 @@ async function enter(page: Page, path = '/?intro') {
   await page.waitForSelector('.cf-scene.on', { timeout: 30_000 }).catch(() => { /* no WebGL: the index page */ })
   // the entrance: the camera whips in and the callouts follow once it has settled
   await page.waitForFunction(() => !document.querySelector('.cf--arriving'), null, { timeout: 15_000 })
+  // a first visit opens the subject file by itself; closing it lands on home
+  await page.waitForTimeout(700)
+  if (['opening', 'file'].includes(await page.evaluate(() => (window as unknown as Win).__cf.getSnapshot().mode))) {
+    await page.waitForFunction(() => (window as unknown as Win).__cf.getSnapshot().mode === 'file', null, { timeout: 30_000 })
+    await closeFile(page)
+  }
   // home (the brief) opens on the selected files: step into the archive the way a reader does
   if (await page.evaluate(() => (window as unknown as Win).__cf?.getSnapshot().brief)) {
     await page.getByRole('button', { name: /Enter the archive/ }).click()
@@ -290,11 +296,13 @@ test('entry: your facts land in an attack profile, which is sealed and falls int
   }
   await page.waitForTimeout(300)
   await page.screenshot({ path: `.codex-runtime/design/entrance/art-directed/${info.project.name}-sealed.png` })
-  // then into the archive: the wave settles on home, the four selected files lit and called out
-  await page.waitForFunction(() => { const s = (window as unknown as Win).__cf?.getSnapshot(); return s?.mode === 'archive' && s.brief }, null, { timeout: 30_000 })
-  expect(await page.evaluate(() => (window as unknown as Win).__cf.getSnapshot().entry?.id)).toBe('X-001')
-  await expect(page.locator('.brief-co')).toHaveCount(4)
+  // then into the archive: the swell settles on the subject file, which opens by itself (spec §29);
+  // closing it lands on home, the four selected files lit and called out
+  await page.waitForFunction(() => (window as unknown as Win).__cf?.getSnapshot().mode === 'file' && !!document.querySelector('.file--subject'), null, { timeout: 40_000 })
   await expect(page.locator('.gate')).toHaveCount(0)
+  await closeFile(page)
+  await page.waitForFunction(() => (window as unknown as Win).__cf.getSnapshot().brief, null, { timeout: 5000 })
+  await expect(page.locator('.brief-co')).toHaveCount(4)
   expect(errors).toEqual([])
 })
 
@@ -303,9 +311,9 @@ test('entry: skipping during a value flight leaves no moving text or gate behind
   await page.goto('/?intro')
   await page.locator('.gz-flight').first().waitFor({ state: 'attached', timeout: 5000 })
   await page.keyboard.press('Escape')
-  await page.waitForFunction(() => { const s = (window as unknown as Win).__cf?.getSnapshot(); return s?.mode === 'archive' && s.brief }, null, { timeout: 30_000 })
+  await page.waitForFunction(() => { const s = (window as unknown as Win).__cf?.getSnapshot(); return s?.mode === 'archive' || s?.mode === 'opening' || s?.mode === 'file' }, null, { timeout: 30_000 })
   await expect(page.locator('.gz-flight, .gate')).toHaveCount(0)
-  expect(await page.evaluate(() => (window as unknown as Win).__cf.getSnapshot().entry?.id)).toBe('X-001')
+  expect(await page.evaluate(() => (window as unknown as Win).__cf.getSnapshot().entry?.id)).toBe('YW-000')
   expect(errors).toEqual([])
 })
 

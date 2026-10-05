@@ -7,6 +7,7 @@ import { DRAWERS } from '../data/roles'
 import { entryById } from '../data/entries'
 import { KIND_NAME, type Entry } from '../data/types'
 import { wrap, LANES } from '../motion/grid'
+import { ENTRANCE } from '../motion/waves'
 import { sealedId } from '../model/archive'
 import { inGroup, type KindGroup } from '../scene/archive'
 import { Brief } from './Brief'
@@ -148,7 +149,9 @@ function KindKey({ hidden }: { hidden: boolean }) {
   )
 }
 
-// A temporary readout follows the entrance's selection, then yields to the file panel.
+// The entrance's status line (after the PV, 26.9–31.6 s): typed in the middle of the frame between
+// four registration marks, a hairline running from it to the edge; it reads "Selecting files…" while
+// the swell searches and the file's number once it has settled on it, with a leader to the drive.
 function SearchReadout({ hidden }: { hidden: boolean }) {
   const { archive, reduced } = useCtx()
   const root = useRef<HTMLDivElement>(null)
@@ -161,24 +164,28 @@ function SearchReadout({ hidden }: { hidden: boolean }) {
       if (!r) return
       if (archive.entranceDone()) { r.style.opacity = '0'; return }
       const W = innerWidth, H = innerHeight, phone = W < 900
-      const x = phone ? W * 0.43 : W * 0.57, y = phone ? H * 0.49 : H * 0.53
-      const path = r.querySelector('path'), mark = r.querySelector('rect'), text = r.querySelector<HTMLElement>('span')
-      const target = archive.anchor(), found = age >= 2.65
-      const ax = found && target ? Math.max(16, Math.min(x - 16, target.x)) : x - 24
-      const ay = found && target ? Math.max(H * 0.22, Math.min(H * 0.7, target.y)) : y + 18
-      path?.setAttribute('d', 'M' + ax + ',' + ay + ' L' + (x - 12) + ',' + (y + 18) + ' H' + (W - Math.max(24, W * 0.033)))
-      mark?.setAttribute('x', String(ax - 1.5)); mark?.setAttribute('y', String(ay - 1.5))
+      const x = phone ? W * 0.3 : W * 0.5, y = phone ? H * 0.5 : H * 0.47
+      const text = r.querySelector<HTMLElement>('span'), lines = r.querySelectorAll('path'), marks = r.querySelectorAll('rect')
+      const found = age >= ENTRANCE.found, target = archive.anchor()
       if (text) {
-        text.style.transform = 'translate(' + x + 'px,' + y + 'px)'
-        const value = found ? 'File ' + (archive.selected?.id ?? '') : 'Selecting files…'
-        text.textContent = value.slice(0, Math.max(0, Math.floor((found ? age - 2.65 : age - 0.25) * 24)))
+        text.style.transform = 'translate(' + x + 'px,' + (y - text.offsetHeight / 2) + 'px)'
+        const value = found ? 'File ' + (archive.selected?.id ?? '') + (archive.selected ? ' · ' + archive.selected.title : '') : 'Selecting files…'
+        text.textContent = value.slice(0, Math.max(0, Math.floor((found ? age - ENTRANCE.found : age - 0.1) * 26)))
       }
-      r.style.opacity = String(Math.min(1, Math.max(0, (age - 0.3) * 3)))
+      // the marks register a band across the frame; the hairline leaves from under the text
+      const m = phone ? 14 : 28, bandW = phone ? W * 0.62 : W * 0.19, top = y - (phone ? 20 : 30), bottom = y + (phone ? 20 : 30)
+      const pts = [[x - m, top], [x - m, bottom], [x + bandW, top], [x + bandW, bottom]]
+      marks.forEach((mk, i) => { const p = pts[i]; if (!p) return; mk.setAttribute('x', String(p[0] - 2.5)); mk.setAttribute('y', String(p[1] - 2.5)) })
+      lines[0]?.setAttribute('d', 'M' + (x + (phone ? 40 : 110)) + ',' + (bottom + 4) + ' H' + W)
+      // once found, a leader from the file's drive to the line
+      const leader = found && target ? 'M' + target.x + ',' + target.y + ' L' + (x - m) + ',' + bottom : ''
+      lines[1]?.setAttribute('d', leader)
+      r.style.opacity = String(Math.min(1, Math.max(0, age * 4)))
     }
     raf = requestAnimationFrame(draw)
     return () => cancelAnimationFrame(raf)
   }, [archive, hidden, reduced])
-  return reduced ? null : <div className="search-readout" ref={root} aria-hidden="true"><svg><path /><rect width="3" height="3" /></svg><span /></div>
+  return reduced ? null : <div className="search-readout" ref={root} aria-hidden="true"><svg><path /><path className="lead" /><rect width="5" height="5" /><rect width="5" height="5" /><rect width="5" height="5" /><rect width="5" height="5" /></svg><span /></div>
 }
 
 // hairline from the selected drive to the panel; redraws on every selection
