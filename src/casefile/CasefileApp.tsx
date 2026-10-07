@@ -67,8 +67,6 @@ export default function CasefileApp() {
   const busy = useRef(false)
   const pendingSlug = useRef(slugFromPath(location.pathname))
   const firstVisit = useRef(gate)
-  /** a first visit: the entrance finds the subject file and opens it; closing it opens home */
-  const autoOpen = useRef(false), homeAfter = useRef(false)
   /** Esc pressed while a file is still opening: honoured the moment it is open (slow devices) */
   const escQueued = useRef(false)
 
@@ -194,8 +192,6 @@ export default function CasefileApp() {
       runtimeRef.current?.stop(); runtimeRef.current = null; archive.interior = null; setCut(null)
       // leaving the briefing early still issues read access (nobody is left in a sealed archive)
       archive.grant()
-      // a first visit's subject file closes onto home
-      if (homeAfter.current && e.id === 'YW-000') { homeAfter.current = false; archive.setBrief(true) }
       status(shred ? `<b>${e.id}</b> <span class="x">crypto-shredded · key zeroized</span> · restore anytime` : `<b>${e.id}</b> re-encrypted · session key revoked`)
     } finally { busy.current = false; setSettled((n) => n + 1) }
   }, [archive, audit, file, status])
@@ -246,12 +242,11 @@ export default function CasefileApp() {
     try { localStorage.setItem('yw.entry', '1') } catch { /* private mode */ }
     if (!archive) return
     const target = entryBySlug.get(pendingSlug.current ?? '')
-    // the entrance's swell settles on the subject file (spec §29). A first visit without a deep link:
-    // the archive stays sealed while it plays, read access is issued as it settles, and the subject
-    // file opens; home (the brief) follows when it closes. A return visit lands on home.
+    // the entrance's swell settles on the subject file (spec §29), then the visitor is on home. A first
+    // visit without a deep link keeps the archive sealed while the swell plays; read access is issued
+    // (and home shown) as it settles. A return visit is granted at once and lands on home the same way.
     const first = firstVisit.current && !target
     archive.enter(target?.id ?? 'YW-000', first)
-    autoOpen.current = homeAfter.current = first
     if (!target && !first) archive.setBrief(true)
     pendingSlug.current = null
   }, [archive])
@@ -311,24 +306,19 @@ export default function CasefileApp() {
   }, [mode, close])
 
   // the HUD waits until the wave has settled; then a first visit's read access is issued (a light
-  // front runs out from the file as the labels decrypt). A first visit's subject file then opens by
-  // itself, straight from the entrance: its status line stays until the drive starts to rise, so the
-  // browsing panel never flashes up between the two (openEntry ends the arrival)
+  // front runs out from the file as the labels decrypt) and home appears, as it does on a return visit
   useEffect(() => {
     if (gate || !sceneReady || !arriving || !archive) return
     const h = setInterval(() => {
       if (!archive.entranceDone()) return
       clearInterval(h)
-      if (!archive.isGranted) { archive.grant(); audit(`access request ${visitor.id} · read only · granted`) }
-      if (!autoOpen.current) { setArriving(false); return }
-      autoOpen.current = false
-      const subject = entryById.get('YW-000')!
-      archive.jumpTo(subject.id); archive.decrypt(subject.id)
-      // (if it cannot open, the archive still arrives)
-      setTimeout(() => void openEntry(subject).finally(() => setArriving(false)), reduced ? 0 : 250)
+      const issued = !archive.isGranted
+      if (issued) { archive.grant(); audit(`access request ${visitor.id} · read only · granted`) }
+      setArriving(false)
+      if (issued) archive.setBrief(true)
     }, 100)
     return () => clearInterval(h)
-  }, [gate, sceneReady, arriving, archive, audit, visitor.id, openEntry, reduced])
+  }, [gate, sceneReady, arriving, archive, audit, visitor.id])
   // the home's way into the subject file: its drive opens, and the door takes the camera inside
   const openProfile = useCallback(() => {
     if (!archive || archive.getSnapshot().mode !== 'archive') return

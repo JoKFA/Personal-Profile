@@ -12,18 +12,12 @@ function watchErrors(page: Page) {
 async function enter(page: Page, path = '/?intro') {
   await page.goto(path)
   await page.getByRole('button', { name: /Skip|Continue/ }).click({ timeout: 15_000 })
-  // (a first visit may already be opening the subject file by itself; that is handled below)
   await page.waitForFunction(() => ['archive', 'opening', 'file'].includes((window as unknown as Win).__cf?.getSnapshot().mode), null, { timeout: 30_000 })
   // the HUD and the scene appear together once the first frame is on screen
   await page.waitForSelector('.cf-scene.on', { timeout: 30_000 }).catch(() => { /* no WebGL: the index page */ })
   // the entrance: the camera whips in and the callouts follow once it has settled
   await page.waitForFunction(() => !document.querySelector('.cf--arriving'), null, { timeout: 15_000 })
-  // a first visit opens the subject file by itself; closing it lands on home
   await page.waitForTimeout(700)
-  if (['opening', 'file'].includes(await page.evaluate(() => (window as unknown as Win).__cf.getSnapshot().mode))) {
-    await page.waitForFunction(() => (window as unknown as Win).__cf.getSnapshot().mode === 'file', null, { timeout: 30_000 })
-    await closeFile(page)
-  }
   // home (the brief) opens on the selected files: step into the archive the way a reader does
   if (await page.evaluate(() => (window as unknown as Win).__cf?.getSnapshot().brief)) {
     await page.getByRole('button', { name: /Enter the archive/ }).click()
@@ -290,12 +284,12 @@ test('entry: your browser is read as a fingerprint, profiled, sealed, and the ar
   await expect(page.locator('.fp-cap3')).toBeVisible({ timeout: 4000 })
   await expect.poll(() => page.locator('.fp-hash code').textContent(), { timeout: 4000 }).toMatch(/^[0-9a-f]{8}( [0-9a-f]{8}){3}\n[0-9a-f]{8}( [0-9a-f]{8}){3}$/)
   await page.screenshot({ path: `.codex-runtime/design/entrance/fingerprint/${info.project.name}-sealed.png` })
-  // then into the archive: the swell settles on the subject file, which opens by itself (spec §29)
-  await page.waitForFunction(() => (window as unknown as Win).__cf?.getSnapshot().mode === 'file' && !!document.querySelector('.file--subject'), null, { timeout: 40_000 })
+  // then into the archive: the swell settles on the subject file and the visitor lands on home (spec §29)
+  await page.waitForFunction(() => (window as unknown as Win).__cf?.getSnapshot().brief, null, { timeout: 40_000 })
   await expect(page.locator('.gate')).toHaveCount(0)
-  await closeFile(page)
-  await page.waitForFunction(() => (window as unknown as Win).__cf.getSnapshot().brief, null, { timeout: 5000 })
+  await expect(page.locator('.brief-thesis')).toBeVisible()
   await expect(page.locator('.brief-co')).toHaveCount(4)
+  expect(await page.locator('.file--subject').count()).toBe(0)
   expect(errors).toEqual([])
 })
 

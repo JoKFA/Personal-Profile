@@ -6,7 +6,7 @@
 1. **指纹入场**（spec §30，`ui/Gate.tsx` + `ui/fingerprint/print.ts`）：读取 → 画像 → 封存（SHA-256），约 6.6 s。
 2. **退场**：过曝退进白场，名字留着（`ui/handoff.ts`）。
 3. **3D 入场**（spec §29，`motion/waves.ts` `entranceWave/entranceCamera/entranceSlide`，`scene/archive.ts`）：档案馆侧面滑入、镜头 0.2 s 上甩、斜向浪 + 回波、收成坡，坡顶是 YW-000；状态行 "Selecting files…" → "File YW-000 · Yaoting Wang"（`Hud.tsx` `SearchReadout`）。按 PV 26–34 s 逐帧对过。
-4. **主档案自动打开**（门 → 硬盘内景），关掉后是**首页**（四个精选亮起 + 论点句，`ui/Brief.tsx`）。回访：同样的 3D 入场，直接落首页。
+4. **首页**：首访与回访都落在首页（四个精选亮起 + 论点句，`ui/Brief.tsx`），不再自动打开主档案（2026-10-06 用户决定）。内景（门 → 硬盘内景）从首页的 “Inside my drive” 进入。
 
 ## 2. 本轮已完成（计划 `docs/curation-plan.md` 与审阅报告的对应项）
 - S0 决策、S1 评审回路（`scripts/shots.mjs`、`docs/review-rubric.md`、`docs/review-log.md`）。
@@ -18,7 +18,7 @@
 - 工具：`scripts/film.mjs`（假时钟逐帧录 25 fps + 每秒对照表 + mp4，软件渲染也准）、`scripts/still.mjs`（真实画质静帧，很慢）。
 
 ## 3. 还没做（按建议顺序）
-1. **本地验证**：`npm run test:e2e`（Windows + d3d11）。入场相关测试已改成新流程（指纹、主档案自动打开、关掉后首页、shred 在 V-FILE），但都没跑过，预计要修时间/选择器。真机看：指纹入场、白场退场、3D 入场的拖影与景深、象牙白静止画面、60 fps。
+1. **本地验证**：`npm run test:e2e`（Windows + d3d11）。入场相关测试已改成新流程（指纹、首访直接落首页、shred 在 V-FILE），但都没跑过，预计要修时间/选择器。真机看：指纹入场、白场退场、3D 入场的拖影与景深、象牙白静止画面、60 fps。
 2. **清理**：`styles/gate.css` 里旧入场卡片（`.gz-card/.gz-f/.gz-aim/.gz-say/.gz-rail/.gz-stage…`）已无人使用，可删（保留 `.gate.gz` 的 veil/wash、`.gz-lock`、`.gz-skip`）。
 3. **S6 抽屉 = 职业时间线**：Profile → IT & Network → Security Operations → Cloud & DevSecOps → AI Security → GRC & Risk；改 `data/roles.ts` 的 `DRAWERS` 与各条目 `slot.lane`，`data.test.ts` 校验；e2e 里按抽屉序号断言的地方要跟着改；单独提交。
 4. **S6 YW-000 记号**：两个原型（盘面蚀刻 YW 印记 / 不同材质），让用户选。
