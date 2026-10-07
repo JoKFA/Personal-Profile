@@ -234,7 +234,7 @@ export default function CasefileApp() {
   // the entry hands over (spec §29): the archive appears under the white field, held at its first
   // frame, and slides in as the white lifts
   const onReveal = useCallback(() => { archiveRef.current?.holdEntrance(); setGateLeaving(true); onEnteredRef.current() }, [])
-  const onStrike = useCallback(() => archiveRef.current?.releaseEntrance(), [])
+  const onStrike = useCallback((skipped: boolean) => archiveRef.current?.releaseEntrance(skipped), [])
   const onGateDone = useCallback(() => setGateLeaving(false), [])
   // entry finished → archive
   const onEntered = useCallback(() => {

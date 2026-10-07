@@ -10,7 +10,7 @@ import { isPlain, land, rekey, sealAll, slotIndex, type ShownMap } from '../mode
 import { Ueba, type Alert } from '../model/ueba'
 import { COLUMN_SPACING as CS, LANES, ROW_SPACING as RS, ROWS, cellKey, nearest, nearestCell, sameCell, wrap, type Cell } from '../motion/grid'
 import { approach, damp, LIFT, RATES, REDUCED_FACTOR, spring, type Spring } from '../motion/spring'
-import { ENTRANCE, ENTRANCE_END, entranceCamera, entranceSlide, field, PULSE_LIFE, settlingWave, slope, smooth, TILT, type FieldState, type Pulse } from '../motion/waves'
+import { ENTRANCE, ENTRANCE_END, SKIP_ENTRANCE, entranceCamera, entranceSlide, field, PULSE_LIFE, settlingWave, slope, smooth, TILT, type FieldState, type Pulse } from '../motion/waves'
 import { BOARD_Z, CARD, LED } from './drive'
 import { DIE_ON_FACE, DOOR, doorAt, doorDistance, doorSpan } from './door'
 import { createHero, type Hero } from './hero'
@@ -337,7 +337,8 @@ export class Archive {
   private entranceHeld = false
   /** Freeze the entrance at its first frame (the archive is seen, still, before the wave). */
   holdEntrance() { this.entranceHeld = true; this.enteredAt = this.t - 0.001 }
-  releaseEntrance() { if (!this.entranceHeld) return; this.entranceHeld = false; this.enteredAt = this.t - 0.001 }
+  /** `skipped`: the visitor skipped the entry, so the entrance plays only its last stretch (camera settling, the selection lighting). */
+  releaseEntrance(skipped = false) { if (!this.entranceHeld) return; this.entranceHeld = false; this.enteredAt = this.t - (skipped ? ENTRANCE_END - SKIP_ENTRANCE : 0.001) }
   /** seconds into the entrance (Infinity when not entering, or long after it) */
   private get entryAge() { const a = this.t - this.enteredAt; return this.reduced || a < 0 || a > ENTRANCE_END + 4 ? Infinity : a }
   /** Seconds since the entrance started; Infinity when there is none (reduced motion, or long done). */

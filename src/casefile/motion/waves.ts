@@ -61,6 +61,8 @@ export const ENTRANCE = {
   settle: 2.33, settleFor: 2.25,
 } as const
 export const ENTRANCE_END = ENTRANCE.settle + ENTRANCE.settleFor
+/** a skipped entry plays only the entrance's last stretch: the camera settling, the selection lighting */
+export const SKIP_ENTRANCE = 1.5
 /** reference time of the PV reconstruction at age 0 (its wave starts at 22, its slide at 21.92) */
 const SHOT0 = 22
 /** z offset of the whole archive while it slides in */

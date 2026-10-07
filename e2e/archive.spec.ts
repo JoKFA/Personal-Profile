@@ -287,6 +287,7 @@ test('entry: your browser is read as a fingerprint, profiled, sealed, and the ar
   // then into the archive: the swell settles on the subject file and the visitor lands on home (spec §29)
   await page.waitForFunction(() => (window as unknown as Win).__cf?.getSnapshot().brief, null, { timeout: 40_000 })
   await expect(page.locator('.gate')).toHaveCount(0)
+  await page.waitForSelector('.brief:not(.hide)', { timeout: 10_000 })
   await expect(page.locator('.brief-thesis')).toBeVisible()
   await expect(page.locator('.brief-co')).toHaveCount(4)
   expect(await page.locator('.file--subject').count()).toBe(0)
@@ -301,6 +302,11 @@ test('entry: skipping lands on the sealed print and leaves no gate behind', asyn
   await page.waitForFunction(() => { const s = (window as unknown as Win).__cf?.getSnapshot(); return s?.mode === 'archive' || s?.mode === 'opening' || s?.mode === 'file' }, null, { timeout: 30_000 })
   await expect(page.locator('.gate')).toHaveCount(0)
   expect(await page.evaluate(() => (window as unknown as Win).__cf.getSnapshot().entry?.id)).toBe('YW-000')
+  // a skip goes straight to home: the entrance plays only its last stretch, so home follows the strike within seconds
+  const settledAt = Date.now()
+  await page.waitForFunction(() => !!document.querySelector('.brief:not(.hide)') && !document.querySelector('.cf--arriving'), null, { timeout: 10_000 })
+  await expect(page.locator('.brief-co')).toHaveCount(4)
+  expect(Date.now() - settledAt, 'home follows the skip within seconds').toBeLessThan(5000)
   expect(errors).toEqual([])
 })
 

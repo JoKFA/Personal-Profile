@@ -54,10 +54,11 @@ function layout(): Layout {
 export function Gate({ visitor, reduced, sceneReady, onTitle, onReveal, onStrike, onDone }: {
   visitor: Visitor; reduced: boolean; sceneReady: boolean
   onTitle: () => void; onReveal: () => void
-  onStrike: () => void; onDone: () => void
+  /** `skipped`: the visitor left the entry before it had finished */
+  onStrike: (skipped: boolean) => void; onDone: () => void
 }) {
   const root = useRef<HTMLDivElement>(null), skipBtn = useRef<HTMLButtonElement>(null)
-  const st = useRef({ leaving: false, waiting: false })
+  const st = useRef<{ leaving: boolean; waiting: boolean; skipped?: boolean }>({ leaving: false, waiting: false })
   const leaveRef = useRef<() => void>(() => {})
   const sceneReadyRef = useRef(sceneReady)
   useEffect(() => { sceneReadyRef.current = sceneReady; if (sceneReady && st.current.waiting) leaveRef.current() }, [sceneReady])
@@ -308,12 +309,14 @@ export function Gate({ visitor, reduced, sceneReady, onTitle, onReveal, onStrike
     const leave = () => {
       if (st.current.leaving) return
       // a skip lands on the sealed grid (the point of the page), then leaves from there
+      st.current.skipped ??= t < T.end - 0.05
       t = T.end; done = true
       if (!titled) { titled = true; onTitle() }
       if (!sceneReadyRef.current) { st.current.waiting = true; r.classList.add('waiting'); return }
       st.current.leaving = true; st.current.waiting = false; r.classList.remove('waiting'); r.dataset.phase = 'transfer'
-      if (reduced) { onReveal(); onStrike(); onDone(); return }
-      out = handover({ root: r, card: cv, lock: q('.gz-lock'), fade: [q('.fp-labels'), q('.fp-say'), q('.fp-phase'), q('.gz-skip')], onReveal, onStrike, onDone })
+      if (reduced) { onReveal(); onStrike(false); onDone(); return }
+      const skipped = !!st.current.skipped
+      out = handover({ root: r, card: cv, lock: q('.gz-lock'), fade: [q('.fp-labels'), q('.fp-say'), q('.fp-phase'), q('.gz-skip')], onReveal, onStrike: () => onStrike(skipped), onDone })
     }
     leaveRef.current = leave
     const onKey = (e: KeyboardEvent) => {

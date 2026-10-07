@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { columnStrength, ENTRANCE, ENTRANCE_END, entranceCamera, entranceSlide, field, idleWave, PULSE_LIFE, selectionWave, settlingWave, smooth, type FieldState } from './waves'
+import { columnStrength, ENTRANCE, ENTRANCE_END, SKIP_ENTRANCE, entranceCamera, entranceSlide, field, idleWave, PULSE_LIFE, selectionWave, settlingWave, smooth, type FieldState } from './waves'
 import { damp, spring } from './spring'
 import { nearest, nearestCell, wrap } from './grid'
 
@@ -123,6 +123,14 @@ describe('entrance: the swell becomes the resting archive', () => {
     expect(Math.abs(entranceSlide(2))).toBe(0)
     const v = (a: number) => entranceSlide(a + 0.01) - entranceSlide(a)
     expect(v(0.1)).toBeGreaterThan(v(0.5))
+  })
+  it('a skipped entry plays only the last stretch: the archive is already in place and the camera still has to settle', () => {
+    const from = ENTRANCE_END - SKIP_ENTRANCE
+    expect(SKIP_ENTRANCE).toBeGreaterThan(0)
+    expect(from).toBeGreaterThan(ENTRANCE.slide)
+    expect(Math.abs(entranceSlide(from))).toBe(0)
+    expect(entranceCamera(from).settle).toBeLessThan(1)
+    expect(entranceCamera(from).settle).toBeGreaterThan(0)
   })
   it("ends the camera on the archive's own view", () => {
     const c = entranceCamera(ENTRANCE_END)
