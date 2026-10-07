@@ -18,13 +18,21 @@
 - 工具：`scripts/film.mjs`（假时钟逐帧录 25 fps + 每秒对照表 + mp4，软件渲染也准）、`scripts/still.mjs`（真实画质静帧，很慢）。
 
 ## 3. 还没做（按建议顺序）
-1. **本地验证**：`npm run test:e2e`（Windows + d3d11）。入场相关测试已改成新流程（指纹、首访直接落首页、shred 在 V-FILE），但都没跑过，预计要修时间/选择器。真机看：指纹入场、白场退场、3D 入场的拖影与景深、象牙白静止画面、60 fps。
-2. **清理**：`styles/gate.css` 里旧入场卡片（`.gz-card/.gz-f/.gz-aim/.gz-say/.gz-rail/.gz-stage…`）已无人使用，可删（保留 `.gate.gz` 的 veil/wash、`.gz-lock`、`.gz-skip`）。
+0. **P0/P1 已做完（2026-10-06，`release/p1`，见 `docs/direction/brief-p0-p1.md`）**：本地验证（全量 E2E 通过）、旧入场样式清理、首访落首页、og-card 重拍、数字口径、工具在 Windows 上可用都已完成。**还在等人决定的几项：**
+   - 封存静帧后的等待（约 2.7–3 s，P1.2）：这台机器上约 2/3 是 GPU 进程里的异步着色器编译（主线程空闲），约 1/3 是主线程（模块 0.27 s、构造 0.27 s、PMREM 0.66 s）；4× 降速时主线程占约 59%。说明里“先测量，主线程不是大头就停下报告”，所以预取和“静帧保持动起来”没做。选项：Gate 在静帧上加一个只在合成线程运行的 CSS 动画；或把异步编译提前到指纹动画下面（代价是动画中途卡 1 s，或页面加载时多等 1 s）。
+   - 首访到首页 ≤14 s 的验收没达到（实测约 15 s，卡在上面那段等待）。
+   - Vercel 生产环境有没有旧的 `SITE_URL`：MCP 返回 403，没法查；构建已忽略指向 `*.vercel.app` 的值，上线后用 `curl` 看 `og:url` 确认。
+   - 简历：PDF 和四处链接在分支 `feat/resume-link`（没有进 release），等用户确认学位写法（PDF 是 MASc，网站是 Master of Cybersecurity）和电话是否公开。
+   - SR-02 的 `['10+', 'PRs gated (approx.)']` 要不要删（Opus 的提案，等用户点头）。
+   - `NoWebGL.tsx` 里还有旧头衔 “Security analyst & engineer”（说明只列了 Simple.tsx 的 Subject，没改这处文案）。
+   - 触屏设备（medium 档）慢帧时降到 low 档会让整个场景在主线程重编译 5 s，已修（`setShadows`，见 `stage.ts`）。
+   - 近景电路线被电路板盖住（z-fighting，Opus 在原型里发现，说明 P1.10a）：`etchMaterial()` 加了 polygonOffset，已修。
+   - 跳过入场有一半的概率仍播完整个入场（`startEntrance` 和 `releaseEntrance` 抢先后），已修，并有测试。
 3. **S6 抽屉 = 职业时间线**：Profile → IT & Network → Security Operations → Cloud & DevSecOps → AI Security → GRC & Risk；改 `data/roles.ts` 的 `DRAWERS` 与各条目 `slot.lane`，`data.test.ts` 校验；e2e 里按抽屉序号断言的地方要跟着改；单独提交。
 4. **S6 YW-000 记号**：两个原型（盘面蚀刻 YW 印记 / 不同材质），让用户选。
 5. **报告其余项**（用户已同意方向）：G4 标签写成"术语 / 白话"对（如 `T1566 / Phishing email`，**文案需用户定稿**）；F3 演示与正文同步解密（对齐到同一条时间线）；手机档案页先标题后演示；首页标注手机越界复查。
 6. **S5 文案**：用户亲手改。占位稿：指纹入场四句、论点句、四条精选一句话（`docs/copy-drafts.md`）。
-7. **S7 收尾**：重拍 `public/og-card.jpg`（可用 `scripts/still.mjs` 或真机截图，1200×630，现在是旧头衔）；把定稿规则写回 `DESIGN.md`；再跑一轮评审（`scripts/shots.mjs` + `docs/review-rubric.md`，记到 `docs/review-log.md`）。
+7. **S7 收尾**：（og-card 已在 P1.5 重拍，`scripts/og-card.mjs`）把定稿规则写回 `DESIGN.md`；再跑一轮评审（`scripts/shots.mjs` + `docs/review-rubric.md`，记到 `docs/review-log.md`）。
 
 ## 4. 规则（别丢）
 - 跟用户用中文交流；不要编造事实或数字（每个数字要在 `numbers.test.ts` 有来源）；不写工作许可；头衔 Security Analyst；Full-time from Apr 2027；精选 4 个：MCP · Coast Capital · VibesMeet · PwnScan。

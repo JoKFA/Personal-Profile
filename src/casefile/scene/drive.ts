@@ -188,6 +188,9 @@ export function etchMaterial({ part = 'face', dark = false, instanced = false }:
     uLamp: { value: new THREE.Color(0xffa458).multiplyScalar(1.6) },
   }
   m.userData.u = u
+  // the etched plane sits exactly on the precision model's board face (BOARD_Z): pull it forward in depth so it always
+  // wins. Close in, the depth range changes and the board would otherwise cover the traces (z-fighting)
+  m.polygonOffset = true; m.polygonOffsetFactor = -2; m.polygonOffsetUnits = -4
   const progress = part === 'top'
     ? 'clamp(uReveal / 0.25, 0.0, 1.0) * 1.1 - abs(x - 0.24) * 1.4'                 // outward from the LED
     : '(uReveal - 0.25) / 0.75 * 1.25 - distance(vEmissiveMapUv * vec2(1.35, 1.0), uEntry * vec2(1.35, 1.0))'   // from the entry point

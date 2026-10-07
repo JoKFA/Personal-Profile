@@ -540,6 +540,29 @@ test('stepping down to the lowest quality does not recompile the scene', async (
   expect(errors).toEqual([])
 })
 
+test('the etched circuit is drawn in front of the coplanar board', async ({ page }, info) => {
+  test.skip(info.project.name !== 'desktop-1440', 'a render-path check; the window size does not matter')
+  const errors = watchErrors(page)
+  await page.addInitScript(() => { localStorage.setItem('yw.entry', '1'); localStorage.setItem('yw.hint', '1') })
+  await page.goto('/')
+  await page.waitForFunction(() => { const s = (window as unknown as Win).__cf?.getSnapshot(); return s?.mode === 'archive' && s.brief && !!document.querySelector('.hud.on') && !document.querySelector('.cf--arriving') }, null, { timeout: 45_000 })
+  // the etched plane lies exactly on the precision model's board face: unless it is pulled forward in depth, the board
+  // covers its traces whenever the camera is close (z-fighting, seen in the subject file's door)
+  const etch = await page.evaluate(() => {
+    type Mat = { userData?: { u?: { uReveal?: unknown } }; polygonOffset?: boolean; polygonOffsetFactor?: number; polygonOffsetUnits?: number }
+    type Obj = { material?: Mat | Mat[]; traverse(f: (o: Obj) => void): void }
+    const cf = (window as unknown as { __cf: { stage: { scene: Obj }; heroGroup: Obj } }).__cf
+    const found: { on: boolean; factor: number; units: number }[] = []
+    for (const root of [cf.stage.scene, cf.heroGroup]) root.traverse((o) => {
+      for (const m of [o.material].flat()) if (m?.userData?.u?.uReveal) found.push({ on: !!m.polygonOffset, factor: m.polygonOffsetFactor ?? 0, units: m.polygonOffsetUnits ?? 0 })
+    })
+    return found
+  })
+  expect(etch.length, 'the etched materials are found').toBeGreaterThanOrEqual(2)
+  for (const m of etch) { expect(m.on).toBe(true); expect(m.factor).toBeLessThan(0); expect(m.units).toBeLessThan(0) }
+  expect(errors).toEqual([])
+})
+
 test('contact is one click away', async ({ page }) => {
   const errors = watchErrors(page)
   await enter(page)
