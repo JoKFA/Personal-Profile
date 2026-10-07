@@ -50,7 +50,9 @@ body.cf-body { margin: 0; background: var(--bg); color: var(--ink); font-family:
 .hud-lock .a { font-weight: 800; font-size: clamp(20px, 2.15vw, 33px); }
 .hud-lock .b { font-weight: 700; font-size: clamp(9.5px, .82vw, 12.5px); letter-spacing: .12em; margin-top: 9px; }
 .hud-top { right: var(--g); top: var(--top); display: flex; gap: 26px; }
-.hud-index-btn { display: inline-flex; gap: 9px; align-items: center; font: 600 11.5px/1 var(--sans); letter-spacing: .08em; text-transform: uppercase; padding: 8px 0; }
+.hud-index-btn { display: inline-flex; gap: 9px; align-items: center; font: 600 11.5px/1 var(--sans); letter-spacing: .08em; text-transform: uppercase; padding: 8px 0; text-decoration: none; color: inherit; }
+/* (the buttons beside it take their type from `.cf button { font: inherit }`: the link does the same, to match them) */
+a.hud-index-btn { font: inherit; }
 
 .index { right: var(--g); top: calc(var(--top) + 36px); width: min(420px, calc(100vw - 2 * var(--g))); max-height: 72vh; overflow: auto; z-index: 12;
   background: color-mix(in srgb, var(--bg) 94%, transparent); backdrop-filter: blur(14px); border-top: 1px solid var(--ink); animation: rise var(--t-enter) var(--ease-in); }

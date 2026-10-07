@@ -22,7 +22,7 @@ function homeBody(e) {
   const work = of('service').map((x) => `<li>${link(x)} · ${esc(x.title)} · ${esc(x.dates)}</li>`).join('')
   const projects = of('case').filter((x) => !SELECTED.some((s) => s.id === x.id)).map((x) => `<li>${link(x)} · ${esc(x.summary)}</li>`).join('')
   const school = of('education').map((x) => `<li>${link(x)} · ${esc(x.org)} · ${esc(x.dates)}</li>`).join('')
-  const contact = `<a href="mailto:${esc(CONTACT.email)}">${esc(CONTACT.email)}</a> · <a href="${esc(CONTACT.linkedin)}">LinkedIn</a> · <a href="${esc(CONTACT.github)}">GitHub</a>`
+  const contact = `<a href="mailto:${esc(CONTACT.email)}">${esc(CONTACT.email)}</a> · <a href="${esc(CONTACT.linkedin)}">LinkedIn</a> · <a href="${esc(CONTACT.github)}">GitHub</a> · <a href="${esc(CONTACT.resume)}">Résumé (PDF)</a>`
   return `<main class="prerender"><h1>${esc(e.title)}</h1><p>${esc(e.kicker)}</p><p>${esc(THESIS.lead)} ${esc(THESIS.rest)}</p><ul>${facts}</ul>`
     + `<h2>Start here</h2><ul>${start}</ul><h2>Experience</h2><ul>${work}</ul><h2>More projects</h2><ul>${projects}</ul>`
     + `<h2>Education</h2><ul>${school}</ul><h2>Certifications</h2><p>${esc(CERTIFICATIONS.join(' · '))}</p><h2>Contact</h2><p>${contact}</p></main>`

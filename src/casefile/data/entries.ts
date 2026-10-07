@@ -252,7 +252,8 @@ export const VISITOR: Entry = {
 // the degree is "Master of Cybersecurity" (SFU transcript and Graduate Calendar), not an MASc
 export const EDUCATION: [string, string, string][] = EDUCATION_ENTRIES.map((e) => [e.title, e.org!, e.dates!])
 export const CERTIFICATIONS = ['Cisco CCNA', 'CompTIA Security+', 'Fortinet NSE 4', 'Palo Alto EDU-120', 'Google Cybersecurity', 'CISA (in progress)']
-export const CONTACT = { email: MAIL, linkedin: 'https://www.linkedin.com/in/yaoting-wang/', github: 'https://github.com/JoKFA' }
+/** the résumé has one fixed address (public/Yaoting-Wang-Resume.pdf): a new file replaces it, no link changes */
+export const CONTACT = { email: MAIL, linkedin: 'https://www.linkedin.com/in/yaoting-wang/', github: 'https://github.com/JoKFA', resume: '/Yaoting-Wang-Resume.pdf' }
 
 // Skills and credentials become small drives that point at the files proving them, so every
 // drawer is populated and each skill is one click from its evidence.

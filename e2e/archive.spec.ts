@@ -568,8 +568,15 @@ test('contact is one click away', async ({ page }) => {
   await enter(page)
   await page.getByRole('button', { name: 'Contact' }).click()
   const links = page.locator('nav[aria-label="Contact"] a')
-  await expect(links).toHaveCount(3)
+  await expect(links).toHaveCount(4)
   expect(await links.first().getAttribute('href')).toMatch(/^mailto:/)
+  // the résumé: one fixed address, opens in its own tab, the file is really served
+  const resume = links.last()
+  expect(await resume.getAttribute('href')).toBe('/Yaoting-Wang-Resume.pdf')
+  expect(await resume.getAttribute('target')).toBe('_blank'); expect(await resume.getAttribute('rel')).toContain('noopener')
+  expect(await page.locator('.hud-top a[href="/Yaoting-Wang-Resume.pdf"]').count(), 'the top bar link').toBe(1)
+  const res = await page.request.get('/Yaoting-Wang-Resume.pdf')
+  expect(res.status()).toBe(200); expect(res.headers()['content-type']).toMatch(/pdf/); expect((await res.body()).length).toBeGreaterThan(50 * 1024)
   expect(errors).toEqual([])
 })
 

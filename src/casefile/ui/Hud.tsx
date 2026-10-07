@@ -50,6 +50,7 @@ export function Hud({ statusLine, hidden, arriving }: { statusLine: { html: stri
       </button>
       <Brief hidden={hidden || !brief || index || contact} />
       <div className="hud-top">
+        <a className="hud-index-btn" href={CONTACT.resume} target="_blank" rel="noopener"><span>Résumé</span></a>
         <button className="hud-index-btn" aria-expanded={contact} onClick={() => { setContact((v) => !v); setIndex(false) }}><span>Contact</span></button>
         <button className="hud-index-btn" aria-expanded={index} onClick={() => { setIndex((v) => !v); setContact(false) }}><span aria-hidden="true">⌕</span><span>Index</span><kbd>/</kbd></button>
       </div>
@@ -318,6 +319,7 @@ function ContactPanel() {
       <a href={`mailto:${CONTACT.email}`}><span className="n">Email</span><span className="t">{CONTACT.email}</span><span aria-hidden="true">→</span></a>
       <a href={CONTACT.linkedin} target="_blank" rel="noopener noreferrer"><span className="n">LinkedIn</span><span className="t">in/yaoting-wang</span><span aria-hidden="true">↗</span></a>
       <a href={CONTACT.github} target="_blank" rel="noopener noreferrer"><span className="n">GitHub</span><span className="t">github.com/JoKFA</span><span aria-hidden="true">↗</span></a>
+      <a href={CONTACT.resume} target="_blank" rel="noopener"><span className="n">Résumé</span><span className="t">PDF</span><span aria-hidden="true">↗</span></a>
     </nav>
   )
 }

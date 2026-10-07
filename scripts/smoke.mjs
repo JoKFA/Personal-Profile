@@ -43,6 +43,11 @@ else {
   if (w !== OG_IMAGE.width || h !== OG_IMAGE.height) fail(`${OG_IMAGE.path} is ${w}×${h}, the tags say ${OG_IMAGE.width}×${OG_IMAGE.height}`)
   if (jpg.length > 300 * 1024) fail(`${OG_IMAGE.path} is ${Math.round(jpg.length / 1024)} KB (limit 300)`)
 }
+// the résumé: one fixed address, a real PDF, linked from the plain-text home page
+const resume = path.join(dist, 'Yaoting-Wang-Resume.pdf')
+if (!fs.existsSync(resume)) fail('missing Yaoting-Wang-Resume.pdf')
+else if (fs.statSync(resume).size < 50 * 1024 || fs.readFileSync(resume).subarray(0, 5).toString() !== '%PDF-') fail('Yaoting-Wang-Resume.pdf is not a real résumé PDF')
+if (!fs.readFileSync(path.join(dist, 'index.html'), 'utf8').includes('href="/Yaoting-Wang-Resume.pdf"')) fail('the home page does not link the résumé')
 if (!assets.size) fail('no /assets/ references found in built HTML')
 for (const a of assets) if (!fs.existsSync(path.join(dist, a))) fail(`missing asset ${a}`)
 

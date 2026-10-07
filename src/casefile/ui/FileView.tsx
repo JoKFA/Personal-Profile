@@ -225,6 +225,7 @@ function tabsFor(e: Entry, visitor: string, audit: [string, string][], jump: (id
       <a href={`mailto:${CONTACT.email}`}><span className="lbl">Email</span><span>{CONTACT.email}</span><span aria-hidden="true">→</span></a>
       <a href={CONTACT.linkedin} target="_blank" rel="noopener"><span className="lbl">LinkedIn</span><span>in/yaoting-wang</span><span aria-hidden="true">↗</span></a>
       <a href={CONTACT.github} target="_blank" rel="noopener"><span className="lbl">GitHub</span><span>github.com/JoKFA</span><span aria-hidden="true">↗</span></a>
+      <a href={CONTACT.resume} target="_blank" rel="noopener"><span className="lbl">Résumé</span><span>PDF</span><span aria-hidden="true">↗</span></a>
     </nav> },
   ]
   if (e.kind === 'service') return [
