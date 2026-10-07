@@ -197,7 +197,7 @@ a.hud-index-btn { font: inherit; }
   .tour { top: 70px; bottom: auto; grid-template-columns: 1fr; padding: 12px 0 14px; background: color-mix(in srgb, var(--bg) 86%, transparent); backdrop-filter: blur(10px); }
   .tour-t p { font-size: 15px; }
   .panel::before { display: none; }
-  .hud-top { gap: 16px; }
+  .hud-top { gap: 16px; font-size: 12.5px; }   /* three links share the row beside the name */
   /* keyboard hints mean nothing on a phone, and the name needs the room */
   .hud-top kbd, .hud-index-btn > span[aria-hidden] { display: none; }
   .panel { left: 0; right: 0; bottom: 0; top: auto; transform: none; width: auto; padding: 16px var(--g) calc(18px + env(safe-area-inset-bottom));
