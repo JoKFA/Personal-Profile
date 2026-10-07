@@ -334,13 +334,15 @@ export class Archive {
    */
   startEntrance() {
     this.lift = spring(0)
-    this.enteredAt = this.t
+    // (a skipped entry may have released its entrance before React got round to starting it: do not play it again from the top)
+    if (!this.entranceReleased) this.enteredAt = this.t
   }
   private entranceHeld = false
+  private entranceReleased = false
   /** Freeze the entrance at its first frame (the archive is seen, still, before the wave). */
   holdEntrance() { this.entranceHeld = true; this.enteredAt = this.t - 0.001 }
   /** `skipped`: the visitor skipped the entry, so the entrance plays only its last stretch (camera settling, the selection lighting). */
-  releaseEntrance(skipped = false) { if (!this.entranceHeld) return; this.entranceHeld = false; this.enteredAt = this.t - (skipped ? ENTRANCE_END - SKIP_ENTRANCE : 0.001) }
+  releaseEntrance(skipped = false) { if (!this.entranceHeld) return; this.entranceHeld = false; this.entranceReleased = true; this.enteredAt = this.t - (skipped ? ENTRANCE_END - SKIP_ENTRANCE : 0.001) }
   /** seconds into the entrance (Infinity when not entering, or long after it) */
   private get entryAge() { const a = this.t - this.enteredAt; return this.reduced || a < 0 || a > ENTRANCE_END + 4 ? Infinity : a }
   /** Seconds since the entrance started; Infinity when there is none (reduced motion, or long done). */
