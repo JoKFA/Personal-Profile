@@ -58,7 +58,7 @@
   .hud > .brief { display: flex; flex-direction: column; padding: calc(var(--top) + 48px) var(--g) var(--bottom); }
   .brief::before { width: 100vw; height: 100%; background: linear-gradient(to bottom, color-mix(in srgb, var(--bg) 92%, transparent) 0%, color-mix(in srgb, var(--bg) 88%, transparent) 78%, transparent); }
   .brief-leads { display: none; }
-  .brief-say { position: relative; order: 1; max-width: none; }
+  .brief-say { position: relative; inset: auto; order: 1; max-width: none; }
   .brief-thesis { font-size: clamp(24px, 6.6vw, 30px); }
   .brief-meta { display: none; }
   .brief-cos { position: relative; order: 2; margin: 16px 0 12px; border-bottom: 1px solid var(--hair); }
@@ -69,5 +69,5 @@
   .brief-co .n { grid-column: 1; grid-row: 1; }
   .brief-co .t { grid-column: 2; grid-row: 1; font-size: 15.5px; }
   .brief-co .l { grid-column: 2; grid-row: 2; font-size: 12.5px; }
-  .brief-act { position: relative; order: 3; margin-top: auto; justify-content: flex-start; gap: 4px 22px; }
+  .brief-act { position: relative; inset: auto; order: 3; margin-top: auto; justify-content: flex-start; gap: 4px 22px; }
 }
