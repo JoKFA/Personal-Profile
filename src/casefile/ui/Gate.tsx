@@ -30,13 +30,14 @@ interface Layout {
   /** a phone-width screen (type and the sentence follow the phone's rules) */
   W: number; H: number; phone: boolean
   /** the four readings sit under the print in a 2 × 2 grid (a phone, or no room for a column beside it) */
-  stack: boolean; g: number; top: number
+  /** columns of the stacked readings: 2 × 2, or one row of four where the window is wide */
+  stack: boolean; cols: number; g: number; top: number
   print: { cx: number; cy: number; w: number; h: number }; labelX: number; labelTop: number; capBottom: number
   lat: { cx: number; cy: number; size: number }
 }
 function layout(): Layout {
   const W = innerWidth, H = innerHeight, phone = W < 760, g = Math.max(16, Math.min(56, W * 0.033)), top = Math.max(22, Math.min(48, H * 0.046))
-  let print: Layout['print'] = { cx: 0, cy: 0, w: 0, h: 0 }, labelX = 0, labelTop = 0, capBottom = 0, stack = phone
+  let print: Layout['print'] = { cx: 0, cy: 0, w: 0, h: 0 }, labelX = 0, labelTop = 0, capBottom = 0, stack = phone, layoutCols = 2
   if (!phone) {
     // the print sits between the name (top left) and the sentence (bottom left) and touches neither
     const y0 = top + Math.max(96, H * 0.13), capTop = H - Math.max(118, H * 0.14)
@@ -49,12 +50,14 @@ function layout(): Layout {
   }
   if (stack) {
     // top to bottom: name, print, the four readings, the sentence, the way out
-    const y0 = top + 92, cb = H - 84, rows = 2 * 80
-    const ph = clamp(cb - 108 - 16 - rows - 20 - y0, 170, Math.min(H * 0.42, W * 1.05)), pw = ph * 0.7
+    const y0 = top + 92, cb = H - 84, cols = !phone && W >= 960 ? 4 : 2, rows = cols === 4 ? 112 : 2 * 80
+    // (a short window may shrink the print below a phone's floor: the readings must stay off the sentence)
+    const ph = clamp(cb - 108 - 16 - rows - 20 - y0, phone ? 170 : 120, Math.min(H * 0.42, W * 1.05)), pw = ph * 0.7
+    layoutCols = cols
     print = { cx: W / 2, cy: y0 + ph / 2, w: pw, h: ph }
     labelX = g; labelTop = y0 + ph + 20; capBottom = cb
   }
-  return { W, H, phone, stack, g, top, print, labelX, labelTop, capBottom, lat: { cx: print.cx, cy: print.cy, size: print.w * 0.92 } }
+  return { W, H, phone, stack, cols: layoutCols, g, top, print, labelX, labelTop, capBottom, lat: { cx: print.cx, cy: print.cy, size: print.w * 0.92 } }
 }
 
 export function Gate({ visitor, reduced, sceneReady, onTitle, onReveal, onStrike, onDone }: {
@@ -119,6 +122,7 @@ export function Gate({ visitor, reduced, sceneReady, onTitle, onReveal, onStrike
     // positions once per layout; styles per frame
     function place() {
       const { print: pr, phone, stack, H, g } = L
+      r.classList.toggle('fp-stack', stack)
       r.dataset.print = [pr.cx - pr.w / 2, pr.cy - pr.h / 2, pr.w, pr.h].map(Math.round).join(',')
       q('.fp-exh-l').textContent = stack ? visitor.id : `${visitor.id} · Browser fingerprint`
       q('.fp-exh-r').textContent = stack ? `${P.whorl ? 'Whorl' : 'Loop'} · ${visitor.ms} ms` : `Pattern · ${P.whorl ? 'whorl' : 'loop'} · ${visitor.ms} ms`
@@ -134,11 +138,11 @@ export function Gate({ visitor, reduced, sceneReady, onTitle, onReveal, onStrike
         const over = Math.max(...labelY) + 70 - (H - 150); if (over > 0) labelY = labelY.map((v) => v - over)
         mis.forEach((el, i) => { el.style.transform = `translate(${L.labelX}px, ${labelY[i]}px)` })
       } else {
-        // a 2 × 2 grid under the print, centred on the screen (it fills a phone's width)
-        const colW = Math.min(300, (L.W - g * 2 - 14) / 2), x0 = (L.W - (colW * 2 + 14)) / 2
+        // a grid under the print, centred on the screen: 2 × 2 (it fills a phone's width), or one row of four
+        const cols = L.cols, colW = Math.min(300, (L.W - g * 2 - 14 * (cols - 1)) / cols), x0 = (L.W - (colW * cols + 14 * (cols - 1))) / 2
         mis.forEach((el) => { el.style.width = colW + 'px' })
-        const hs = mis.map((el) => el.offsetHeight), row0 = Math.max(hs[order[0].i], hs[order[1].i])
-        order.forEach(({ i }, k) => { labelY[i] = L.labelTop + (k < 2 ? 0 : row0 + 16); mis[i].style.transform = `translate(${x0 + (k % 2) * (colW + 14)}px, ${labelY[i]}px)` })
+        const hs = mis.map((el) => el.offsetHeight), row0 = Math.max(...order.slice(0, cols).map(({ i }) => hs[i]))
+        order.forEach(({ i }, k) => { labelY[i] = L.labelTop + (k < cols ? 0 : row0 + 16); mis[i].style.transform = `translate(${x0 + (k % cols) * (colW + 14)}px, ${labelY[i]}px)` })
       }
       scanAt = P.minutiae.map((m) => timeForScan(m.y))
       // the sentence, anchored from the bottom

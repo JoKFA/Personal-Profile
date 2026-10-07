@@ -238,7 +238,8 @@ export function createStage(canvas: HTMLCanvasElement, quality: Quality) {
      * Shadows off for this scene (the renderer's own switch is shared with the interior and is left alone).
      * The light keeps its shadow switch: flipping it changes the shader of every lit material, and the
      * whole scene would recompile on the main thread (seconds, on a phone, at the moment it is struggling).
-     * Instead nothing casts any more, and the shadow map is cleared once and left alone.
+     * Instead nothing casts any more, and the shadow map is cleared once and left alone (one way: the
+     * archive only ever steps down).
      */
     setShadows(on: boolean) {
       if (on) { key.castShadow = true; return }

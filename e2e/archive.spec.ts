@@ -294,10 +294,10 @@ test('entry: your browser is read as a fingerprint, profiled, sealed, and the ar
   expect(errors).toEqual([])
 })
 
-test('entry: at every window size the four readings are on screen and clear of the print', async ({ page }, info) => {
+test('entry: at every window size the four readings are on screen and clear of the print and the sentence', async ({ page }, info) => {
   test.skip(info.project.name !== 'desktop-1440', 'sets its own window sizes')
   const errors = watchErrors(page)
-  for (const [width, height] of [[800, 900], [1024, 768], [1100, 700], [1280, 720]]) {
+  for (const [width, height] of [[800, 900], [1024, 768], [1100, 700], [1280, 720], [1024, 600], [900, 600]]) {
     await page.setViewportSize({ width, height })
     await page.goto('/?intro')
     await expect(page.locator('.fp-cap2')).toBeVisible({ timeout: 8000 })
@@ -313,6 +313,13 @@ test('entry: at every window size the four readings are on screen and clear of t
       expect(on, `${width}×${height}: reading ${i + 1} on screen (${Math.round(b.left)},${Math.round(b.top)} ${Math.round(b.width)}×${Math.round(b.height)})`).toBe(true)
       expect(hit, `${width}×${height}: reading ${i + 1} clear of the print`).toBe(false)
     })
+    // and clear of the sentence that is on screen
+    const say = await page.locator('.fp-cap, .fp-sub').evaluateAll((els) => els.filter((e) => getComputedStyle(e).visibility === 'visible' && Number(getComputedStyle(e).opacity) > 0.1).map((e) => e.getBoundingClientRect().toJSON() as DOMRect))
+    expect(say.length, `${width}×${height}: a sentence is showing`).toBeGreaterThan(0)
+    for (const s of say) boxes.forEach((b, i) => {
+      const hit = Math.min(b.right, s.right) - Math.max(b.left, s.left) > 1 && Math.min(b.bottom, s.bottom) - Math.max(b.top, s.top) > 1
+      expect(hit, `${width}×${height}: reading ${i + 1} clear of the sentence`).toBe(false)
+    })
   }
   expect(errors).toEqual([])
 })
@@ -322,14 +329,15 @@ test('entry: skipping lands on the sealed print and leaves no gate behind', asyn
   await page.goto('/?intro')
   await expect(page.locator('.fp-cap1')).toBeVisible({ timeout: 5000 })
   await page.keyboard.press('Escape')
-  await page.waitForFunction(() => { const s = (window as unknown as Win).__cf?.getSnapshot(); return s?.mode === 'archive' || s?.mode === 'opening' || s?.mode === 'file' }, null, { timeout: 30_000 })
+  // the hand-over starts once the scene is ready (building it takes a few seconds, whatever the skip); from
+  // that moment a skip plays only the entrance's last stretch, and home must be fully shown within 3 s
+  await page.waitForFunction(() => document.querySelector('.gate')?.getAttribute('data-phase') === 'transfer', null, { timeout: 30_000, polling: 'raf' })
+  const handedOver = Date.now()
+  await page.waitForFunction(() => { const t = document.querySelector('.brief-thesis'); return !!t && getComputedStyle(t.closest('.brief')!).opacity === '1' && !document.querySelector('.cf--arriving') }, null, { timeout: 10_000, polling: 'raf' })
+  expect(Date.now() - handedOver, 'home is shown within 3 s of the hand-over').toBeLessThan(3000)
   await expect(page.locator('.gate')).toHaveCount(0)
   expect(await page.evaluate(() => (window as unknown as Win).__cf.getSnapshot().entry?.id)).toBe('YW-000')
-  // a skip goes straight to home: the entrance plays only its last stretch, so home follows the strike within seconds
-  const settledAt = Date.now()
-  await page.waitForFunction(() => !!document.querySelector('.brief:not(.hide)') && !document.querySelector('.cf--arriving'), null, { timeout: 10_000 })
   await expect(page.locator('.brief-co')).toHaveCount(4)
-  expect(Date.now() - settledAt, 'home follows the skip within seconds').toBeLessThan(5000)
   expect(errors).toEqual([])
 })
 

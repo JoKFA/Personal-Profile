@@ -19,6 +19,9 @@
 .fp-hash { display: grid; justify-items: center; row-gap: 7px; }
 .fp-hash code { font: 400 12px/1.6 var(--mono); letter-spacing: .04em; color: var(--ink); white-space: pre; }
 
+/* readings stacked under the print: a column may be narrower than a line, so lines wrap */
+.fp-stack .fp-mi .v, .fp-stack .fp-mi .a { white-space: normal; }
+.fp-stack .fp-mi .a { font-size: 11.5px; line-height: 1.35; }
 @media (max-width: 759px) {
   .fp-mi { width: auto; }
   .fp-mi .v { font-size: 14px; white-space: normal; }
