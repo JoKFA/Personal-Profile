@@ -39,11 +39,11 @@ const archiveUp = async (page) => {
   await page.waitForTimeout(1500)
 }
 const landed = async (page) => {
-  // a first visit: leave the entry; the entrance then settles in the archive or opens the subject file by itself
+  // a first visit: leave the entry; the entrance then settles on home
   await page.locator('.gate-skip').click({ timeout: LONG })
   await fn(page, () => {
     const a = window.__cf, s = a?.getSnapshot()
-    return !document.querySelector('.gate') && s && ((s.mode === 'file' && document.querySelector('.file-meta h1')?.textContent) || (s.mode === 'archive' && a.settled() && !document.querySelector('.cf--arriving')))
+    return !document.querySelector('.gate') && s && s.mode === 'archive' && s.brief && a.settled() && !document.querySelector('.cf--arriving')
   })
   await page.waitForTimeout(4000)
 }
@@ -97,7 +97,8 @@ fs.mkdirSync(out, { recursive: true })
 if (!only?.length || only.includes('T1')) fs.writeFileSync(path.join(out, 'T1-home.txt'), homeText())
 
 // any free port, so two rounds (two prototypes) can shoot at once
-const server = await preview({ preview: { port: 4181, strictPort: false, open: false }, logLevel: 'silent' })
+// 127.0.0.1 explicitly: on Windows vite binds `localhost` to IPv6 only, and the browser is sent to 127.0.0.1
+const server = await preview({ preview: { host: '127.0.0.1', port: 4181, strictPort: false, open: false }, logLevel: 'silent' })
 const PORT = server.httpServer.address().port
 const failed = []
 async function shoot(g) {

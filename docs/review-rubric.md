@@ -20,7 +20,7 @@ The site belongs to a security professional looking for a full-time job in Canad
 FILES (open each one with your file-reading tool):
 - {SHOTS}/F1-desk.png  first visit, 1.5 s after the page loads (desktop 1440x900)
 - {SHOTS}/F2-desk.png  first visit, 5 s after load
-- {SHOTS}/F3-desk.png  first visit, after the entry sequence ends and the profile opens by itself
+- {SHOTS}/F3-desk.png  first visit, after the entry sequence ends and home appears
 - {SHOTS}/F4-desk.png  a returning visitor arrives at the main view
 - {SHOTS}/F5-desk.png  the main view with one project selected
 - {SHOTS}/F6-desk.png  the site's index opened

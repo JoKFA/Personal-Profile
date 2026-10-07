@@ -16,7 +16,8 @@ const only = arg('only', 'home,archive,file').split(',')
 const LONG = 30 * 60_000
 fs.mkdirSync(out, { recursive: true })
 
-const server = await preview({ preview: { port: 4193, strictPort: false, open: false }, logLevel: 'silent' })
+// 127.0.0.1 explicitly: on Windows vite binds `localhost` to IPv6 only, and the browser is sent to 127.0.0.1
+const server = await preview({ preview: { host: '127.0.0.1', port: 4193, strictPort: false, open: false }, logLevel: 'silent' })
 const PORT = server.httpServer.address().port
 const browser = await chromium.launch({ executablePath: process.env.SHOTS_CHROMIUM || undefined, args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] })
 const fn = (page, f, a) => page.waitForFunction(f, a, { timeout: LONG, polling: 1000 })

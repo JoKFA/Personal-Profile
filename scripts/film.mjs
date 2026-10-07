@@ -3,8 +3,9 @@
 // so a slow software renderer still yields an exact 25 fps film.
 //
 //   node scripts/film.mjs                               → return visit, the entrance alone
-//   node scripts/film.mjs --visit first                 → first visit: skip the entry, film the hand-over and the entrance
+//   node scripts/film.mjs --visit first                 → first visit: skip the entry, film the hand-over and the (short) entrance a skip gets
 //   node scripts/film.mjs --seconds 6 --fps 25 --size 1280x720 --quality high --out shots/film/now
+//   node scripts/film.mjs --gpu                         → on this machine's GPU instead of software rendering
 //
 // Writes f-0000.png…, a contact sheet per second (sheet-00.png…, 5 × 5 frames) and film.mp4.
 import { execFileSync } from 'node:child_process'
@@ -24,9 +25,12 @@ const LONG = 20 * 60_000
 if (!fs.existsSync('dist/index.html')) { console.error('film: run `npm run build` first'); process.exit(1) }
 fs.rmSync(out, { recursive: true, force: true }); fs.mkdirSync(out, { recursive: true })
 
-const server = await preview({ preview: { port: 4191, strictPort: false, open: false }, logLevel: 'silent' })
+// 127.0.0.1 explicitly: on Windows vite binds `localhost` to IPv6 only, and the browser is sent to 127.0.0.1
+const server = await preview({ preview: { host: '127.0.0.1', port: 4191, strictPort: false, open: false }, logLevel: 'silent' })
 const PORT = server.httpServer.address().port
-const browser = await chromium.launch({ executablePath: process.env.SHOTS_CHROMIUM || undefined, args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] })
+// --gpu: the machine's GPU through ANGLE (true light and material); without it, software rendering
+const gpu = process.argv.includes('--gpu')
+const browser = await chromium.launch({ executablePath: process.env.SHOTS_CHROMIUM || undefined, args: gpu ? ['--use-angle=d3d11', '--enable-gpu', '--ignore-gpu-blocklist'] : ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] })
 try {
   const ctx = await browser.newContext({ viewport: { width: W, height: H }, deviceScaleFactor: 1 })
   if (visit !== 'first') await ctx.addInitScript(() => { try { localStorage.setItem('yw.entry', '1'); localStorage.setItem('yw.hint', '1') } catch { /* */ } })
@@ -40,6 +44,19 @@ try {
     window.cancelAnimationFrame = (id) => { if (id < 0) queue.delete(id); else caf(id) }
     window.__filmManual = () => { manual = true }
     window.__filmFlush = () => { const now = performance.now(), due = [...queue.values()]; queue.clear(); for (const cb of due) cb(now) }
+    // CSS transitions and animations run on the real clock: pause each one the first time it is seen and
+    // advance it by the film step, so DOM motion stays in step with the fake clock (without this the
+    // page's own transitions are filmed as a single-frame cut); finish() fires transitionend
+    window.__filmAnim = (dt) => {
+      for (const a of document.getAnimations()) {
+        if (a.playState === 'finished' || a.playState === 'idle') continue
+        if (!a.__film) { a.__film = true; a.pause(); a.currentTime = 0; continue }
+        const end = a.effect ? a.effect.getComputedTiming().endTime : Infinity
+        const next = (Number(a.currentTime) || 0) + dt
+        if (Number.isFinite(end) && next >= end) a.finish(); else a.currentTime = next
+      }
+    }
+    window.__filmAnimRelease = () => { for (const a of document.getAnimations()) if (a.__film && a.playState === 'paused') a.play() }
   })
   const page = await ctx.newPage()
   const errors = []; page.on('pageerror', (e) => errors.push(String(e)))
@@ -81,16 +98,19 @@ try {
   await page.evaluate(() => window.__filmManual())
   for (let i = 0; i < n; i++) {
     await page.clock.runFor(step)
-    await page.evaluate(() => window.__filmFlush())
+    await page.evaluate((dt) => { window.__filmFlush(); window.__filmAnim(dt) }, step)
     await page.screenshot({ path: path.join(out, `f-${String(i).padStart(4, '0')}.png`) })
     if (i % fps === fps - 1) console.log(`film: ${(i + 1) / fps} s (${Math.round((Date.now() - t0) / 1000)} s real)`)
   }
+  await page.evaluate(() => window.__filmAnimRelease())
   if (errors.length) console.error(`film: page errors: ${errors.slice(0, 3).join(' | ')}`)
 } finally {
   await browser.close(); await server.close()
 }
 // a sheet per second, 5 × 5, each frame stamped with its time; and the film itself
-const stamp = `drawtext=fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf:text='%{eif\\:n/${fps}\\:d}.%{eif\\:mod(n\\,${fps})*${100 / fps}\\:d\\:2}':x=6:y=6:fontsize=16:fontcolor=red:box=1:boxcolor=white@0.6`
+// (ffmpeg wants the drive colon escaped inside a filter)
+const font = process.platform === 'win32' ? "'C\\:/Windows/Fonts/consola.ttf'" : '/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf'
+const stamp = `drawtext=fontfile=${font}:text='%{eif\\:n/${fps}\\:d}.%{eif\\:mod(n\\,${fps})*${100 / fps}\\:d\\:2}':x=6:y=6:fontsize=16:fontcolor=red:box=1:boxcolor=white@0.6`
 const sheets = Math.ceil(seconds)
 for (let s = 0; s < sheets; s++) {
   execFileSync('ffmpeg', ['-v', 'error', '-y', '-framerate', String(fps), '-start_number', String(s * fps), '-i', path.join(out, 'f-%04d.png'),
