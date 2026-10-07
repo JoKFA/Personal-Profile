@@ -14,7 +14,7 @@ export const ROLES: Role[] = [
   {
     id: 'soc', name: 'Security Operations',
     seats: 'SOC Analyst · Vulnerability Analyst · Security Analyst',
-    fit: 'Detection on Wazuh and Splunk, 4 IR playbooks, a 14-finding grey-box pentest, and CVE × EPSS risk ranking.',
+    fit: 'Detection on Wazuh and Splunk, 4 IR playbooks, access-control findings in a team grey-box pentest, and CVE × EPSS risk ranking.',
   },
   {
     id: 'grc', name: 'GRC & Awareness',

@@ -23,7 +23,7 @@ export const EDUCATION_ENTRIES: Entry[] = [
       { code: 'CMPT 626', title: 'Graduate Co-op', out: 'Security risk assessments at Coast Capital Savings', ids: ['SR-01'] },
     ],
     sections: [
-      { eyebrow: '01 · Lab I', title: 'Trained as a penetration tester', body: 'Cybersecurity Lab I simulates real attacks on software systems: discover a vulnerability, exploit it, and decide what an attacker would gain. Out of it came a grey-box pentest of a staging web app with 14 validated findings, and a scanner that tests MCP servers before an AI agent may use them.' },
+      { eyebrow: '01 · Lab I', title: 'Trained as a penetration tester', body: 'Cybersecurity Lab I simulates real attacks on software systems: discover a vulnerability, exploit it, and decide what an attacker would gain. Out of it came a team grey-box pentest of a staging web app (my part: the access-control findings), and a scanner that tests MCP servers before an AI agent may use them.' },
       { eyebrow: '02 · Lab II', title: 'Then as a defender', body: 'Cybersecurity Lab II studies attacks on systems, networks and cloud infrastructure, and how to detect and prevent them. My team’s project, PwnScan, finds IoT devices on a network and ranks their CVEs by what is actually exploitable; it placed in the top 3.' },
       { eyebrow: '03 · Systems', title: 'Cryptography and the cloud underneath', body: 'Applied Cryptography produced CryptoLab, a client-side password vault: keys derived with scrypt, entries sealed with AES-256-GCM so tampered metadata fails to decrypt, an HMAC-chained audit log, and Shamir k-of-n recovery shares. Distributed and Cloud Systems produced a GFS-style vault on GCP, one master and three chunk servers across zones.' },
     ],

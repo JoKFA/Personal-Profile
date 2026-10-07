@@ -15,7 +15,7 @@ export const SUBJECT: Entry = {
   // targets: resume system (能力画像 · OBJECTIVE.md, 2026-09-24); title and availability: user 2026-10-05
   facts: [['Available', 'Full-time from Apr 2027'], ['Looking for', 'Security Analyst · GRC · Cloud & AI Security'], ['Now', 'Information Security co-op, Coast Capital'], ['Based', 'Vancouver, BC · open to relocating in Canada']],
   // no demo on the drive: the subject file's exhibit is the drive's own work space (space/, docs/subject-space-spec.md)
-  numbers: [['50+', 'security assessments'], ['20+', 'vendor risk reviews'], ['60+', 'MCP servers tested'], ['14', 'pentest findings'], ['1,000+', 'people trained'], ['~30%', 'AWS cost cut']],
+  numbers: [['50+', 'security assessments'], ['20+', 'vendor risk reviews'], ['60+', 'MCP servers tested'], ['1,000+', 'people trained'], ['~30%', 'AWS cost cut']],
   seo: { title: 'Yaoting Wang | Security Portfolio', description: 'Security analyst, Master of Cybersecurity at SFU: risk assessment at a Canadian financial institution, cloud and DevSecOps, detection, and AI security, with the evidence for each.' },
 }
 

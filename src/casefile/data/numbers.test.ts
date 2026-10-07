@@ -10,7 +10,7 @@ import { CHAPTERS, HEADLINE, KEY_NUMBERS, PRINCIPLES, SELECTED, THESIS } from '.
 const DB = 'experience_db.yaml'
 const USER = 'user, spec §5.4 / §13'
 const NUMBER_SOURCES: Record<string, string> = {
-  '14': `${DB}: MCPSF 14 detectors; pentest 14 validated findings`,
+  '14': `${DB}: MCPSF 14 detectors`,
   '60+': `${DB}: MCPSF validated against 60+ real MCP servers`,
   '5': `${USER} Q-S1 (old site, 5 pipeline phases); GFS 5/5 availability (${DB})`,
   '30–90': `${USER} Q-S1 (old site runtime per target)`,

@@ -22,7 +22,7 @@ function combine(x1: number, y1: number[], x2: number, y2: number[]) {
 const hex = (b: number[]) => b.map((x) => x.toString(16).padStart(2, '0')).join(' ')
 
 const SEATS = [
-  { role: 'Attacker', from: 'Lab I · CMPT 782', sees: 'how a system is broken into', proof: '14 validated pentest findings' },
+  { role: 'Attacker', from: 'Lab I · CMPT 782', sees: 'how a system is broken into', proof: 'access-control findings, team pentest' },
   { role: 'Defender', from: 'Lab II · CMPT 783', sees: 'how an attack is detected and stopped', proof: 'PwnScan · Top 3' },
   { role: 'Risk owner', from: 'Co-op · Coast Capital', sees: 'what the risk is worth to the business', proof: '50+ risk assessments' },
 ] as const

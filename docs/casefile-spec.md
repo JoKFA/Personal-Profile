@@ -225,7 +225,7 @@ interface FactRecord {                                         // 抽屉里的�
 | C12 | 主档案 Seeking | “AppSec · DevSecOps · AI Security” | 与 Hiring for 一致的 5 个方向 | 锁定设计 |
 | C13 | 主档案 Education | 只有 “MASc Cybersecurity” | MASc Cybersecurity, SFU (Sept 2025 – exp. 2027) · BTech Digital Forensics & Cybersecurity, BCIT (2023–2025) · Diploma CISA, BCIT (2021–2023) | `main.tex` 教育段（⚠️ 非 experience_db，见 Q-S6） |
 | C14 | EDR | “Maps each alert to an ATT&CK technique”、“6 ATT&CK techniques”、“<1s triage context” | 事实库只有：Python pipeline Wazuh → LLM 摘要、SQLite 缓存重复模式、React/REST 看板、BF/SQLi/DDoS 仿真验证、按反馈历史抑制重复告警。ATT&CK 属于 Splunk lab | facts 1195–1223（见 Q-S2） |
-| C15 | Pentest | “auth, sessions, access control”；nums “2 critical / 4 surfaces / 100% with repro” | “grey-box pentest of a staging web app and APIs: authentication, session handling, file handling, tenant-based access control; 14 validated findings; formal report with severity + remediation”。不点名 ViMi Labs | facts 1355–1382，claim_limit 1394（nums 见 Q-S3） |
+| C15 | Pentest | “auth, sessions, access control”；nums “2 critical / 4 surfaces / 100% with repro” | “grey-box pentest of a staging web app and APIs: authentication, session handling, file handling, tenant-based access control; formal report with severity + remediation”。不写 finding 总数（用户 2026-10-01：团队项目，只写个人部分“the access-control findings”，见 §26.2）；不点名 ViMi Labs | facts 1355–1382，claim_limit 1394（nums 见 Q-S3） |
 | C16 | TELUS | “48-hour build” | 事实库无时长；保留 “Semgrep JSON → LLM false-positive triage + fix; dashboard shows vulnerable code beside AI-proposed fix for human approval” | facts 1513–1532 |
 | C17 | VIVA 威胁建模 | “scored with CVSS, owned, and tracked” | “STRIDE across web app, database, server, network; 12 threats identified; all 12 remediated (by me); report for VIVA leadership” | facts 1435–1463 |
 | C18 | SENTINEL 前端 | 本地正则假裁判 + 明文 flag | 接真实 `/api/redteam`；flag 只来自服务端回复；attempts 来自 `attemptsRemaining` | A4 |
@@ -453,7 +453,7 @@ src/casefile/
 | D1 | 电路纹和光不要局限在硬盘中间；读取时的 motion 要更有创意 | 纹路铺满正面并**绕过圆角翻上顶边**（长焦镜头恰好能看到顶边，全景里就有纹路光）。读取动画：光从顶边指示灯出发，沿纹路翻过圆角流向正面，汇聚到芯片轮廓 → 芯片亮起 → 沿一条细接缝，硬盘上下两半错开几毫米、内部光透出 → 项目页从缝里“流出”。关闭时倒放 |
 | D2 | UI 线条和动画要 Rhine 级高级 | 实现前先拆 Rhine 的 `ui-transitions.ts` / `hud-projection.ts` / `document-decryption.*`：线条描绘入场（stroke 生长）、数字滚动、从选中硬盘到面板的**投影引线**（3D 点投到屏幕，一根细线连到面板），统一缓动与时长表 |
 | D3 | 经历、技能找不到，分不清哪个是 project | 硬盘只有两类：**CASE FILE**（项目）和 **SERVICE RECORD**（经历），都能打开。技能不再单独占硬盘，改为出现在经历/项目页和主档案的能力矩阵里。两类硬盘外形区分：经历盘的顶边是**双灯**，面板顶部标 `SERVICE RECORD` / `CASE FILE`；Index 按“Subject / Service records / Case files”分组 |
-| D4 | 主档案几乎是空的 | 主档案首屏一眼看到：姓名 + 定位一句、五个方向各一行“能做什么 + 证据”、6 个关键数字（50+ 评估 · 20+ 供应商 · 60+ MCP servers · 14 findings · 1,000+ 培训 · ~30% AWS 成本）、经历时间线（Coast Capital → VibesMeet → BCIT → VIVA）、教育、证书、联系方式。下方是能力矩阵（按五方向分组、每项链到证据硬盘） |
+| D4 | 主档案几乎是空的 | 主档案首屏一眼看到：姓名 + 定位一句、五个方向各一行“能做什么 + 证据”、5 个关键数字（50+ 评估 · 20+ 供应商 · 60+ MCP servers · 1,000+ 培训 · ~30% AWS 成本）、经历时间线（Coast Capital → VibesMeet → BCIT → VIVA）、教育、证书、联系方式。下方是能力矩阵（按五方向分组、每项链到证据硬盘） |
 | D5 | 其他档案内容太少 | 每个案卷：一句结果、我的角色、3 个事实、演示、“怎么做的”三段、证据、年份与时代背景；每个经历：职责、3 条要点（来自事实库）、用到的技能、关联案卷 |
 | D6 | 打开后的页面像 PPT | 参考 Rhine 的档案页（`.codex-runtime/design/spec-shots/rhine-detail-1440.png`）：**硬盘本身是主角**。打开时硬盘转向镜头，演示用 Rhine `hudQuadMatrix` 式四角透视投影到硬盘正面，风格改为浅色、与磨砂同质感（不再是黑屏）；右栏是元信息（标题、事实格、Overview / Evidence / Log、摘要、操作）；3D 场景始终在后面。向下滚动进入章节正文（GSAP ScrollTrigger）。文字解密用 Rhine 式逐行遮挡条收回，标题短暂密文跳动（GSAP ScrambleText） |
 | D8 | 用户：别闷头写，去找资源 | 采用 GSAP（2025-04 起全部插件免费可商用：SplitText / ScrambleText / DrawSVG / ScrollTrigger）做 UI 线条、文字、滚动编排；电路光的辉光在第 3 步用选择性 bloom（three.js emissive bloom 示例 / pmndrs postprocessing） |
@@ -699,7 +699,7 @@ verify 与 E2E 全绿；1440 与 390@3x ≥ 57 fps；截图确认选中的盘和
 | # | 攻击 | 阶段 · 编号 | 挡住它的盘 · 证据 |
 |---|---|---|---|
 | 1 | Phishing email | Get in · T1566 | SR-03 Awareness programme · ~15% fewer phishing successes |
-| 2 | Broken access in a web app | Get in · T1190 | X-003 Pentest of the app · 14 validated findings |
+| 2 | Broken access in a web app | Get in · T1190 | X-003 Pentest of the app · my part: the access-control findings |
 | 3 | Risky vendor | Get in · T1199 Trusted Relationship | SR-01 Vendor risk reviews · 20+ vendor reviews |
 | 4 | Poisoned AI tool | Get in · MITRE ATLAS | X-001 MCP security scanner · 60+ servers tested |
 | 5 | Leaked cloud key | Steal keys · T1552 | SR-02 Secret checks in CI · Every merge scanned |
