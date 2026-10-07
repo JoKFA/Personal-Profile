@@ -33,3 +33,6 @@ test-results/
 
 .vercel
 art/.cache/
+
+# design review screenshots (scripts/shots.mjs)
+shots/

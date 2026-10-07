@@ -3,6 +3,7 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { entryById, entryBySlug, ENTRIES } from './data/entries'
+import { SELECTED } from './data/story'
 import type { Entry } from './data/types'
 import type { Archive, Handoff } from './scene/archive'
 import type { Clock } from './space/clock'
@@ -66,8 +67,8 @@ export default function CasefileApp() {
   const busy = useRef(false)
   const pendingSlug = useRef(slugFromPath(location.pathname))
   const firstVisit = useRef(gate)
-  /** the entrance opens the subject file by itself once (a first visit) */
-  const autoOpen = useRef(false)
+  /** a first visit: the entrance finds the subject file and opens it; closing it opens home */
+  const autoOpen = useRef(false), homeAfter = useRef(false)
   /** Esc pressed while a file is still opening: honoured the moment it is open (slow devices) */
   const escQueued = useRef(false)
 
@@ -193,6 +194,8 @@ export default function CasefileApp() {
       runtimeRef.current?.stop(); runtimeRef.current = null; archive.interior = null; setCut(null)
       // leaving the briefing early still issues read access (nobody is left in a sealed archive)
       archive.grant()
+      // a first visit's subject file closes onto home
+      if (homeAfter.current && e.id === 'YW-000') { homeAfter.current = false; archive.setBrief(true) }
       status(shred ? `<b>${e.id}</b> <span class="x">crypto-shredded · key zeroized</span> · restore anytime` : `<b>${e.id}</b> re-encrypted · session key revoked`)
     } finally { busy.current = false; setSettled((n) => n + 1) }
   }, [archive, audit, file, status])
@@ -232,10 +235,9 @@ export default function CasefileApp() {
 
   const archiveRef = useRef<Archive | null>(null)
   useEffect(() => { archiveRef.current = archive }, [archive])
-  // the entry hands over (spec §26.10): the archive appears, held at its first frame, while the
-  // profile, now a point of light, flies into it; where it strikes, the wave starts
+  // the entry hands over (spec §29): the archive appears under the white field, held at its first
+  // frame, and slides in as the white lifts
   const onReveal = useCallback(() => { archiveRef.current?.holdEntrance(); setGateLeaving(true); onEnteredRef.current() }, [])
-  const originAt = useCallback(() => archiveRef.current?.entranceOrigin() ?? null, [])
   const onStrike = useCallback(() => archiveRef.current?.releaseEntrance(), [])
   const onGateDone = useCallback(() => setGateLeaving(false), [])
   // entry finished → archive
@@ -244,11 +246,13 @@ export default function CasefileApp() {
     try { localStorage.setItem('yw.entry', '1') } catch { /* private mode */ }
     if (!archive) return
     const target = entryBySlug.get(pendingSlug.current ?? '')
-    // a first visit without a deep link: the archive stays sealed, the entrance finds the subject
-    // file and opens it, and read access is issued when its briefing ends (spec §26.4)
+    // the entrance's swell settles on the subject file (spec §29). A first visit without a deep link:
+    // the archive stays sealed while it plays, read access is issued as it settles, and the subject
+    // file opens; home (the brief) follows when it closes. A return visit lands on home.
     const first = firstVisit.current && !target
     archive.enter(target?.id ?? 'YW-000', first)
-    autoOpen.current = first
+    autoOpen.current = homeAfter.current = first
+    if (!target && !first) archive.setBrief(true)
     pendingSlug.current = null
   }, [archive])
   const onEnteredRef = useRef(onEntered)
@@ -292,6 +296,8 @@ export default function CasefileApp() {
       if (mode === 'opening') { if (ev.key === 'Escape') escQueued.current = true; return }
       if (mode !== 'archive') return
       const m = ({ ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] } as Record<string, [number, number]>)[ev.key]
+      // from home, the first key steps into the archive (Enter lands on the first selected file)
+      if (archive.brief && (m || ev.key === 'Enter') && !(ev.target instanceof HTMLButtonElement || ev.target instanceof HTMLAnchorElement)) { ev.preventDefault(); archive.setBrief(false); if (m) archive.move(...m); return }
       if (m) { ev.preventDefault(); archive.move(...m) }
       else if (ev.key === 'Enter' && !(ev.target instanceof HTMLButtonElement)) open()
     }
@@ -305,33 +311,45 @@ export default function CasefileApp() {
   }, [mode, close])
 
   // the HUD waits until the wave has settled; then a first visit's read access is issued (a light
-  // front runs out from the file as the labels decrypt)
+  // front runs out from the file as the labels decrypt). A first visit's subject file then opens by
+  // itself, straight from the entrance: its status line stays until the drive starts to rise, so the
+  // browsing panel never flashes up between the two (openEntry ends the arrival)
   useEffect(() => {
     if (gate || !sceneReady || !arriving || !archive) return
     const h = setInterval(() => {
       if (!archive.entranceDone()) return
-      setArriving(false)
+      clearInterval(h)
       if (!archive.isGranted) { archive.grant(); audit(`access request ${visitor.id} · read only · granted`) }
+      if (!autoOpen.current) { setArriving(false); return }
+      autoOpen.current = false
+      const subject = entryById.get('YW-000')!
+      archive.jumpTo(subject.id); archive.decrypt(subject.id)
+      // (if it cannot open, the archive still arrives)
+      setTimeout(() => void openEntry(subject).finally(() => setArriving(false)), reduced ? 0 : 250)
     }, 100)
     return () => clearInterval(h)
-  }, [gate, sceneReady, arriving, archive, audit, visitor.id])
-  // ④ a first visit: once the wave has settled on the subject file, it decrypts and opens by itself
-  useEffect(() => {
-    if (arriving || !archive || !autoOpen.current) return
-    autoOpen.current = false
+  }, [gate, sceneReady, arriving, archive, audit, visitor.id, openEntry, reduced])
+  // the home's way into the subject file: its drive opens, and the door takes the camera inside
+  const openProfile = useCallback(() => {
+    if (!archive || archive.getSnapshot().mode !== 'archive') return
     const subject = entryById.get('YW-000')!
-    archive.jumpTo(subject.id); archive.decrypt(subject.id)
-    const h = setTimeout(() => void openEntry(subject), reduced ? 0 : 450)
-    return () => clearTimeout(h)
-  }, [arriving, archive, openEntry, reduced])
+    archive.setBrief(false); archive.jumpTo(subject.id)
+    setTimeout(() => void openEntry(subject), reduced ? 0 : 700)
+  }, [archive, openEntry, reduced])
 
-  const ctx = useMemo<Ctx | null>(() => (archive ? { archive, visitor, reduced, status, open, close, auditLog, record: audit, exitRef, space, runtime: runtimeRef, cut } : null), [archive, visitor, reduced, status, open, close, auditLog, audit, space, cut])
+  const ctx = useMemo<Ctx | null>(() => (archive ? { archive, visitor, reduced, status, open, openProfile, close, auditLog, record: audit, exitRef, space, runtime: runtimeRef, cut } : null), [archive, visitor, reduced, status, open, openProfile, close, auditLog, audit, space, cut])
 
   if (noGL) return <NoWebGL visitor={visitor} />
   return (
     <div className={`cf ${file ? 'cf--file' : ''} ${arriving && !gate && sceneReady ? 'cf--arriving' : ''} ${doorOpen ? 'cf--door' : ''}`} onPointerDown={() => { if (doorOpen) archive?.skipDoor() }}>
       <canvas ref={canvasRef} className={`cf-scene ${!gate && sceneReady ? 'on' : ''}`} aria-label="An archive of encrypted drives. Use the index to browse them as a list."
-        onClick={() => { if (archive?.click() === 'hero') open() }} />
+        onClick={() => {
+          if (!archive) return
+          // from home, a lit drive opens its file; any other drive steps into the archive there
+          const brief = archive.brief, hit = archive.click()
+          if (brief && hit) { archive.setBrief(false); if (SELECTED.some((s) => s.id === archive.selected?.id)) open() }
+          else if (hit === 'hero') open()
+        }} />
       <canvas ref={veilRef} className="cf-veil" aria-hidden="true" />
       <div className="cf-grain" aria-hidden="true" />
       {doorOpen && archive?.doorActive() && <button type="button" className="door-skip lbl" onClick={(ev) => { ev.stopPropagation(); archive?.skipDoor() }}>Skip ›</button>}
@@ -344,7 +362,7 @@ export default function CasefileApp() {
           {file && <Suspense fallback={null}><FileView entry={file} key={file.id} /></Suspense>}
         </ArchiveContext.Provider>
       )}
-      {(gate || gateLeaving) && <Suspense fallback={null}><Gate visitor={visitor} reduced={reduced} sceneReady={sceneReady || noGL} onTitle={() => setLoadScene(true)} onReveal={onReveal} originAt={originAt} onStrike={onStrike} onDone={onGateDone} /></Suspense>}
+      {(gate || gateLeaving) && <Suspense fallback={null}><Gate visitor={visitor} reduced={reduced} sceneReady={sceneReady || noGL} onTitle={() => setLoadScene(true)} onReveal={onReveal} onStrike={onStrike} onDone={onGateDone} /></Suspense>}
       <noscript>{ENTRIES.map((e) => e.title).join(' · ')}</noscript>
     </div>
   )

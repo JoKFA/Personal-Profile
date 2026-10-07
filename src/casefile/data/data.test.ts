@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { ENTRIES, entryById } from './entries'
 import { CAPABILITIES } from './capabilities'
 import { DRAWERS, ROLE_IDS } from './roles'
+import { SELECTED } from './story'
 import { LANES, ROWS, slotKey } from '../motion/grid'
 
 const openable = ENTRIES.filter((e) => e.kind === 'case' || e.kind === 'service' || e.kind === 'education')
@@ -34,6 +35,10 @@ describe('archive data', () => {
   it('related links and capability evidence point at real drives', () => {
     for (const e of ENTRIES) for (const r of e.related ?? []) expect(entryById.has(r), `${e.id} → ${r}`).toBe(true)
     for (const c of CAPABILITIES) for (const [, ev] of c.skills) for (const id of ev) expect(entryById.has(id), id).toBe(true)
+  })
+  it('the selected files are distinct and each has its own page', () => {
+    expect(new Set(SELECTED.map((s) => s.id)).size).toBe(SELECTED.length)
+    for (const s of SELECTED) expect(['case', 'service'], s.id).toContain(entryById.get(s.id)?.kind)
   })
   it('printed IDs fit on the drive label', () => {
     for (const e of ENTRIES) expect(e.id.length).toBeLessThanOrEqual(8)

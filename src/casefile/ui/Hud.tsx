@@ -7,8 +7,11 @@ import { DRAWERS } from '../data/roles'
 import { entryById } from '../data/entries'
 import { KIND_NAME, type Entry } from '../data/types'
 import { wrap, LANES } from '../motion/grid'
+import { ENTRANCE } from '../motion/waves'
+import { SELECTED } from '../data/story'
 import { sealedId } from '../model/archive'
-import { inGroup, type KindGroup } from '../scene/archive'
+import type { KindGroup } from '../scene/archive'
+import { Brief } from './Brief'
 import { useCtx, useSnapshot } from './context'
 
 const pad = (n: number) => String(n).padStart(2, '0')
@@ -27,15 +30,20 @@ export function Hud({ statusLine, hidden, arriving }: { statusLine: { html: stri
   const e = s.entry, lane = wrap(s.sel.lane, LANES), drawer = DRAWERS[lane]
   const locked = archive.isLocked(e), dead = archive.isShredded(e)
   const hide = hidden || s.mode !== 'archive'
+  /** home: the brief replaces the browsing HUD */
+  const brief = s.brief && s.mode === 'archive'
 
   return (
-    <div className={`hud ${hidden ? '' : 'on'} ${s.mode !== 'archive' ? 'dim' : ''}`} aria-hidden={hidden}>
-      <div className="hud-lock"><div className="a">YAOTING WANG</div><div className="b">ANALYST &amp; ENGINEER<span className="loc"> · VANCOUVER, BC</span></div><div className="c">SECURITY <b>PORTFOLIO</b></div></div>
+    <div className={`hud ${hidden ? '' : 'on'} ${s.mode !== 'archive' ? 'dim' : ''} ${brief ? 'hud--brief' : ''}`} aria-hidden={hidden}>
+      <button className="hud-lock" aria-label="Yaoting Wang, Security Analyst: home" onClick={() => { if (s.mode === 'archive') { setIndex(false); setContact(false); archive.setBrief(true) } }}>
+        <span className="a">YAOTING WANG</span><span className="b">SECURITY ANALYST<span className="loc"> · VANCOUVER, BC</span></span>
+      </button>
+      <Brief hidden={hidden || !brief || index || contact} />
       <div className="hud-top">
         <button className="hud-index-btn" aria-expanded={contact} onClick={() => { setContact((v) => !v); setIndex(false) }}><span>Contact</span></button>
         <button className="hud-index-btn" aria-expanded={index} onClick={() => { setIndex((v) => !v); setContact(false) }}><span aria-hidden="true">⌕</span><span>Index</span><kbd>/</kbd></button>
       </div>
-      {index && <IndexPanel onPick={(id) => { setIndex(false); archive.jumpTo(id) }} />}
+      {index && <IndexPanel onPick={(id) => { setIndex(false); archive.setBrief(false); archive.jumpTo(id) }} />}
       {contact && <ContactPanel />}
 
       <Leader entry={e} hidden={hide} />
@@ -61,7 +69,6 @@ export function Hud({ statusLine, hidden, arriving }: { statusLine: { html: stri
             <>
               <h2 className="panel-title">{locked ? '[REDACTED]' : e.title}</h2>
               <div className="panel-sub">{e.kind === 'service' || e.kind === 'education' ? `${e.org} · ${e.dates}` : e.year ? `${e.kicker.replace(/^Project · /, '')} · ${e.year}` : e.kicker}</div>
-              <p className="panel-sum">{e.summary}</p>
               {(dead || locked) && <dl className="policy"><dt className="lbl">{dead ? 'Status' : 'Access'}</dt><dd className="x">{dead ? 'Crypto-shredded · key zeroized' : 'Held by an AI guard · SENTINEL-1'}</dd></dl>}
               <button className="go" onClick={open}><b>{dead ? 'Restore & open' : locked ? 'Request clearance' : 'Open'}</b><kbd>ENTER</kbd><span aria-hidden="true">→</span></button>
             </>
@@ -90,20 +97,14 @@ export function Hud({ statusLine, hidden, arriving }: { statusLine: { html: stri
           <span>{drawer.name}</span>
           <button aria-label="Next drawer" onClick={() => archive.move(1, 0)}>→</button>
         </div>
-        <div className="lbl pos">{posInDrawer(lane, e)}</div>
+        <DrawerMeter lane={lane} entry={e} />
       </div>
       <HoverLabel />
 
       <KindKey hidden={hide} />
 
       {hint && !hide && <div className="hud-hint lbl">← → drawers / ↑ ↓ drives / enter open / click a drive</div>}
-      <div className="hud-foot lbl">
-        <span className="risk" data-lvl={s.riskLevel} tabIndex={0} aria-describedby="risk-tip"><span className="rb"><i style={{ width: `${s.risk}%` }} /></span>risk {pad(s.risk)}
-          <span className="tip" id="risk-tip" role="tooltip">How suspicious this session looks to this site’s behaviour analytics (UEBA). Denied drives, rapid scanning and shredding raise it; it cools down on its own.</span>
-        </span>
-        <PrivacyStat />
-        <button aria-label="Replay the intro" title="Replay the intro" onClick={() => { try { localStorage.removeItem('yw.entry') } catch { /* */ } location.reload() }}>↺</button>
-      </div>
+      <SessionLine granted={s.granted} />
     </div>
   )
 }
@@ -128,21 +129,20 @@ function KindKey({ hidden }: { hidden: boolean }) {
   useEffect(() => () => archive.setKindFocus(null), [archive])
   return (
     <div className={`kind-key lbl ${hidden ? 'hide' : ''}`} role="group" aria-label="What the drives hold" onMouseLeave={() => show(null)}>
-      {KINDS.map(([k, name]) => {
-        const n = ENTRIES.filter((e) => inGroup(e, k) && archive.isReadable(e)).length
-        return (
-          <button key={k} className={s.kindFocus === k ? 'on' : ''} aria-pressed={pinned === k}
-            onMouseEnter={() => show(k)} onFocus={() => show(k)} onBlur={() => show(null)}
-            onClick={() => { const next = pinned === k ? null : k; setPinned(next); archive.setKindFocus(next) }}>
-            <Glyph k={k} /><span>{name}</span><b>{n}</b>
-          </button>
-        )
-      })}
+      {KINDS.map(([k, name]) => (
+        <button key={k} className={s.kindFocus === k ? 'on' : ''} aria-pressed={pinned === k}
+          onMouseEnter={() => show(k)} onFocus={() => show(k)} onBlur={() => show(null)}
+          onClick={() => { const next = pinned === k ? null : k; setPinned(next); archive.setKindFocus(next) }}>
+          <Glyph k={k} /><span>{name}</span>
+        </button>
+      ))}
     </div>
   )
 }
 
-// A temporary readout follows the entrance's selection, then yields to the file panel.
+// The entrance's status line (after the PV, 26.9–31.6 s): typed in the middle of the frame between
+// four registration marks, a hairline running from it to the edge; it reads "Selecting files…" while
+// the swell searches and the file's number once it has settled on it, with a leader to the drive.
 function SearchReadout({ hidden }: { hidden: boolean }) {
   const { archive, reduced } = useCtx()
   const root = useRef<HTMLDivElement>(null)
@@ -155,24 +155,28 @@ function SearchReadout({ hidden }: { hidden: boolean }) {
       if (!r) return
       if (archive.entranceDone()) { r.style.opacity = '0'; return }
       const W = innerWidth, H = innerHeight, phone = W < 900
-      const x = phone ? W * 0.43 : W * 0.57, y = phone ? H * 0.49 : H * 0.53
-      const path = r.querySelector('path'), mark = r.querySelector('rect'), text = r.querySelector<HTMLElement>('span')
-      const target = archive.anchor(), found = age >= 2.65
-      const ax = found && target ? Math.max(16, Math.min(x - 16, target.x)) : x - 24
-      const ay = found && target ? Math.max(H * 0.22, Math.min(H * 0.7, target.y)) : y + 18
-      path?.setAttribute('d', 'M' + ax + ',' + ay + ' L' + (x - 12) + ',' + (y + 18) + ' H' + (W - Math.max(24, W * 0.033)))
-      mark?.setAttribute('x', String(ax - 1.5)); mark?.setAttribute('y', String(ay - 1.5))
+      const x = phone ? W * 0.3 : W * 0.5, y = phone ? H * 0.5 : H * 0.47
+      const text = r.querySelector<HTMLElement>('span'), lines = r.querySelectorAll('path'), marks = r.querySelectorAll('rect')
+      const found = age >= ENTRANCE.found, target = archive.anchor()
       if (text) {
-        text.style.transform = 'translate(' + x + 'px,' + y + 'px)'
-        const value = found ? 'File ' + (archive.selected?.id ?? '') : 'Selecting files…'
-        text.textContent = value.slice(0, Math.max(0, Math.floor((found ? age - 2.65 : age - 0.25) * 24)))
+        text.style.transform = 'translate(' + x + 'px,' + (y - text.offsetHeight / 2) + 'px)'
+        const value = found ? 'File ' + (archive.selected?.id ?? '') + (archive.selected ? ' · ' + archive.selected.title : '') : 'Selecting files…'
+        text.textContent = value.slice(0, Math.max(0, Math.floor((found ? age - ENTRANCE.found : age - 0.1) * 26)))
       }
-      r.style.opacity = String(Math.min(1, Math.max(0, (age - 0.3) * 3)))
+      // the marks register a band across the frame; the hairline leaves from under the text
+      const m = phone ? 14 : 28, bandW = phone ? W * 0.62 : W * 0.19, top = y - (phone ? 20 : 30), bottom = y + (phone ? 20 : 30)
+      const pts = [[x - m, top], [x - m, bottom], [x + bandW, top], [x + bandW, bottom]]
+      marks.forEach((mk, i) => { const p = pts[i]; if (!p) return; mk.setAttribute('x', String(p[0] - 2.5)); mk.setAttribute('y', String(p[1] - 2.5)) })
+      lines[0]?.setAttribute('d', 'M' + (x + (phone ? 40 : 110)) + ',' + (bottom + 4) + ' H' + W)
+      // once found, a leader from the file's drive to the line
+      const leader = found && target ? 'M' + target.x + ',' + target.y + ' L' + (x - m) + ',' + bottom : ''
+      lines[1]?.setAttribute('d', leader)
+      r.style.opacity = String(Math.min(1, Math.max(0, age * 4)))
     }
     raf = requestAnimationFrame(draw)
     return () => cancelAnimationFrame(raf)
   }, [archive, hidden, reduced])
-  return reduced ? null : <div className="search-readout" ref={root} aria-hidden="true"><svg><path /><rect width="3" height="3" /></svg><span /></div>
+  return reduced ? null : <div className="search-readout" ref={root} aria-hidden="true"><svg><path /><path className="lead" /><rect width="5" height="5" /><rect width="5" height="5" /><rect width="5" height="5" /><rect width="5" height="5" /></svg><span /></div>
 }
 
 // hairline from the selected drive to the panel; redraws on every selection
@@ -209,11 +213,14 @@ function Leader({ entry, hidden }: { entry: Entry | null; hidden: boolean }) {
 
 function IndexPanel({ onPick }: { onPick: (id: string) => void }) {
   const { archive } = useCtx()
+  // start here: the selected files first, in their order; the visitor's own file last
   const groups: [string, Entry[]][] = [
-    ['Profile', ENTRIES.filter((e) => e.kind === 'subject' || e.kind === 'visitor')],
+    ['Start here', SELECTED.map((x) => entryById.get(x.id)!)],
+    ['Profile', ENTRIES.filter((e) => e.kind === 'subject')],
     ['Experience', ENTRIES.filter((e) => e.kind === 'service')],
-    ['Education', ENTRIES.filter((e) => e.kind === 'education')],
     ['Projects', ENTRIES.filter((e) => e.kind === 'case' || e.kind === 'restricted')],
+    ['Education', ENTRIES.filter((e) => e.kind === 'education')],
+    ['You', ENTRIES.filter((e) => e.kind === 'visitor')],
   ]
   return (
     <div className="index" role="dialog" aria-label="Archive index">
@@ -261,11 +268,37 @@ function HoverLabel() {
   return <div ref={ref} className="hover-label" aria-hidden="true" />
 }
 
-/** "3 of 7 in this drawer": where the selection sits among the drawer's records. */
-function posInDrawer(lane: number, e: Entry | null) {
-  const rows = ENTRIES.filter((x) => x.slot.lane === lane).map((x) => x.slot.row).sort((a, b) => a - b)
-  if (!e) return `${rows.length} records in this drawer`
-  return `${rows.indexOf(e.slot.row) + 1} of ${rows.length} in this drawer`
+/** Where the selection sits in its drawer, read like an instrument: the number large and thin, a tick per record. */
+function DrawerMeter({ lane, entry }: { lane: number; entry: Entry | null }) {
+  const { archive } = useCtx()
+  const list = ENTRIES.filter((x) => x.slot.lane === lane).sort((a, b) => a.slot.row - b.slot.row)
+  const at = entry ? list.findIndex((x) => x.id === entry.id) : -1
+  return (
+    <div className="meter">
+      <div className="meter-n" aria-label={at >= 0 ? `${at + 1} of ${list.length} in this drawer` : `${list.length} records in this drawer`}>
+        <span className="n">{at >= 0 ? pad(at + 1) : '––'}</span><span className="of">/ {pad(list.length)}</span>
+      </div>
+      <div className="meter-ticks">{list.map((x, i) => (
+        <button key={x.id} className={i === at ? 'on' : ''} aria-label={x.kind === 'service' ? x.org : x.title} title={x.kind === 'service' ? x.org : x.title} onClick={() => archive.jumpTo(x.id)} />
+      ))}</div>
+    </div>
+  )
+}
+
+/** The session, as the system sees it: its state, the visitor's number, the time, a way to start over. */
+function SessionLine({ granted }: { granted: boolean }) {
+  const { visitor } = useCtx()
+  const [now, setNow] = useState(() => new Date())
+  useEffect(() => { const h = setInterval(() => setNow(new Date()), 1000); return () => clearInterval(h) }, [])
+  return (
+    <div className="hud-foot lbl">
+      <span className="sess"><i aria-hidden="true" />{granted ? 'Session authorized · read only' : 'Session pending'}</span>
+      <span className="sep" aria-hidden="true">/</span><span>{visitor.id}</span>
+      <span className="sep" aria-hidden="true">/</span><time className="clock">{now.toLocaleTimeString('en-GB')}</time>
+      <span className="sep" aria-hidden="true">/</span>
+      <button title="Replay the intro" onClick={() => { try { localStorage.removeItem('yw.entry') } catch { /* */ } location.reload() }}>Replay ↺</button>
+    </div>
+  )
 }
 
 function ContactPanel() {
@@ -279,22 +312,3 @@ function ContactPanel() {
   )
 }
 
-// The recon claims nothing leaves the browser; this lets anyone check it. Counted live in the page:
-// requests to any other origin, and cookies. The link runs Mozilla's header scan on this host.
-const OBSERVATORY = `https://developer.mozilla.org/en-US/observatory/analyze?host=${typeof location !== 'undefined' ? location.hostname : ''}`
-function PrivacyStat() {
-  const [n, setN] = useState({ third: 0, cookies: 0 })
-  useEffect(() => {
-    const f = () => {
-      const third = performance.getEntriesByType('resource').filter((r) => { try { const u = new URL(r.name, location.href); return (u.protocol === 'http:' || u.protocol === 'https:') && u.origin !== location.origin } catch { return false } }).length
-      const cookies = document.cookie ? document.cookie.split(';').filter((c) => c.trim()).length : 0
-      setN((o) => (o.third === third && o.cookies === cookies ? o : { third, cookies }))
-    }
-    f(); const h = setInterval(f, 4000); return () => clearInterval(h)
-  }, [])
-  return (
-    <span className="privacy" title="Counted live in this page">
-      <b>{n.third}</b> trackers · <b>{n.cookies}</b> cookies · <a href={OBSERVATORY} target="_blank" rel="noopener noreferrer">headers ↗</a>
-    </span>
-  )
-}

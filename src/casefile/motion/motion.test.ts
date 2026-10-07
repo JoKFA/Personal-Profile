@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { columnStrength, ENTRANCE, ENTRANCE_END, field, idleWave, PULSE_LIFE, selectionWave, settlingWave, smooth, type FieldState } from './waves'
+import { columnStrength, ENTRANCE, ENTRANCE_END, entranceCamera, entranceSlide, field, idleWave, PULSE_LIFE, selectionWave, settlingWave, smooth, type FieldState } from './waves'
 import { damp, spring } from './spring'
 import { nearest, nearestCell, wrap } from './grid'
 
@@ -91,23 +91,46 @@ describe('grid', () => {
   })
 })
 
-describe('entrance: the search becomes the resting archive', () => {
+describe('entrance: the swell becomes the resting archive', () => {
   // the archive at the selected file (row 0, lane 0) and around it, with nothing else moving
   const at = (row: number, lane: number, entry: number) => field(row, lane, { shoulder: 0, laneFocus: 0, idleGain: 0, pulseGain: 0, pulses: [], time: 0, entry })
   const rest = (row: number, lane: number) => at(row, lane, 0)
   it('ends exactly in the resting shape', () => {
     for (const [r, l] of [[0, 0], [3, 0], [-3, 0], [8, 0], [0, 1], [5, 2]]) expect(at(r, l, ENTRANCE_END + 0.01)).toBeCloseTo(rest(r, l), 6)
   })
-  it('never piles up above the resting shape and then drops back to it', () => {
+  it('once it hands over, never piles up above the resting shape and then drops back to it', () => {
     for (let r = -10; r <= 10; r++) {
-      for (let a = ENTRANCE.travel - ENTRANCE.morph; a <= ENTRANCE_END; a += 1 / 60) {
+      for (let a = ENTRANCE.handover + ENTRANCE.handoverFor; a <= ENTRANCE_END + 3; a += 1 / 60) {
         expect(at(r, 0, a), `row ${r} at ${a.toFixed(2)} s`).toBeLessThanOrEqual(Math.max(rest(r, 0), 0) + 0.15)
       }
     }
   })
-  it('moves smoothly frame to frame while it arrives', () => {
+  it('moves smoothly frame to frame (the crest is fast, as in the PV, but never jumps)', () => {
     for (let r = -10; r <= 10; r += 2) {
-      for (let a = 0.4; a < ENTRANCE_END; a += 1 / 60) expect(Math.abs(at(r, 0, a + 1 / 60) - at(r, 0, a)), `row ${r} at ${a.toFixed(2)} s`).toBeLessThan(0.12)
+      for (let a = 0.02; a < ENTRANCE_END; a += 1 / 60) expect(Math.abs(at(r, 0, a + 1 / 60) - at(r, 0, a)), `row ${r} at ${a.toFixed(2)} s`).toBeLessThan(0.25)
     }
+  })
+  it('sweeps the rows once out and once back before it settles', () => {
+    // the first crest passes the file early, the returning one just before the hand-over
+    const peakAt = (from: number, to: number) => { let best = -Infinity, when = from; for (let a = from; a < to; a += 0.01) { const v = at(0, 0, a); if (v > best) { best = v; when = a } } return when }
+    expect(peakAt(0.2, 1.2)).toBeGreaterThan(0.3)
+    expect(peakAt(0.2, 1.2)).toBeLessThan(0.7)
+    expect(peakAt(2.6, 3.4)).toBeGreaterThan(2.9)
+  })
+  it('slides the archive in, decelerating, and holds it in place after', () => {
+    expect(entranceSlide(0)).toBeLessThan(-15)
+    expect(Math.abs(entranceSlide(ENTRANCE.slide))).toBeLessThan(0.1)
+    expect(Math.abs(entranceSlide(2))).toBe(0)
+    const v = (a: number) => entranceSlide(a + 0.01) - entranceSlide(a)
+    expect(v(0.1)).toBeGreaterThan(v(0.5))
+  })
+  it("ends the camera on the archive's own view", () => {
+    const c = entranceCamera(ENTRANCE_END)
+    expect(c.yaw).toBeCloseTo(59, 6); expect(c.elevation).toBeCloseTo(19, 6)
+    expect(c.span).toBeCloseTo(1, 6); expect(c.distance).toBeCloseTo(140, 6)
+    expect(c.aimY).toBeCloseTo(0, 6); expect(c.aimZ).toBeCloseTo(0, 6)
+    // and starts low and side-on, close in
+    const s = entranceCamera(0)
+    expect(s.elevation).toBeLessThan(6); expect(s.yaw).toBeGreaterThan(85); expect(s.distance).toBeLessThan(30)
   })
 })

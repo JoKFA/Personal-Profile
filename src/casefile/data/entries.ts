@@ -9,14 +9,14 @@ const MAIL = 'felixwang1222@gmail.com'
 const ask = (subject: string) => ({ label: 'Walkthrough on request', href: `mailto:${MAIL}?subject=${encodeURIComponent(subject)}` })
 
 export const SUBJECT: Entry = {
-  id: 'YW-000', slug: 'profile', kind: 'subject', title: 'Yaoting Wang', kicker: 'Security Analyst & Engineer · Risk, Cloud & AI Security',
+  id: 'YW-000', slug: 'profile', kind: 'subject', title: 'Yaoting Wang', kicker: 'Security Analyst · Risk, Cloud & AI Security',
   summary: 'Master of Cybersecurity at SFU. Security work across AI systems, cloud pipelines, detection, risk and networks, with the evidence kept.',
   roles: 'all', slot: { lane: 0, row: 12 },
-  // availability and targets: resume system (能力画像 · OBJECTIVE.md, 2026-09-24)
-  facts: [['Available', 'Full-time from Feb 2027'], ['Looking for', 'Security Analyst · GRC · Cloud & AI Security'], ['Now', 'Information Security co-op, Coast Capital'], ['Based', 'Vancouver, BC · open to relocating in Canada']],
+  // targets: resume system (能力画像 · OBJECTIVE.md, 2026-09-24); title and availability: user 2026-10-05
+  facts: [['Available', 'Full-time from Apr 2027'], ['Looking for', 'Security Analyst · GRC · Cloud & AI Security'], ['Now', 'Information Security co-op, Coast Capital'], ['Based', 'Vancouver, BC · open to relocating in Canada']],
   // no demo on the drive: the subject file's exhibit is the drive's own work space (space/, docs/subject-space-spec.md)
   numbers: [['50+', 'security assessments'], ['20+', 'vendor risk reviews'], ['60+', 'MCP servers tested'], ['14', 'pentest findings'], ['1,000+', 'people trained'], ['~30%', 'AWS cost cut']],
-  seo: { title: 'Yaoting Wang | Security Portfolio', description: 'Security analyst and engineer, Master of Cybersecurity at SFU: risk assessment at a Canadian financial institution, cloud and DevSecOps, detection, and AI security, with the evidence for each.' },
+  seo: { title: 'Yaoting Wang | Security Portfolio', description: 'Security analyst, Master of Cybersecurity at SFU: risk assessment at a Canadian financial institution, cloud and DevSecOps, detection, and AI security, with the evidence for each.' },
 }
 
 export const CASES: Entry[] = [
@@ -26,7 +26,7 @@ export const CASES: Entry[] = [
     summary: 'Sandboxes any MCP server in Docker and runs 14 detectors before an AI agent is allowed near it.',
     roles: ['ai', 'cloud'], slot: { lane: 1, row: 12 },
     facts: [['My role', 'Designer and builder'], ['Tested', '60+ real MCP servers'], ['Output', 'HTML · TXT · SARIF for GitHub'], ['Evidence', 'JSON / JSONL logs']],
-    numbers: [['14', 'detectors'], ['60+', 'servers tested'], ['5', 'pipeline phases'], ['30–90 s', 'per target']],
+    numbers: [['14', 'detectors'], ['60+', 'servers tested'], ['30–90 s', 'per target']],
     stack: ['Python', 'Docker', 'MCP', 'SARIF', 'JSONL', 'stdio / SSE'],
     sections: [
       { eyebrow: '01 · Threat model', title: 'MCP is a new security boundary', body: 'Once an LLM can call tools, the MCP server becomes the enforcement point between untrusted instructions and real systems. Web scanners do not understand MCP resources, prompts, tool descriptions or stdio/SSE transports, so the framework speaks MCP natively.', points: ['Covers injection, data exposure, access control, enumeration and tool-level abuse.', 'Maps every finding to CWE, OWASP LLM / API Top 10 and CVSS.'] },
@@ -185,7 +185,7 @@ export const SERVICE: Entry[] = [
     numbers: [['50+', 'internal assessments'], ['20+', 'vendors reviewed']],
     sections: [{ eyebrow: 'What I do', title: 'Decision-ready risk', body: 'I research each change, threat-model it, and document a risk rating with a treatment recommendation: accept, mitigate, transfer or avoid.', points: ['Assessed 50+ internal security projects with threat modelling and documented risk treatment.', 'Reviewed 20+ vendors against ISO 27001, SOC 2 Type II, PCI and pentest evidence, plus OSINT and external ratings.', 'Kept audit-ready Archer records; updated internal security policies, procedures and awareness material.'] }],
     stack: ['Risk assessment', 'Threat modelling', 'Third-party risk', 'ISO 27001', 'SOC 2', 'Archer'],
-    demo: 'coast', demoNote: ['Sample vendor · real assessments are confidential', '50+ assessments · 20+ vendors'],
+    demo: 'coast', demoNote: ['Sample vendor · real assessments are confidential', 'Jun 2026 – Feb 2027'],
     related: ['X-005'],
     seo: { title: 'Yaoting Wang | Coast Capital · Information Security', description: 'Information security co-op: 50+ internal security risk assessments and 20+ vendor risk reviews against ISO 27001, SOC 2 and PCI evidence.' },
   },

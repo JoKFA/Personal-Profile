@@ -1,7 +1,7 @@
 // Acceptance for the Encrypted Archive (docs/casefile-spec.md §12, V2–V11).
 import { expect, test, type Page } from '@playwright/test'
 
-type Win = Window & { __cf: { clearanceMin: number; stalled: boolean; settled(): boolean; subscribe(f: () => void): () => void; getSnapshot(): { mode: string; readable: number; risk: number; captured: boolean; sel: { lane: number; row: number }; entry: { id: string } | null }; select(c: { lane: number; row: number }): void; jumpTo(id: string): void; move(l: number, r: number): void } }
+type Win = Window & { __cf: { clearanceMin: number; stalled: boolean; settled(): boolean; subscribe(f: () => void): () => void; getSnapshot(): { mode: string; readable: number; risk: number; captured: boolean; brief: boolean; sel: { lane: number; row: number }; entry: { id: string } | null }; select(c: { lane: number; row: number }): void; jumpTo(id: string): void; move(l: number, r: number): void } }
 
 function watchErrors(page: Page) {
   const errors: string[] = []
@@ -16,13 +16,18 @@ async function enter(page: Page, path = '/?intro') {
   await page.waitForFunction(() => ['archive', 'opening', 'file'].includes((window as unknown as Win).__cf?.getSnapshot().mode), null, { timeout: 30_000 })
   // the HUD and the scene appear together once the first frame is on screen
   await page.waitForSelector('.cf-scene.on', { timeout: 30_000 }).catch(() => { /* no WebGL: the index page */ })
-  // the entrance: the camera whips in and the file panel follows once it has settled
+  // the entrance: the camera whips in and the callouts follow once it has settled
   await page.waitForFunction(() => !document.querySelector('.cf--arriving'), null, { timeout: 15_000 })
-  // a first visit opens the subject file by itself once the entrance settles: close it
-  const opened = await page.waitForFunction(() => (window as unknown as Win).__cf.getSnapshot().mode !== 'archive', null, { timeout: 2500 }).then(() => true, () => false)
-  if (opened) {
-    await page.waitForFunction(() => (window as unknown as Win).__cf.getSnapshot().mode === 'file', null, { timeout: 20_000 })
+  // a first visit opens the subject file by itself; closing it lands on home
+  await page.waitForTimeout(700)
+  if (['opening', 'file'].includes(await page.evaluate(() => (window as unknown as Win).__cf.getSnapshot().mode))) {
+    await page.waitForFunction(() => (window as unknown as Win).__cf.getSnapshot().mode === 'file', null, { timeout: 30_000 })
     await closeFile(page)
+  }
+  // home (the brief) opens on the selected files: step into the archive the way a reader does
+  if (await page.evaluate(() => (window as unknown as Win).__cf?.getSnapshot().brief)) {
+    await page.getByRole('button', { name: /Enter the archive/ }).click()
+    await page.waitForFunction(() => !(window as unknown as Win).__cf.getSnapshot().brief, null, { timeout: 5000 })
   }
   await page.waitForTimeout(800)
 }
@@ -56,13 +61,18 @@ test('full flow: read access, open, close, shred, deny, SENTINEL', async ({ page
   await closeFile(page)
   await expect(page).toHaveURL(/\/$/)
 
-  // crypto-shred: three passes, key zeroized, the drive reads SHREDDED
+  // a file's way on is the next file, named; nothing to shred there
   await openDrive(page, 'X-003')
+  await expect(page.locator('.file-next')).toBeVisible()
+  await expect(page.locator('.file-shred')).toHaveCount(0)
+  await closeFile(page)
+  // crypto-shred lives in the visitor's own file: three passes, key zeroized, the drive reads SHREDDED
+  await openDrive(page, 'V-FILE')
   await page.locator('.file-shred').click()
   await expect(page.locator('.shred-banner')).toContainText('Pass 1 of 3')
   await expect(page.locator('.shred-banner')).toContainText('Key zeroized', { timeout: 8000 })
   await page.waitForFunction(() => (window as unknown as Win).__cf.getSnapshot().mode === 'archive', null, { timeout: 15_000 })
-  await page.evaluate(() => (window as unknown as Win).__cf.jumpTo('X-003')); await page.waitForTimeout(800)
+  await page.evaluate(() => (window as unknown as Win).__cf.jumpTo('V-FILE')); await page.waitForTimeout(800)
   await expect(page.locator('.panel .go')).toContainText('Restore')
 
   // deny: an empty drive raises the visitor's risk
@@ -245,7 +255,7 @@ test('open never clips, close is quick, every shred step stays readable', async 
   expect(await page.evaluate(() => (window as unknown as Win).__cf.stalled)).toBe(false)
 
   // crypto-shred: each pass and the zeroized key stay on screen long enough to read
-  await openDrive(page, 'X-003')
+  await openDrive(page, 'V-FILE')
   await page.waitForTimeout(1200)
   await page.evaluate(() => {
     const w = window as unknown as { __sb: [number, string][] }; w.__sb = []
@@ -260,51 +270,42 @@ test('open never clips, close is quick, every shred step stays readable', async 
   expect(errors).toEqual([])
 })
 
-test('entry: your facts land in an attack profile, which is sealed and falls into the archive', async ({ page }, info) => {
+test('entry: your browser is read as a fingerprint, profiled, sealed, and the archive slides in', async ({ page }, info) => {
   const errors = watchErrors(page)
   const phone = info.project.name.startsWith('phone')
   await page.goto('/?intro')
-  // the hook: the first fact is said large and lands in the card within about two seconds
-  await expect(page.locator('.gz-s').first()).toBeVisible({ timeout: 5000 })
-  const size = await page.locator('.gz-s').first().evaluate((el) => parseFloat(getComputedStyle(el).fontSize))
-  expect(size).toBeGreaterThanOrEqual(phone ? 24 : 30)
-  await expect(page.locator('.gz-f .v').first()).toBeVisible({ timeout: 2500 })
-  // the turn: an attack profile, with what an attacker would do written under three fields
-  await expect(page.locator('.gz-card.attack .gz-h')).toContainText('ATTACK PROFILE', { timeout: 4000 })
-  const aims = await page.locator('.gz-aim').allTextContents()
-  expect(aims.filter((t) => t.trim().length > 8).length).toBe(3)
-  await expect.poll(() => page.locator('.gz-aim').last().evaluate((el) => Number(getComputedStyle(el).opacity))).toBeGreaterThan(0.95)
-  for (const el of await page.locator('.gz-aim').all()) {
-    expect(await el.evaluate((e) => e.scrollWidth <= e.clientWidth + 1), await el.textContent() ?? '').toBe(true)
+  // read: the scan reaches the readings; each value resolves from cipher into a real one
+  await expect(page.locator('.fp-cap1')).toBeVisible({ timeout: 5000 })
+  const size = await page.locator('.fp-cap1').evaluate((el) => parseFloat(getComputedStyle(el).fontSize))
+  expect(size).toBeGreaterThanOrEqual(phone ? 24 : 28)
+  // profile: every reading carries what an attacker does with it, readable and inside the screen
+  await expect(page.locator('.fp-cap2')).toBeVisible({ timeout: 6000 })
+  await expect.poll(() => page.locator('.fp-mi .a').last().evaluate((el) => Number(getComputedStyle(el).opacity))).toBeGreaterThan(0.95)
+  const vw = page.viewportSize()!
+  for (const el of await page.locator('.fp-mi').all()) {
+    const b = (await el.boundingBox())!
+    expect(b.x >= 0 && b.x + b.width <= vw.width && b.y + b.height <= vw.height, await el.textContent() ?? '').toBe(true)
   }
-  await page.screenshot({ path: `.codex-runtime/design/entrance/art-directed/${info.project.name}-attack.png` })
-  // the defender: sealed, nothing left the browser; the card stays inside the screen
-  await expect(page.locator('.gz-card.sealed .gz-h')).toContainText('PROFILE SEALED', { timeout: 4000 })
-  await expect(page.locator('.gz-foot')).toContainText('Nothing sent.')
-  const card = await page.locator('.gz-card').boundingBox(), vw = page.viewportSize()!
-  expect(card && card.x >= 0 && card.x + card.width <= vw.width && card.y + card.height <= vw.height).toBe(true)
-  const skip = await page.locator('.gz-skip').boundingBox()
-  if (phone) expect(card && skip && card.y + card.height < skip.y).toBe(true)
-  for (const el of await page.locator('.gz-f .v, .gz-aim, .gz-h span').all()) {
-    const fits = await el.evaluate((e) => e.scrollWidth <= e.clientWidth + 1)
-    expect(fits, await el.textContent() ?? '').toBe(true)
-  }
-  await page.waitForTimeout(300)
-  await page.screenshot({ path: `.codex-runtime/design/entrance/art-directed/${info.project.name}-sealed.png` })
-  // then into the archive: the wave settles and the subject file opens by itself
-  await page.waitForFunction(() => (window as unknown as Win).__cf?.getSnapshot().mode === 'file', null, { timeout: 30_000 })
-  expect(await page.evaluate(() => (window as unknown as Win).__cf.getSnapshot().entry?.id)).toBe('YW-000')
+  // seal: the readings turn to cipher, the print becomes its SHA-256, which is printed in full
+  await expect(page.locator('.fp-cap3')).toBeVisible({ timeout: 4000 })
+  await expect.poll(() => page.locator('.fp-hash code').textContent(), { timeout: 4000 }).toMatch(/^[0-9a-f]{8}( [0-9a-f]{8}){3}\n[0-9a-f]{8}( [0-9a-f]{8}){3}$/)
+  await page.screenshot({ path: `.codex-runtime/design/entrance/fingerprint/${info.project.name}-sealed.png` })
+  // then into the archive: the swell settles on the subject file, which opens by itself (spec §29)
+  await page.waitForFunction(() => (window as unknown as Win).__cf?.getSnapshot().mode === 'file' && !!document.querySelector('.file--subject'), null, { timeout: 40_000 })
   await expect(page.locator('.gate')).toHaveCount(0)
+  await closeFile(page)
+  await page.waitForFunction(() => (window as unknown as Win).__cf.getSnapshot().brief, null, { timeout: 5000 })
+  await expect(page.locator('.brief-co')).toHaveCount(4)
   expect(errors).toEqual([])
 })
 
-test('entry: skipping during a value flight leaves no moving text or gate behind', async ({ page }) => {
+test('entry: skipping lands on the sealed print and leaves no gate behind', async ({ page }) => {
   const errors = watchErrors(page)
   await page.goto('/?intro')
-  await page.locator('.gz-flight').first().waitFor({ state: 'attached', timeout: 5000 })
+  await expect(page.locator('.fp-cap1')).toBeVisible({ timeout: 5000 })
   await page.keyboard.press('Escape')
-  await page.waitForFunction(() => (window as unknown as Win).__cf?.getSnapshot().mode === 'file', null, { timeout: 30_000 })
-  await expect(page.locator('.gz-flight, .gate')).toHaveCount(0)
+  await page.waitForFunction(() => { const s = (window as unknown as Win).__cf?.getSnapshot(); return s?.mode === 'archive' || s?.mode === 'opening' || s?.mode === 'file' }, null, { timeout: 30_000 })
+  await expect(page.locator('.gate')).toHaveCount(0)
   expect(await page.evaluate(() => (window as unknown as Win).__cf.getSnapshot().entry?.id)).toBe('YW-000')
   expect(errors).toEqual([])
 })
@@ -321,9 +322,44 @@ test('entrance: a returning visitor follows a populated wave to the selected fil
     await page.screenshot({ path: `.codex-runtime/design/entrance/art-directed/${info.project.name}-wave-${age}.png` })
   }
   await page.waitForFunction(() => !document.querySelector('.cf--arriving'), null, { timeout: 15_000 })
-  await expect(page.locator('.panel-title')).toContainText('Yaoting Wang')
+  await expect(page.locator('.brief-thesis')).toBeVisible()
   expect(await page.evaluate(() => (window as unknown as EntryWin).__cf.getSnapshot().mode)).toBe('archive')
   await expect(page.locator('.gate')).toHaveCount(0)
+  expect(errors).toEqual([])
+})
+
+test('home: the selected files are lit, called out without overlap, and open their files', async ({ page }, info) => {
+  test.setTimeout(120_000)
+  const errors = watchErrors(page)
+  await page.addInitScript(() => { localStorage.setItem('yw.entry', '1'); localStorage.setItem('yw.hint', '1') })
+  await page.goto('/')
+  await page.waitForFunction(() => { const s = (window as unknown as Win).__cf?.getSnapshot(); return s?.mode === 'archive' && s.brief && !document.querySelector('.cf--arriving') }, null, { timeout: 45_000 })
+  await page.waitForTimeout(1500)   // the lens has opened
+  const phone = info.project.name.startsWith('phone')
+  // the four callouts, the sentence and the actions sit inside the screen and never on each other
+  const boxes = await page.evaluate(() => ['.brief-co', '.brief-say', '.brief-act', '.hud-lock', '.hud-top'].flatMap((s) => [...document.querySelectorAll(s)].map((e) => ({ s, b: e.getBoundingClientRect().toJSON() as DOMRect }))))
+  expect(boxes.filter((x) => x.s === '.brief-co')).toHaveLength(4)
+  const vw = page.viewportSize()!
+  for (const { s, b } of boxes) expect(b.left >= 0 && b.right <= vw.width && b.top >= 0 && b.bottom <= vw.height, `${s} on screen`).toBe(true)
+  for (let i = 0; i < boxes.length; i++) for (let j = i + 1; j < boxes.length; j++) {
+    const a = boxes[i].b, b = boxes[j].b
+    const hit = Math.min(a.right, b.right) - Math.max(a.left, b.left) > 1 && Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top) > 1
+    expect(hit, `${boxes[i].s} × ${boxes[j].s}`).toBe(false)
+  }
+  if (phone) for (const co of await page.locator('.brief-co').all()) expect((await co.boundingBox())!.height).toBeGreaterThanOrEqual(44)
+  expect(await noOverflow(page)).toBe(true)
+  await page.screenshot({ path: `.codex-runtime/design/home/${info.project.name}-home.png` })
+  // a callout opens its file; closing it leaves the reader in the archive; the name brings them home
+  await page.locator('.brief-co').first().click()
+  await page.waitForURL(/\/projects\/mcp-security-framework/)
+  await page.waitForFunction(() => (window as unknown as Win).__cf.getSnapshot().mode === 'file', null, { timeout: 20_000 })
+  await closeFile(page)
+  expect(await page.evaluate(() => (window as unknown as Win).__cf.getSnapshot().brief)).toBe(false)
+  await page.locator('.hud-lock').click()
+  await page.waitForFunction(() => (window as unknown as Win).__cf.getSnapshot().brief, null, { timeout: 5000 })
+  // the way inside the drive: the subject file opens on request, not by itself
+  await page.getByRole('button', { name: /Inside my drive/ }).click()
+  await page.waitForFunction(() => (window as unknown as Win).__cf.getSnapshot().mode === 'file' && !!document.querySelector('.file--subject'), null, { timeout: 30_000 })
   expect(errors).toEqual([])
 })
 

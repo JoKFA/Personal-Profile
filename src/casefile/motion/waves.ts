@@ -39,38 +39,72 @@ export const idleWave = (row: number, lane: number, t: number) =>
   0.027 * Math.sin((t * Math.PI * 2) / 13 - row * 0.17 + lane * 0.3)
 
 /**
- * The entrance, after the Rhine Lab PV (27.6–31.8 s, frame by frame; spec §26.3): one continuous
- * shot, no cuts. The camera arrives fast down the selected file's drawer and slows to a stop on it;
- * the drives ripple in slanted crests that run the same way, the main swell riding with the camera;
- * as it slows, the ripples die away and the last swell piles up in the file's own drawer as a long
- * ramp whose top is the file. Rows and lanes are relative to the file; `age` is seconds since the
- * archive appeared. One easing curve drives both the camera and the swell, so they stay together.
+ * The entrance (spec §29), after the Rhine Lab PV 26.9–31.6 s, watched at 25 fps. The wave and the
+ * camera follow RhineLabUI's frame-by-frame reconstruction of that shot (src/motion.ts `archiveWave`,
+ * `cinematicField`; src/scene.ts, the cinematic camera; MIT, Copyright (c) 2026 LBEILC). The archive
+ * slides into a white field seen side-on, the drives standing as slats; the camera whips up and turns
+ * while one tall crest sweeps the rows with its front slanted across the drawers; a faster crest runs
+ * back; as it reaches the file the swell hands over to the archive's resting shape, a long ramp whose
+ * top is the file, and the camera pulls back into the archive's telephoto view. Rows and lanes are
+ * relative to the file; `age` is seconds since the archive appeared.
  */
-export const ENTRANCE = { travel: 3.4, reach: 26, morph: 1.6, settle: 3.2, settleFor: 1.0 } as const
+export const ENTRANCE = {
+  /** the archive slides in from the left, decelerating */
+  slide: 0.75, slideFrom: -23,
+  /** the swell hands over to the resting shape */
+  handover: 2.95, handoverFor: 0.45,
+  /** the other drawers quieten to a quarter */
+  focus: 3.4, focusFor: 0.95,
+  /** the camera has the file: its number types in */
+  found: 3.3,
+  /** the camera settles into the archive's own view */
+  settle: 2.33, settleFor: 2.25,
+} as const
 export const ENTRANCE_END = ENTRANCE.settle + ENTRANCE.settleFor
-const easeOut = (t: number) => 1 - (1 - t) ** 3
-/** How far behind the file the camera (and the main swell) is, in rows: fast at first, then slowing to 0. */
-export const crestRow = (age: number) => -ENTRANCE.reach * (1 - easeOut(clamp(age / ENTRANCE.travel)))
-/**
- * How far the search has turned into the archive's resting shape (0 → 1). The swell does not pile
- * up and then fall: as it slows onto the file it becomes, continuously, the resting field itself
- * (the shoulders round the selected file), so the entrance ends exactly where the archive rests.
- */
-export const entryMorph = (age: number) => (age <= 0 ? 1 : smooth((age - (ENTRANCE.travel - ENTRANCE.morph)) / ENTRANCE.morph))
-/** the crests run at a slant across the drawers, the way the PV's do */
-const SLANT = 1.3
-/** The travelling part of the entrance: ripples and the main swell, handing over to the resting field. */
-export function searchWave(row: number, lane: number, age: number) {
-  if (age <= 0 || age >= ENTRANCE.travel) return 0
-  const on = smooth(age / 0.35)
-  const morph = entryMorph(age)
-  // The slanted front straightens into the subject's drawer as the camera comes to rest.
-  const along = row + lane * SLANT * (1 - morph), front = along - crestRow(age)
-  // A single readable crest with a quieter trailing wake, rather than a full-screen sine field.
-  const wake = 0.3 * Math.sin(front * 0.86) * bell(front + 6, 6) * Math.exp(-age * 0.55)
-  const swell = 1.85 * bell(front, 3.4)
-  return on * (wake + swell) * (1 - morph)
+/** reference time of the PV reconstruction at age 0 (its wave starts at 22, its slide at 21.92) */
+const SHOT0 = 22
+/** z offset of the whole archive while it slides in */
+export const entranceSlide = (age: number) => ENTRANCE.slideFrom * (1 - clamp((age + 0.08) / ENTRANCE.slide)) ** 2
+/** one crest with a trough behind it: neighbours describe one surface, not staggered tweens */
+const packet = (d: number) => 2.3 * bell(d, 3.8) - 0.53 * bell(d - 6, 3.5)
+/** the slant of the crest's front across the drawers, in rows per lane */
+const SLANT = 0.65
+/** The travelling part: the first crest out, the faster one back. */
+export function entranceWave(row: number, lane: number, age: number) {
+  if (age <= 0 || age >= ENTRANCE.handover + ENTRANCE.handoverFor) return 0
+  const phase = row + lane * SLANT
+  const first = -9 + age * 19, back = 20 - (age - 2.3) * 24
+  return smooth(age / 0.32) * (
+    packet(phase - first) * (1 - smooth((age - 2.15) / 0.65)) +
+    packet(phase - back) * smooth((age - 2.17) / 0.32) * (1 - smooth((age - 3.5) / 0.85))
+  ) * (1 - smooth((age - ENTRANCE.handover) / ENTRANCE.handoverFor))
 }
+/** How far the drawers have quietened to the file's (0 → 1). */
+export const entryFocus = (age: number) => (age <= 0 ? 1 : smooth((age - ENTRANCE.focus) / ENTRANCE.focusFor))
+/**
+ * The resting shape grows out from the file as the swell hands over: the shoulders rise from the
+ * file outward, a row a little later than the one before. Only rising (spec §26.8): the swell never
+ * piles up above the resting shape and falls back to it.
+ */
+export const grown = (row: number, age: number) => (age <= 0 ? 1 : smooth((SHOT0 + age - 25.05 - Math.abs(row) * 0.065) / 0.62))
+
+/** The entrance's camera, in degrees and world units; at the end it is the archive's own view. */
+export function entranceCamera(age: number) {
+  const shot = SHOT0 - 0.08 + Math.max(0, age)
+  const orbit = smooth((shot - 22.6) / 1.6), settle = smooth((age - ENTRANCE.settle) / ENTRANCE.settleFor)
+  return {
+    yaw: 89 - 22 * orbit - 8 * settle,
+    elevation: 3 + 40 * smooth((shot - 21.96) / 0.22) - 8 * orbit - 16 * settle,
+    /** vertical extent of the view at the aim, as a multiple of the archive's own */
+    span: lerp(lerp(10.8, 10.3, orbit) / 7.33, 1, settle),
+    distance: lerp(28 + 7 * orbit, 140, settle),
+    /** the aim's offset from the archive's own aim */
+    aimY: lerp(-2.55 + 0.4 * orbit, -0.045, settle) + 0.045,
+    aimZ: lerp(2.48, 0.481, settle) - 0.481,
+    settle,
+  }
+}
+const lerp = (a: number, b: number, t: number) => a + (b - a) * t
 
 /** Lane distance counts 2.2× a row: lanes are further apart than rows. */
 export const pulseDistance = (dRow: number, dLane: number) => Math.hypot(dRow, dLane * 2.2)
@@ -94,11 +128,11 @@ export function field(row: number, lane: number, s: FieldState) {
   let pulse = 0
   for (const p of s.pulses) pulse += selectionWave(pulseDistance(row - p.row, lane - p.lane), s.time - p.time)
   return (
-    // the resting shape grows out of the search as it arrives (entryMorph), never after it
-    settlingWave(row - s.shoulder) * columnStrength(lane, s.laneFocus) * entryMorph(s.entry ?? 0) +
+    // the resting shape grows out from the file as the swell hands over to it, never after it
+    settlingWave(row - s.shoulder) * grown(row - s.shoulder, s.entry ?? 0) * (1 + (columnStrength(lane, s.laneFocus) - 1) * entryFocus(s.entry ?? 0)) +
     idleWave(row, lane, s.time) * s.idleGain +
     clamp(pulse, -PULSE_CLAMP, PULSE_CLAMP) * s.pulseGain +
-    searchWave(row - s.shoulder, lane - s.laneFocus, s.entry ?? 0)
+    entranceWave(row - s.shoulder, lane - s.laneFocus, s.entry ?? 0)
   )
 }
 
