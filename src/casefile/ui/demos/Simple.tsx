@@ -1,9 +1,6 @@
-// Timeline (projects without a bespoke demo), the subject's identity plate, and the visitor print.
+// Timeline (projects without a bespoke demo) and the visitor print.
 import { useEffect, useRef, useState } from 'react'
 import type { DemoProps } from '.'
-import { CAPABILITIES } from '../../data/capabilities'
-import { ENTRIES } from '../../data/entries'
-import { roleById } from '../../data/roles'
 import { useCtx } from '../context'
 import { useScript } from './useLoop'
 
@@ -16,20 +13,6 @@ export function Timeline({ entry }: DemoProps) {
       <div className="dm-head"><span>{entry.title} · evidence trail</span><span className="live">{entry.year}</span></div>
       <div className="tlx">{steps.map(([e, t], k) => <div key={k} className={k < n ? 'on' : ''}><span className="lbl">{e}</span><b>{t}</b></div>)}</div>
       <div className="dm-cap"><b>stack</b><span>{entry.stack?.join(' · ')}</span></div>
-    </div>
-  )
-}
-
-export function Subject() {
-  const counts = CAPABILITIES.map((c) => ({ role: roleById(c.role), n: ENTRIES.filter((e) => (e.kind === 'case' || e.kind === 'service') && e.roles !== 'all' && e.roles.includes(c.role)).length }))
-  const max = Math.max(...counts.map((c) => c.n))
-  return (
-    <div className="dm-panel subj">
-      <div className="dm-head"><span>Subject · YW-000</span><span className="live">open to hire</span></div>
-      <div className="subj-name">YAOTING<br />WANG</div>
-      <div className="lbl subj-line">Security analyst &amp; engineer · Vancouver, BC · Master of Cybersecurity, SFU</div>
-      <div className="subj-bars">{counts.map(({ role, n }) => <div key={role.id}><span>{role.name}</span><i style={{ width: `${(n / max) * 100}%` }} /><b>{n}</b></div>)}</div>
-      <div className="dm-cap"><b>evidence</b><span>drives that prove each direction · open any from the Capabilities tab</span></div>
     </div>
   )
 }

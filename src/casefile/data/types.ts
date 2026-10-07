@@ -29,7 +29,7 @@ export const KIND_NAME: Record<EntryKind, string> = {
 
 export type DemoKey =
   | 'mcpsf' | 'edr' | 'pentest' | 'telus' | 'viva' | 'network' | 'pwnscan'
-  | 'visitor' | 'sentinel' | 'timeline' | 'subject' | 'coast' | 'vibes' | 'bcit' | 'vivaops' | 'custody' | 'stack' | 'quorum'
+  | 'visitor' | 'sentinel' | 'timeline' | 'coast' | 'vibes' | 'bcit' | 'vivaops' | 'custody' | 'stack' | 'quorum'
 
 export interface Section { eyebrow: string; title: string; body: string; points?: string[]; note?: string }
 export interface Finding { severity: 'critical' | 'high' | 'medium' | 'low' | 'ok'; label: string; title: string; detail: string }

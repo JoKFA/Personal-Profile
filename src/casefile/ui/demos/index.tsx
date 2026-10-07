@@ -11,7 +11,7 @@ import { Viva } from './Viva'
 import { Network } from './Network'
 import { PwnScan } from './PwnScan'
 import { Sentinel } from './Sentinel'
-import { Timeline, Subject, VisitorPrint } from './Simple'
+import { Timeline, VisitorPrint } from './Simple'
 import { Custody } from './Custody'
 import { Stack } from './Stack'
 import { Quorum } from './Quorum'
@@ -20,7 +20,7 @@ import './demos.css'
 import './service.css'
 
 export function Demo({ kind, entry, jump }: { kind: DemoKey; entry: Entry; jump?: (id: string) => void }) {
-  const C = { mcpsf: Mcpsf, edr: Edr, pentest: Pentest, telus: Telus, viva: Viva, network: Network, pwnscan: PwnScan, sentinel: Sentinel, timeline: Timeline, subject: Subject, visitor: VisitorPrint, custody: Custody, stack: Stack, quorum: Quorum, coast: CoastCapital, vibes: VibesMeet, bcit: Bcit, vivaops: VivaOps }[kind] as ComponentType<DemoProps> | undefined
+  const C = { mcpsf: Mcpsf, edr: Edr, pentest: Pentest, telus: Telus, viva: Viva, network: Network, pwnscan: PwnScan, sentinel: Sentinel, timeline: Timeline, visitor: VisitorPrint, custody: Custody, stack: Stack, quorum: Quorum, coast: CoastCapital, vibes: VibesMeet, bcit: Bcit, vivaops: VivaOps }[kind] as ComponentType<DemoProps> | undefined
   return <div className="dm">{C ? <C entry={entry} jump={jump} /> : null}</div>
 }
 export interface DemoProps { entry: Entry; jump?: (id: string) => void }

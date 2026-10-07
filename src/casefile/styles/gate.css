@@ -7,70 +7,7 @@
 .gz-lock .a { font-weight: 800; font-size: clamp(20px, 2.15vw, 33px); }
 .gz-lock .b { font-weight: 700; font-size: clamp(9.5px, .82vw, 12.5px); letter-spacing: .12em; margin-top: 9px; }
 
-.gz-rail { position: absolute; top: 27%; left: var(--g); right: var(--g); height: 1px; background: var(--hair2); transform-origin: left; }
-.gz-rail::before, .gz-rail::after { content: ""; position: absolute; width: 3px; height: 3px; background: var(--ink); top: -1px; }
-.gz-rail::before { left: 0; } .gz-rail::after { right: 0; }
-.gz-rail span { position: absolute; top: -24px; font: 600 10px/1 var(--sans); letter-spacing: .12em; text-transform: uppercase; color: var(--label); }
-.gz-rail .gz-read-step { right: 0; font-family: var(--mono); }
-.gz-link { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; }
-.gz-link path { fill: none; stroke: var(--ink2); stroke-width: 1; stroke-dasharray: 1; opacity: 0; }
-.gz-stage { position: absolute; left: var(--g); right: var(--g); top: 30%; bottom: 21%; display: grid; grid-template-columns: minmax(0, 1fr) min(540px, 40vw); gap: 6vw; align-items: center; }
-.gz-say { position: relative; height: 260px; font-size: clamp(30px, 3.35vw, 52px); }
-.gz-s, .gz-turn, .gz-def { position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: center; align-items: flex-start; margin: 0; color: var(--ink); visibility: hidden; opacity: 0; }
-.gz-s, .gz-turn { font: 300 1em/1.13 var(--sans); letter-spacing: -.035em; }
-.gz-s span, .gz-turn span { margin-bottom: .12em; }
-.gz-s b { display: inline-block; font-weight: 600; max-width: 100%; }
-.gz-turn b { font-weight: 650; }
-.gz-def { font: 400 .55em/1.4 var(--sans); letter-spacing: -.02em; }
-.gz-def b { display: block; margin-top: .45em; font-size: 1.55em; font-weight: 700; line-height: 1.15; letter-spacing: -.035em; }
-
-/* Frosted plate with a raking edge: shallow relief, no ornamental gold frame. */
-.gz-card { position: relative; width: 100%; aspect-ratio: 1.36; padding: 30px 34px 22px; display: grid; grid-template-rows: auto 1fr auto; visibility: hidden; opacity: 0;
-  border-radius: 2px; background: linear-gradient(110deg, rgba(255, 254, 250, .88), rgba(242, 239, 232, .7) 52%, rgba(222, 219, 210, .5));
-  border: 1px solid rgba(255, 255, 255, .65); border-right-color: rgba(70, 67, 59, .2); border-bottom-color: rgba(70, 67, 59, .2);
-  box-shadow: -5px 0 0 -3px #f9f8f2, 4px 3px 0 -1px rgba(143, 138, 125, .17), 12px 16px 24px -24px rgba(30, 29, 25, .28); }
-.gz-card::before { content: ""; position: absolute; left: 8px; top: 0; bottom: 0; width: 1px; background: rgba(255, 255, 255, .8); }
-.gz-card::after { content: ""; position: absolute; right: 9px; top: 0; bottom: 0; width: 1px; background: rgba(70, 67, 59, .08); }
-.gz-etch { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
-.gz-etch path { fill: none; stroke: rgba(50, 49, 44, .11); stroke-width: .7; vector-effect: non-scaling-stroke; }
-.gz-h { position: relative; display: flex; justify-content: space-between; gap: 10px; padding-bottom: 15px; border-bottom: 1px solid var(--hair2); font: 650 10.5px/1.3 var(--sans); letter-spacing: .12em; }
-.gz-h .id { font: 400 10px/1.3 var(--mono); color: var(--label); }
-.gz-fields { position: relative; margin: 22px 0; display: grid; align-content: center; gap: 20px; }
-.gz-f { display: grid; grid-template-columns: 86px minmax(0, 1fr); gap: 16px; align-items: baseline; }
-.gz-f dt { font: 500 11px/1.4 var(--sans); color: var(--label); }
-.gz-f dd { margin: 0; display: grid; gap: 7px; min-width: 0; }
-.gz-f .v { font: 600 clamp(15px, 1.3vw, 20px)/1.25 var(--sans); letter-spacing: -.025em; visibility: hidden; overflow-wrap: anywhere; }
-.gz-aim { position: relative; padding-left: 12px; font: 500 13px/1.3 var(--sans); color: #a33b22; visibility: hidden; opacity: 0; }
-.gz-aim::before { content: ""; position: absolute; left: 0; top: .48em; width: 3px; height: 3px; background: currentColor; }
-.gz-card.attack .gz-h { border-bottom-color: #b4492d; } .gz-card.attack .gz-h .t { color: #a33b22; }
-.gz-card.sealed .gz-h .t { color: var(--acc-text); }
-.gz-card.sealed .gz-f .v { font: 400 clamp(12px, 1vw, 15px)/1.5 var(--mono); letter-spacing: .025em; }
-.gz-card.sealed .gz-aim { color: var(--label); text-decoration: line-through; text-decoration-color: rgba(70, 67, 59, .55); }
-.gz-foot { position: relative; display: grid; grid-template-columns: 4px 1fr auto; gap: 12px; align-items: center; padding-top: 15px; border-top: 1px solid var(--hair); font: 400 12px/1.4 var(--sans); color: var(--ink2); }
-.gz-foot i { width: 3px; height: 3px; background: var(--ink2); } .gz-card.sealed .gz-foot i { background: var(--acc-text); }
-.gz-ms { font: 400 10px/1 var(--mono); color: var(--label); }
-.gz-scan { position: absolute; left: 10px; right: 10px; top: 0; height: 100%; pointer-events: none; visibility: hidden;
-  background: linear-gradient(to bottom, transparent calc(100% - 1px), rgba(255, 254, 244, .98) calc(100% - 1px)); }
-.gz-caption { position: absolute; left: var(--g); bottom: calc(var(--bottom) + 7px); margin: 0; font: 400 12px/1.6 var(--sans); color: var(--label); }
-.gz-caption span { display: block; }
 .gz .gz-skip { right: var(--g); bottom: var(--bottom); min-height: 44px; padding: 10px 0 10px 16px; font: 500 12px/1 var(--sans); letter-spacing: .035em; text-transform: none; color: var(--ink2); }
 .gz-skip .t2 { display: none; } .gate.waiting .gz-skip .t1 { display: none; } .gate.waiting .gz-skip .t2 { display: inline; }
 
-@media (max-width: 1100px) and (min-width: 900px) { .gz-card { padding: 24px; } .gz-f { grid-template-columns: 64px minmax(0, 1fr); gap: 10px; } .gz-fields { gap: 16px; } }
-@media (max-width: 899px) {
-  .gz-rail { top: 23%; }
-  .gz-stage { top: 26%; bottom: 15%; grid-template-columns: 1fr; grid-template-rows: minmax(125px, 1fr) auto; gap: 24px; }
-  .gz-say { align-self: center; height: 140px; font-size: clamp(28px, 7.5vw, 42px); }
-  .gz-def { font-size: .59em; } .gz-def b { font-size: 1.4em; }
-  .gz-card { max-width: 470px; justify-self: center; aspect-ratio: auto; padding: 22px 24px 18px; }
-  .gz-fields { margin: 22px 0; gap: 16px; } .gz-f { grid-template-columns: 62px minmax(0, 1fr); gap: 12px; }
-  .gz-f .v { font-size: 16px; } .gz-f dd { gap: 5px; } .gz-aim { font-size: 12px; }
-  .gz-h { font-size: 10px; padding-bottom: 12px; } .gz-foot { font-size: 11.5px; padding-top: 12px; }
-  .gz-caption { bottom: var(--bottom); font-size: 10.5px; line-height: 1.5; max-width: 50%; }
-}
-@media (max-height: 700px) and (max-width: 899px) {
-  .gz-lock .loc { display: none; }
-  .gz-rail { top: 20%; } .gz-stage { top: 22%; bottom: 14%; gap: 12px; grid-template-rows: minmax(90px, 1fr) auto; }
-  .gz-say { height: 100px; font-size: 26px; } .gz-card { padding: 16px 22px 12px; }
-  .gz-fields { margin: 14px 0; gap: 10px; } .gz-f .v { font-size: 14px; } .gz-aim { font-size: 11.5px; }
-}
+@media (max-height: 700px) and (max-width: 899px) { .gz-lock .loc { display: none; } }
