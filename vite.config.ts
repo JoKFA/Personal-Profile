@@ -19,7 +19,7 @@ const buildDate = new Date().toISOString().slice(0, 10)
 const vercel = JSON.parse(readFileSync(new URL('./vercel.json', import.meta.url), 'utf8')) as { headers: { source: string; headers: { key: string; value: string }[] }[] }
 const siteHeaders = Object.fromEntries(vercel.headers.find((h) => h.source === '/(.*)')!.headers.filter((h) => h.key !== 'Strict-Transport-Security').map((h) => [h.key, h.value.replace('; upgrade-insecure-requests', '')]))
 // /api is a Vercel function; locally the preview forwards it to the deployed site (override with API_ORIGIN)
-const apiOrigin = process.env.API_ORIGIN || 'https://personal-profile-alpha-cyan.vercel.app'
+const apiOrigin = process.env.API_ORIGIN || 'https://yaotingw.com'
 
 export default defineConfig({
   plugins: [react()],

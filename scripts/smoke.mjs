@@ -4,6 +4,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { preview } from 'vite'
+import { OG_IMAGE, SITE_URL } from './site-routes.mjs'
 
 const dist = path.resolve('dist')
 const fail = (msg) => { console.error(`smoke: FAIL ${msg}`); process.exitCode = 1 }
@@ -23,7 +24,24 @@ for (const route of routes) {
   else if (titles.has(title)) fail(`${route}: same title as ${titles.get(title)} ("${title}")`)
   else titles.set(title, route)
   if (!/<meta name="description" content="[^"]{20,}"/.test(html)) fail(`${route}: missing meta description`)
+  // share cards and search engines read absolute URLs on the canonical origin (never the vercel.app alias)
+  const page = `${SITE_URL}${route}`
+  if (!html.includes(`<link rel="canonical" href="${page}">`)) fail(`${route}: canonical is not ${page}`)
+  if (!html.includes(`<meta property="og:url" content="${page}">`)) fail(`${route}: og:url is not ${page}`)
+  if (!html.includes(`<meta property="og:image" content="${SITE_URL}${OG_IMAGE.path}">`)) fail(`${route}: og:image is not ${SITE_URL}${OG_IMAGE.path}`)
+  if (!/<meta property="og:image:alt" content="[^"]{10,}">/.test(html)) fail(`${route}: missing og:image:alt`)
+  if (/vercel\.app/.test(html)) fail(`${route}: still mentions a vercel.app address`)
   for (const m of html.matchAll(/(?:src|href)="(\/assets\/[^"]+)"/g)) assets.add(m[1])
+}
+// the share card: a JPEG of the size the tags promise, small enough for every preview service
+const card = path.join(dist, OG_IMAGE.path)
+if (!fs.existsSync(card)) fail(`missing ${OG_IMAGE.path}`)
+else {
+  const jpg = fs.readFileSync(card)
+  let i = 2, w = 0, h = 0
+  while (i + 9 < jpg.length) { if (jpg[i] !== 0xff) break; const m = jpg[i + 1]; if (m >= 0xc0 && m <= 0xc3) { h = jpg.readUInt16BE(i + 5); w = jpg.readUInt16BE(i + 7); break } i += 2 + jpg.readUInt16BE(i + 2) }
+  if (w !== OG_IMAGE.width || h !== OG_IMAGE.height) fail(`${OG_IMAGE.path} is ${w}×${h}, the tags say ${OG_IMAGE.width}×${OG_IMAGE.height}`)
+  if (jpg.length > 300 * 1024) fail(`${OG_IMAGE.path} is ${Math.round(jpg.length / 1024)} KB (limit 300)`)
 }
 if (!assets.size) fail('no /assets/ references found in built HTML')
 for (const a of assets) if (!fs.existsSync(path.join(dist, a))) fail(`missing asset ${a}`)

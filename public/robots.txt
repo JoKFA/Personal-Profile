@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://personal-profile-alpha-cyan.vercel.app/sitemap.xml
+Sitemap: https://yaotingw.com/sitemap.xml

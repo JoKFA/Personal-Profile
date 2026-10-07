@@ -525,7 +525,7 @@ src/casefile/
 | A1 | 读取时开启 UnrealBloomPass，1440 与 390@3x 仍 60 fps | 未验证 → 先做 spike |
 | A2 | 按抬升高度控制转向即可消除穿模 | 未验证 → 用每帧间隙检查证明 |
 | A3 | Playwright WebKit 能在这台 Windows 上跑 WebGL | 未验证 → 下载后 spike |
-| A4 | 正式域名 `personal-profile-alpha-cyan.vercel.app` | 已验证（sitemap、index.html） |
+| A4 | 正式域名 `yaotingw.com`（2026-10-06 起；之前写的是 `personal-profile-alpha-cyan.vercel.app`，那只是 Vercel 的别名） | 已验证（`curl -sI https://yaotingw.com/` 200，`Server: Vercel`；sitemap、index.html 由 `scripts/site-routes.mjs` 生成） |
 | A5 | `public/locales/` 无引用 | 已验证（grep src / scripts / index.html 无结果） |
 | A6 | 访客事实只在本地计算、不外发 | 已验证（`visitor.ts` 无网络调用） |
 

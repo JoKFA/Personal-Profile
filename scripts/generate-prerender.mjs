@@ -72,7 +72,10 @@ function withMeta(html, meta) {
   nextHtml = upsertTag(nextHtml, /<meta property="og:image:width" content=".*?">/, `<meta property="og:image:width" content="${OG_IMAGE.width}">`)
   nextHtml = upsertTag(nextHtml, /<meta property="og:image:height" content=".*?">/, `<meta property="og:image:height" content="${OG_IMAGE.height}">`)
   nextHtml = upsertTag(nextHtml, /<meta property="og:url" content=".*?">/, `<meta property="og:url" content="${SITE_URL}${meta.route === '/' ? '/' : meta.route}">`)
+  nextHtml = upsertTag(nextHtml, /<meta property="og:image:alt" content=".*?">/, `<meta property="og:image:alt" content="${esc(OG_IMAGE.alt)}">`)
   nextHtml = upsertTag(nextHtml, /<meta name="twitter:image" content=".*?">/, `<meta name="twitter:image" content="${SITE_URL}${OG_IMAGE.path}">`)
+  nextHtml = upsertTag(nextHtml, /<meta name="twitter:image:alt" content=".*?">/, `<meta name="twitter:image:alt" content="${esc(OG_IMAGE.alt)}">`)
+  nextHtml = upsertTag(nextHtml, /<link rel="canonical" href=".*?">/, `<link rel="canonical" href="${SITE_URL}${meta.route === '/' ? '/' : meta.route}">`)
   nextHtml = upsertTag(
     nextHtml,
     /<meta name="twitter:card" content=".*?">/,
