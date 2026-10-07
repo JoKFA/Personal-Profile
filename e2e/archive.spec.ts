@@ -294,6 +294,29 @@ test('entry: your browser is read as a fingerprint, profiled, sealed, and the ar
   expect(errors).toEqual([])
 })
 
+test('entry: at every window size the four readings are on screen and clear of the print', async ({ page }, info) => {
+  test.skip(info.project.name !== 'desktop-1440', 'sets its own window sizes')
+  const errors = watchErrors(page)
+  for (const [width, height] of [[800, 900], [1024, 768], [1100, 700], [1280, 720]]) {
+    await page.setViewportSize({ width, height })
+    await page.goto('/?intro')
+    await expect(page.locator('.fp-cap2')).toBeVisible({ timeout: 8000 })
+    await expect.poll(() => page.locator('.fp-mi .a').last().evaluate((el) => Number(getComputedStyle(el).opacity)), { timeout: 8000 }).toBeGreaterThan(0.95)
+    const print = (await page.locator('.gate').getAttribute('data-print'))!.split(',').map(Number)
+    expect(print.length, 'the print box is published').toBe(4)
+    const [px, py, pw, ph] = print
+    const boxes = await page.locator('.fp-mi').evaluateAll((els) => els.map((e) => e.getBoundingClientRect().toJSON() as DOMRect))
+    expect(boxes, `${width}×${height}: four readings`).toHaveLength(4)
+    boxes.forEach((b, i) => {
+      const on = b.left >= 0 && b.right <= width && b.top >= 0 && b.bottom <= height
+      const hit = Math.min(b.right, px + pw) - Math.max(b.left, px) > 1 && Math.min(b.bottom, py + ph) - Math.max(b.top, py) > 1
+      expect(on, `${width}×${height}: reading ${i + 1} on screen (${Math.round(b.left)},${Math.round(b.top)} ${Math.round(b.width)}×${Math.round(b.height)})`).toBe(true)
+      expect(hit, `${width}×${height}: reading ${i + 1} clear of the print`).toBe(false)
+    })
+  }
+  expect(errors).toEqual([])
+})
+
 test('entry: skipping lands on the sealed print and leaves no gate behind', async ({ page }) => {
   const errors = watchErrors(page)
   await page.goto('/?intro')
@@ -333,9 +356,11 @@ test('home: the selected files are lit, called out without overlap, and open the
   const errors = watchErrors(page)
   await page.addInitScript(() => { localStorage.setItem('yw.entry', '1'); localStorage.setItem('yw.hint', '1') })
   await page.goto('/')
-  await page.waitForFunction(() => { const s = (window as unknown as Win).__cf?.getSnapshot(); return s?.mode === 'archive' && s.brief && !document.querySelector('.cf--arriving') }, null, { timeout: 45_000 })
-  await page.waitForTimeout(1500)   // the lens has opened
+  await page.waitForFunction(() => { const s = (window as unknown as Win).__cf?.getSnapshot(); return s?.mode === 'archive' && s.brief && !!document.querySelector('.hud.on') && !document.querySelector('.cf--arriving') }, null, { timeout: 45_000 })
   const phone = info.project.name.startsWith('phone')
+  // the lens has opened: on a desktop the callouts fade in once the camera rests (a phone shows its list at once)
+  if (!phone) await page.waitForSelector('.brief--lit', { timeout: 15_000 })
+  await page.waitForTimeout(1200)
   // the four callouts, the sentence and the actions sit inside the screen and never on each other
   const boxes = await page.evaluate(() => ['.brief-co', '.brief-say', '.brief-act', '.hud-lock', '.hud-top'].flatMap((s) => [...document.querySelectorAll(s)].map((e) => ({ s, b: e.getBoundingClientRect().toJSON() as DOMRect }))))
   expect(boxes.filter((x) => x.s === '.brief-co')).toHaveLength(4)
@@ -346,7 +371,17 @@ test('home: the selected files are lit, called out without overlap, and open the
     const hit = Math.min(a.right, b.right) - Math.max(a.left, b.left) > 1 && Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top) > 1
     expect(hit, `${boxes[i].s} × ${boxes[j].s}`).toBe(false)
   }
-  if (phone) for (const co of await page.locator('.brief-co').all()) expect((await co.boundingBox())!.height).toBeGreaterThanOrEqual(44)
+  if (phone) {
+    // a phone gets a list under the sentence, 01 → 04, each row at least 44 px and tappable
+    const rows = await page.locator('.brief-co').evaluateAll((els) => els.map((e) => ({ n: e.querySelector('.n')?.textContent, ...(e.getBoundingClientRect().toJSON() as DOMRect) })))
+    const say = await page.locator('.brief-thesis').evaluate((e) => e.getBoundingClientRect().bottom)
+    expect(rows.map((r) => r.n)).toEqual(['01', '02', '03', '04'])
+    rows.forEach((r, i) => {
+      expect(r.height, `row ${i + 1} height`).toBeGreaterThanOrEqual(44)
+      expect(r.top, `row ${i + 1} is under the sentence`).toBeGreaterThanOrEqual(say)
+      if (i) expect(r.top, `row ${i + 1} follows row ${i}`).toBeGreaterThanOrEqual(rows[i - 1].bottom - 1)
+    })
+  }
   expect(await noOverflow(page)).toBe(true)
   await page.screenshot({ path: `.codex-runtime/design/home/${info.project.name}-home.png` })
   // a callout opens its file; closing it leaves the reader in the archive; the name brings them home
@@ -360,6 +395,115 @@ test('home: the selected files are lit, called out without overlap, and open the
   // the way inside the drive: the subject file opens on request, not by itself
   await page.getByRole('button', { name: /Inside my drive/ }).click()
   await page.waitForFunction(() => (window as unknown as Win).__cf.getSnapshot().mode === 'file' && !!document.querySelector('.file--subject'), null, { timeout: 30_000 })
+  expect(errors).toEqual([])
+})
+
+test('home: hidden controls cannot be focused, and Enter opens the selected file after stepping into the archive', async ({ page }) => {
+  test.setTimeout(180_000)
+  const errors = watchErrors(page)
+  await page.addInitScript(() => { localStorage.setItem('yw.entry', '1'); localStorage.setItem('yw.hint', '1') })
+  const home = async () => {
+    await page.goto('/')
+    await page.waitForFunction(() => { const s = (window as unknown as Win).__cf?.getSnapshot(); return s?.mode === 'archive' && s.brief && !!document.querySelector('.hud.on') && !document.querySelector('.cf--arriving') }, null, { timeout: 45_000 })
+  }
+  const tabbed = async (what: string) => {
+    let seen = 0
+    for (let i = 0; i < 20; i++) {
+      await page.keyboard.press('Tab')
+      const at = await page.evaluate(() => { const a = document.activeElement; return a && a !== document.body ? { stray: !!a.closest('[inert], .brief.hide'), what: a.className || a.tagName } : null })
+      if (at) { seen++; expect(at.stray, `${what}: Tab ${i + 1} reached a hidden control (${at.what})`).toBe(false) }
+    }
+    expect(seen, `${what}: Tab reaches something`).toBeGreaterThan(0)
+  }
+  // on home, nothing under the sentence takes focus
+  await home(); await tabbed('home')
+  // inside the archive, home's buttons are gone from the tab order
+  await home()
+  await page.getByRole('button', { name: /Enter the archive/ }).click()
+  await page.waitForFunction(() => !(window as unknown as Win).__cf.getSnapshot().brief, null, { timeout: 5000 })
+  await tabbed('archive')
+  // and a key press works from where the click left the reader: Enter opens the selected file
+  await home()
+  await page.getByRole('button', { name: /Enter the archive/ }).click()
+  await page.waitForFunction(() => !(window as unknown as Win).__cf.getSnapshot().brief, null, { timeout: 5000 })
+  await page.waitForTimeout(600)
+  await page.keyboard.press('Enter')
+  await page.waitForFunction(() => ['opening', 'file'].includes((window as unknown as Win).__cf.getSnapshot().mode), null, { timeout: 10_000 })
+  expect(errors).toEqual([])
+})
+
+/** a return visit's home, with the HUD up and the entrance over */
+async function returnHome(page: Page) {
+  await page.addInitScript(() => { localStorage.setItem('yw.entry', '1'); localStorage.setItem('yw.hint', '1') })
+  await page.goto('/')
+  await page.waitForFunction(() => { const s = (window as unknown as Win).__cf?.getSnapshot(); return s?.mode === 'archive' && s.brief && !!document.querySelector('.hud.on') && !document.querySelector('.cf--arriving') }, null, { timeout: 45_000 })
+}
+/** the mean colour of a PNG (decoded in a blank page: the site's CSP does not matter there) */
+async function meanColour(page: Page, png: Buffer) {
+  const helper = await page.context().newPage()
+  try {
+    await helper.setContent('<canvas id="c"></canvas>')
+    return await helper.evaluate(async (b64) => {
+      const img = new Image(); img.src = `data:image/png;base64,${b64}`; await img.decode()
+      const c = document.getElementById('c') as HTMLCanvasElement; c.width = img.width; c.height = img.height
+      const x = c.getContext('2d')!; x.drawImage(img, 0, 0)
+      const d = x.getImageData(0, 0, c.width, c.height).data; let r = 0, g = 0, b = 0; const n = d.length / 4
+      for (let i = 0; i < d.length; i += 4) { r += d[i]; g += d[i + 1]; b += d[i + 2] }
+      return [r / n, g / n, b / n] as [number, number, number]
+    }, png.toString('base64'))
+  } finally { await helper.close() }
+}
+const luminance = ([r, g, b]: number[]) => { const f = (v: number) => { const s = v / 255; return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4 }; return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b) }
+const contrast = (a: number[], b: number[]) => { const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x); return (hi + 0.05) / (lo + 0.05) }
+
+test('home: the line under the sentence is readable over the archive at three window sizes', async ({ page }, info) => {
+  test.skip(info.project.name !== 'desktop-1440', 'sets its own window sizes')
+  test.setTimeout(240_000)
+  const errors = watchErrors(page)
+  for (const [width, height] of [[1440, 900], [1280, 720], [1024, 768]]) {
+    await page.setViewportSize({ width, height })
+    await returnHome(page)
+    await page.waitForSelector('.brief--lit', { timeout: 15_000 })
+    await page.waitForTimeout(800)
+    const meta = page.locator('.brief-meta')
+    const box = (await meta.boundingBox())!
+    const style = await meta.evaluate((el) => { const s = getComputedStyle(el); return { color: s.color, size: parseFloat(s.fontSize), family: s.fontFamily } })
+    expect(style.size, 'the line is 14 px').toBe(14)
+    expect(style.family).toMatch(/Manrope/)
+    const ink = style.color.match(/[\d.]+/g)!.slice(0, 3).map(Number)
+    // what is behind the line: shoot its rectangle with the text hidden
+    await meta.evaluate((el) => { el.style.visibility = 'hidden' })
+    const behind = await meanColour(page, await page.screenshot({ clip: { x: box.x, y: box.y, width: box.width, height: box.height } }))
+    await meta.evaluate((el) => { el.style.visibility = '' })
+    const ratio = contrast(ink, behind)
+    info.annotations.push({ type: `contrast ${width}×${height}`, description: ratio.toFixed(2) })
+    expect(ratio, `${width}×${height}: contrast ${ratio.toFixed(2)} (text ${ink.join(',')} on ${behind.map(Math.round).join(',')})`).toBeGreaterThanOrEqual(4.5)
+  }
+  expect(errors).toEqual([])
+})
+
+test('home: the callouts fade in 01 → 04 once the camera rests, and then do not move', async ({ page }, info) => {
+  test.skip(info.project.name !== 'desktop-1440', 'a phone shows a list, not callouts')
+  test.setTimeout(120_000)
+  const errors = watchErrors(page)
+  await returnHome(page)
+  // unseen while the camera is still opening on the drives
+  expect(await page.evaluate(() => Number(getComputedStyle(document.querySelector('.brief-co')!).opacity))).toBe(0)
+  await page.waitForSelector('.brief--lit', { timeout: 15_000 })
+  expect(await page.evaluate(() => (window as unknown as { __cf: { briefSettled(): boolean } }).__cf.briefSettled()), 'they appear only once the camera has settled').toBe(true)
+  // in order, 80 ms apart
+  expect(await page.locator('.brief-co').evaluateAll((els) => els.map((e) => parseFloat(getComputedStyle(e).transitionDelay.split(',').pop()!) * 1000))).toEqual([0, 80, 160, 240])
+  await page.waitForTimeout(900)   // the last one has finished fading
+  expect(await page.locator('.brief-co').evaluateAll((els) => els.map((e) => Number(getComputedStyle(e).opacity)))).toEqual([1, 1, 1, 1])
+  // for the next two seconds each callout stays within a pixel of where it was
+  const read = () => page.locator('.brief-co').evaluateAll((els) => els.map((e) => { const r = e.getBoundingClientRect(); return [r.x, r.y] }))
+  const first = await read()
+  let worst = 0
+  for (let k = 0; k < 20; k++) {
+    await page.waitForTimeout(100)
+    ;(await read()).forEach(([x, y], i) => { worst = Math.max(worst, Math.abs(x - first[i][0]), Math.abs(y - first[i][1])) })
+  }
+  expect(worst, 'largest move in 2 s').toBeLessThanOrEqual(1)
   expect(errors).toEqual([])
 })
 

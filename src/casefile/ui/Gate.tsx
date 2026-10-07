@@ -27,13 +27,16 @@ function language(tag: string) {
 }
 
 interface Layout {
-  W: number; H: number; phone: boolean; g: number; top: number
+  /** a phone-width screen (type and the sentence follow the phone's rules) */
+  W: number; H: number; phone: boolean
+  /** the four readings sit under the print in a 2 × 2 grid (a phone, or no room for a column beside it) */
+  stack: boolean; g: number; top: number
   print: { cx: number; cy: number; w: number; h: number }; labelX: number; labelTop: number; capBottom: number
   lat: { cx: number; cy: number; size: number }
 }
 function layout(): Layout {
   const W = innerWidth, H = innerHeight, phone = W < 760, g = Math.max(16, Math.min(56, W * 0.033)), top = Math.max(22, Math.min(48, H * 0.046))
-  let print: Layout['print'], labelX: number, labelTop = 0, capBottom: number
+  let print: Layout['print'] = { cx: 0, cy: 0, w: 0, h: 0 }, labelX = 0, labelTop = 0, capBottom = 0, stack = phone
   if (!phone) {
     // the print sits between the name (top left) and the sentence (bottom left) and touches neither
     const y0 = top + Math.max(96, H * 0.13), capTop = H - Math.max(118, H * 0.14)
@@ -41,14 +44,17 @@ function layout(): Layout {
     const left = Math.max(g + 290, (W - (pw + gap + labW)) / 2 + 30)
     print = { cx: left + pw / 2, cy: y0 + ph / 2, w: pw, h: ph }
     labelX = left + pw + gap; capBottom = H - 26
-  } else {
+    // the column needs 290 px and a margin to its right; without them the readings go under the print
+    stack = W < 1100 || W - labelX < 320
+  }
+  if (stack) {
     // top to bottom: name, print, the four readings, the sentence, the way out
     const y0 = top + 92, cb = H - 84, rows = 2 * 80
     const ph = clamp(cb - 108 - 16 - rows - 20 - y0, 170, Math.min(H * 0.42, W * 1.05)), pw = ph * 0.7
     print = { cx: W / 2, cy: y0 + ph / 2, w: pw, h: ph }
     labelX = g; labelTop = y0 + ph + 20; capBottom = cb
   }
-  return { W, H, phone, g, top, print, labelX, labelTop, capBottom, lat: { cx: print.cx, cy: print.cy, size: print.w * 0.92 } }
+  return { W, H, phone, stack, g, top, print, labelX, labelTop, capBottom, lat: { cx: print.cx, cy: print.cy, size: print.w * 0.92 } }
 }
 
 export function Gate({ visitor, reduced, sceneReady, onTitle, onReveal, onStrike, onDone }: {
@@ -112,14 +118,15 @@ export function Gate({ visitor, reduced, sceneReady, onTitle, onReveal, onStrike
     }
     // positions once per layout; styles per frame
     function place() {
-      const { print: pr, phone, H, g } = L
-      q('.fp-exh-l').textContent = phone ? visitor.id : `${visitor.id} · Browser fingerprint`
-      q('.fp-exh-r').textContent = phone ? `${P.whorl ? 'Whorl' : 'Loop'} · ${visitor.ms} ms` : `Pattern · ${P.whorl ? 'whorl' : 'loop'} · ${visitor.ms} ms`
-      const exh = q('.fp-exh'); exh.style.width = pr.w + 'px'; exh.style.transform = `translate(${pr.cx - pr.w / 2}px, ${pr.cy - pr.h / 2 - (phone ? 30 : 34)}px)`
+      const { print: pr, phone, stack, H, g } = L
+      r.dataset.print = [pr.cx - pr.w / 2, pr.cy - pr.h / 2, pr.w, pr.h].map(Math.round).join(',')
+      q('.fp-exh-l').textContent = stack ? visitor.id : `${visitor.id} · Browser fingerprint`
+      q('.fp-exh-r').textContent = stack ? `${P.whorl ? 'Whorl' : 'Loop'} · ${visitor.ms} ms` : `Pattern · ${P.whorl ? 'whorl' : 'loop'} · ${visitor.ms} ms`
+      const exh = q('.fp-exh'); exh.style.width = pr.w + 'px'; exh.style.transform = `translate(${pr.cx - pr.w / 2}px, ${pr.cy - pr.h / 2 - (stack ? 30 : 34)}px)`
       mis.forEach((el, i) => { el.querySelector('.v')!.textContent = values[i] })
       const order = P.minutiae.map((m, i) => ({ m, i })).sort((a, b) => a.m.y - b.m.y)
       labelY = []
-      if (!phone) {
+      if (!stack) {
         // a column beside the print, each label level with its minutia where there is room
         let y = -Infinity
         mis.forEach((el) => { el.style.width = '' })
@@ -127,10 +134,11 @@ export function Gate({ visitor, reduced, sceneReady, onTitle, onReveal, onStrike
         const over = Math.max(...labelY) + 70 - (H - 150); if (over > 0) labelY = labelY.map((v) => v - over)
         mis.forEach((el, i) => { el.style.transform = `translate(${L.labelX}px, ${labelY[i]}px)` })
       } else {
-        const colW = (L.W - g * 2 - 14) / 2
+        // a 2 × 2 grid under the print, centred on the screen (it fills a phone's width)
+        const colW = Math.min(300, (L.W - g * 2 - 14) / 2), x0 = (L.W - (colW * 2 + 14)) / 2
         mis.forEach((el) => { el.style.width = colW + 'px' })
         const hs = mis.map((el) => el.offsetHeight), row0 = Math.max(hs[order[0].i], hs[order[1].i])
-        order.forEach(({ i }, k) => { labelY[i] = L.labelTop + (k < 2 ? 0 : row0 + 16); mis[i].style.transform = `translate(${g + (k % 2) * (colW + 14)}px, ${labelY[i]}px)` })
+        order.forEach(({ i }, k) => { labelY[i] = L.labelTop + (k < 2 ? 0 : row0 + 16); mis[i].style.transform = `translate(${x0 + (k % 2) * (colW + 14)}px, ${labelY[i]}px)` })
       }
       scanAt = P.minutiae.map((m) => timeForScan(m.y))
       // the sentence, anchored from the bottom
@@ -238,7 +246,7 @@ export function Gate({ visitor, reduced, sceneReady, onTitle, onReveal, onStrike
         const ap = eout(seg(tt, at, at + 0.25)), red = sstep(T.prof + i * 0.14, T.prof + i * 0.14 + 0.2, tt), ok = sstep(T.sealScan[0] + 0.1, T.sealScan[1], tt)
         const col = ok > 0 ? `rgba(92,107,18,${ok})` : red > 0 ? THREAT : INK
         ctx.save(); ctx.globalAlpha = chrome
-        if (!L.phone) {
+        if (!L.stack) {
           const lp = eio(seg(tt, at + 0.05, at + 0.45)), ly = labelY[i] + 9, lx = L.labelX - 10, ex = lx - 28
           const path = [[m.x + 6, m.y], [ex, ly], [lx, ly]], len = Math.hypot(ex - m.x - 6, ly - m.y) + 28
           ctx.setLineDash([len * lp, 1e5]); ctx.lineCap = 'butt'
@@ -247,9 +255,9 @@ export function Gate({ visitor, reduced, sceneReady, onTitle, onReveal, onStrike
         }
         const s = (L.phone ? 8 : 9) * ap
         ctx.fillStyle = 'rgba(231,228,221,.95)'; ctx.fillRect(m.x - s / 2 - 2, m.y - s / 2 - 2, s + 4, s + 4)
-        ctx.strokeStyle = ok > 0 ? (L.phone ? OLIVE : col) : red > 0 ? THREAT : INK; ctx.lineWidth = 1.3; ctx.strokeRect(m.x - s / 2, m.y - s / 2, s, s)
+        ctx.strokeStyle = ok > 0 ? (L.stack ? OLIVE : col) : red > 0 ? THREAT : INK; ctx.lineWidth = 1.3; ctx.strokeRect(m.x - s / 2, m.y - s / 2, s, s)
         ctx.fillStyle = ctx.strokeStyle
-        if (L.phone) { ctx.font = '500 9px "JetBrains Mono", monospace'; ctx.fillText(String(i + 1).padStart(2, '0'), m.x + 7, m.y - 6) }
+        if (L.stack) { ctx.font = '500 9px "JetBrains Mono", monospace'; ctx.fillText(String(i + 1).padStart(2, '0'), m.x + 7, m.y - 6) }
         else ctx.fillRect(m.x - 1, m.y - 1, 2, 2)
         if (!L.phone && red > 0 && ok <= 0) { const rr = 9 + 14 * eout(seg(tt, T.prof + i * 0.14, T.prof + i * 0.14 + 0.7)); ctx.globalAlpha = chrome * (1 - seg(tt, T.prof + i * 0.14, T.prof + i * 0.14 + 0.7)); ctx.strokeStyle = THREAT; ctx.lineWidth = 1; ctx.strokeRect(m.x - rr / 2, m.y - rr / 2, rr, rr) }
         ctx.restore()

@@ -32,9 +32,19 @@ export function Hud({ statusLine, hidden, arriving }: { statusLine: { html: stri
   const hide = hidden || s.mode !== 'archive'
   /** home: the brief replaces the browsing HUD */
   const brief = s.brief && s.mode === 'archive'
+  // the browsing panel is where focus goes when the reader steps from home into the archive: the button
+  // they pressed is hidden by then (and inert), and keys must keep working from where they are
+  const panelRef = useRef<HTMLElement>(null), wasBrief = useRef(false)
+  useEffect(() => {
+    if (wasBrief.current && !brief) {
+      const a = document.activeElement
+      if (!a || a === document.body || a.closest('.brief')) panelRef.current?.focus({ preventScroll: true })
+    }
+    wasBrief.current = brief
+  }, [brief])
 
   return (
-    <div className={`hud ${hidden ? '' : 'on'} ${s.mode !== 'archive' ? 'dim' : ''} ${brief ? 'hud--brief' : ''}`} aria-hidden={hidden}>
+    <div className={`hud ${hidden ? '' : 'on'} ${s.mode !== 'archive' ? 'dim' : ''} ${brief ? 'hud--brief' : ''}`} aria-hidden={hidden} inert={hidden}>
       <button className="hud-lock" aria-label="Yaoting Wang, Security Analyst: home" onClick={() => { if (s.mode === 'archive') { setIndex(false); setContact(false); archive.setBrief(true) } }}>
         <span className="a">YAOTING WANG</span><span className="b">SECURITY ANALYST<span className="loc"> · VANCOUVER, BC</span></span>
       </button>
@@ -48,7 +58,7 @@ export function Hud({ statusLine, hidden, arriving }: { statusLine: { html: stri
 
       <Leader entry={e} hidden={hide} />
       <SearchReadout hidden={hidden || !arriving} />
-      <section className={`panel ${hide || index || contact ? 'hide' : ''} ${e && !s.plain ? 'sealed' : ''} ${!e ? 'empty' : ''}`} aria-live="polite">
+      <section ref={panelRef} tabIndex={-1} inert={hide || index || contact || brief} className={`panel ${hide || index || contact ? 'hide' : ''} ${e && !s.plain ? 'sealed' : ''} ${!e ? 'empty' : ''}`} aria-live="polite">
         <div className="panel-status lbl" key={statusLine?.key ?? 0} dangerouslySetInnerHTML={{ __html: statusLine?.html ?? '' }} />
         <div className="panel-body" key={`${s.sel.lane}:${s.sel.row}:${s.plain}:${dead}:${s.captured}`}>
           <div className="panel-eyebrow lbl"><span>{e ? kindLabel(e) : 'No record'}</span>{e?.kind === 'restricted' && <span className="kind x">Restricted</span>}</div>
@@ -90,7 +100,7 @@ export function Hud({ statusLine, hidden, arriving }: { statusLine: { html: stri
         </div>
       </section>
 
-      <div className={`hud-sel ${hide ? 'hide' : ''}`}>
+      <div className={`hud-sel ${hide ? 'hide' : ''}`} inert={hide || brief}>
         <div className="lbl">Drawer {pad(lane + 1)} of {pad(DRAWERS.length)}</div>
         <div className="drawer-nav">
           <button aria-label="Previous drawer" onClick={() => archive.move(-1, 0)}>←</button>
@@ -101,10 +111,10 @@ export function Hud({ statusLine, hidden, arriving }: { statusLine: { html: stri
       </div>
       <HoverLabel />
 
-      <KindKey hidden={hide} />
+      <KindKey hidden={hide} inert={brief} />
 
       {hint && !hide && <div className="hud-hint lbl">← → drawers / ↑ ↓ drives / enter open / click a drive</div>}
-      <SessionLine granted={s.granted} />
+      <SessionLine granted={s.granted} inert={brief} />
     </div>
   )
 }
@@ -121,14 +131,14 @@ function Glyph({ k }: { k: KindGroup }) {
     </svg>
   )
 }
-function KindKey({ hidden }: { hidden: boolean }) {
+function KindKey({ hidden, inert }: { hidden: boolean; inert: boolean }) {
   const { archive } = useCtx()
   const s = useSnapshot()
   const [pinned, setPinned] = useState<KindGroup | null>(null)
   const show = (k: KindGroup | null) => archive.setKindFocus(k ?? pinned)
   useEffect(() => () => archive.setKindFocus(null), [archive])
   return (
-    <div className={`kind-key lbl ${hidden ? 'hide' : ''}`} role="group" aria-label="What the drives hold" onMouseLeave={() => show(null)}>
+    <div className={`kind-key lbl ${hidden ? 'hide' : ''}`} inert={hidden || inert} role="group"aria-label="What the drives hold" onMouseLeave={() => show(null)}>
       {KINDS.map(([k, name]) => (
         <button key={k} className={s.kindFocus === k ? 'on' : ''} aria-pressed={pinned === k}
           onMouseEnter={() => show(k)} onFocus={() => show(k)} onBlur={() => show(null)}
@@ -286,12 +296,12 @@ function DrawerMeter({ lane, entry }: { lane: number; entry: Entry | null }) {
 }
 
 /** The session, as the system sees it: its state, the visitor's number, the time, a way to start over. */
-function SessionLine({ granted }: { granted: boolean }) {
+function SessionLine({ granted, inert }: { granted: boolean; inert: boolean }) {
   const { visitor } = useCtx()
   const [now, setNow] = useState(() => new Date())
   useEffect(() => { const h = setInterval(() => setNow(new Date()), 1000); return () => clearInterval(h) }, [])
   return (
-    <div className="hud-foot lbl">
+    <div className="hud-foot lbl" inert={inert}>
       <span className="sess"><i aria-hidden="true" />{granted ? 'Session authorized · read only' : 'Session pending'}</span>
       <span className="sep" aria-hidden="true">/</span><span>{visitor.id}</span>
       <span className="sep" aria-hidden="true">/</span><time className="clock">{now.toLocaleTimeString('en-GB')}</time>

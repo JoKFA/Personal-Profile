@@ -17,11 +17,25 @@
   -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px);
   -webkit-mask-image: radial-gradient(ellipse 62% 60% at 45% 50%, #000 45%, transparent 100%); mask-image: radial-gradient(ellipse 62% 60% at 45% 50%, #000 45%, transparent 100%); }
 .brief-co .n { font: 500 11px/1.3 var(--mono); letter-spacing: .1em; color: var(--acc-text); }
-.brief-co .t { grid-column: 1 / -1; font: 700 17px/1.2 var(--sans); letter-spacing: -.015em; color: var(--ink); }
-.brief-co .l { grid-column: 1 / -1; font: 400 12px/1.4 var(--mono); color: var(--ink2); }
+.brief-co .t { grid-column: 1 / -1; font: 600 16px/1.2 var(--sans); letter-spacing: -.01em; color: var(--ink); }
+.brief-co .l { grid-column: 1 / -1; font: 500 13px/1.4 var(--sans); font-variant-numeric: tabular-nums; color: var(--ink2); }
+/* the callouts stay unseen while the camera is still opening on the drives; once it rests they fade in,
+   01 → 04, 80 ms apart, and do not move again (Brief.tsx) */
+.brief-co, .brief-leads g { opacity: 0; visibility: hidden; transition: opacity 320ms var(--ease-in), visibility 0s linear 320ms; }
+.brief--lit .brief-co, .brief--lit .brief-leads g { opacity: 1; visibility: visible; transition: opacity 320ms var(--ease-in) var(--d, 0ms), visibility 0s linear var(--d, 0ms); }
+.brief-co[data-i="1"], .brief-leads g[data-i="1"] { --d: 80ms; }
+.brief-co[data-i="2"], .brief-leads g[data-i="2"] { --d: 160ms; }
+.brief-co[data-i="3"], .brief-leads g[data-i="3"] { --d: 240ms; }
 .brief-co:hover .t, .brief-co:focus-visible .t { text-decoration: underline; text-underline-offset: 4px; text-decoration-thickness: 1px; }
 
-.brief-say { position: absolute; left: var(--g); top: calc(var(--top) + 96px); max-width: min(690px, 47vw); pointer-events: auto; }
+.brief-say { position: absolute; left: var(--g); top: calc(var(--top) + 96px); max-width: min(690px, 47vw); pointer-events: auto; isolation: isolate; }
+/* a soft fog behind the sentence and the line under it, so they read over whatever the archive is doing */
+.brief-say::before { content: ""; position: absolute; inset: -34px -72px -34px -64px; z-index: -1; pointer-events: none;
+  background: color-mix(in srgb, var(--bg) 88%, transparent);
+  -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px);
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 64px, #000 calc(100% - 72px), transparent), linear-gradient(to bottom, transparent, #000 34px, #000 calc(100% - 34px), transparent);
+  mask-image: linear-gradient(to right, transparent, #000 64px, #000 calc(100% - 72px), transparent), linear-gradient(to bottom, transparent, #000 34px, #000 calc(100% - 34px), transparent);
+  -webkit-mask-composite: source-in; mask-composite: intersect; }
 .brief-thesis { margin: 0; font: 300 clamp(30px, 3.1vw, 50px)/1.1 var(--sans); letter-spacing: -.035em; color: var(--ink); }
 .brief-thesis b { display: block; font-weight: 680; margin-bottom: .14em; }
 .brief-act { position: absolute; right: var(--g); bottom: var(--bottom); display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 14px 32px; align-items: center; pointer-events: auto; }
@@ -29,7 +43,7 @@
 .brief-inside { padding: 13px 0 11px; border-bottom: 1px solid var(--hair2); font: 600 12.5px/1 var(--sans); letter-spacing: .02em; color: var(--ink2); }
 .brief-enter span, .brief-inside span { display: inline-block; transition: transform .25s var(--ease-in); }
 .brief-enter:hover span, .brief-inside:hover span { transform: translateX(5px); }
-.brief-meta { margin: 26px 0 0; }
+.brief-meta { margin: 20px 0 0; font: 500 14px/1.45 var(--sans); letter-spacing: 0; color: var(--ink2); }
 
 /* the entrance first, then home: while the archive slides in and the swell runs, the frame holds
    only the status line (after the PV); home's sentence and callouts follow once it has settled */
@@ -39,15 +53,21 @@
 .hud--brief > .hud-lock, .hud--brief > .hud-top, .hud--brief > .index { z-index: 12; }
 .hud--brief > .panel, .hud--brief > .leader, .hud--brief > .hud-sel, .hud--brief > .kind-key, .hud--brief > .hud-foot, .hud--brief > .hud-hint { opacity: 0 !important; pointer-events: none !important; }
 
+/* a phone: the sentence, then the four files as a list (01 → 04), then the ways in; nothing floats */
 @media (max-width: 899px) {
-  .brief::before { width: 100vw; height: 46vh; background: linear-gradient(to bottom, color-mix(in srgb, var(--bg) 92%, transparent) 55%, transparent); }
-  .brief-say { top: calc(var(--top) + 48px); right: var(--g); max-width: none; }
+  .hud > .brief { display: flex; flex-direction: column; padding: calc(var(--top) + 48px) var(--g) var(--bottom); }
+  .brief::before { width: 100vw; height: 100%; background: linear-gradient(to bottom, color-mix(in srgb, var(--bg) 92%, transparent) 0%, color-mix(in srgb, var(--bg) 88%, transparent) 78%, transparent); }
+  .brief-leads { display: none; }
+  .brief-say { position: relative; order: 1; max-width: none; }
   .brief-thesis { font-size: clamp(24px, 6.6vw, 30px); }
-  .brief-act { left: var(--g); justify-content: flex-start; gap: 10px 22px; }
   .brief-meta { display: none; }
-  /* on a phone the callouts are short tags on the drives; the proof lines live in each file */
-  .brief-co { max-width: 180px; min-height: 44px; row-gap: 2px; align-content: center; }
-  .brief-co .k, .brief-co .l { display: none; }
-  .brief-co .t { font-size: 13.5px; }
-  .brief-co::before { inset: -14px -22px -12px -16px; }
+  .brief-cos { position: relative; order: 2; margin: 16px 0 12px; border-bottom: 1px solid var(--hair); }
+  .brief-co { position: relative; display: grid; grid-template-columns: 28px 1fr; column-gap: 8px; row-gap: 1px; align-items: baseline; align-content: center; width: 100%; max-width: none; min-height: 48px; padding: 7px 0; border-top: 1px solid var(--hair); transform: none !important; }
+  .brief-co::before, .brief-say::before { display: none; }
+  .brief-co, .brief-leads g { opacity: 1; visibility: visible; transition: none; }
+  .brief-co .k { display: none; }
+  .brief-co .n { grid-column: 1; grid-row: 1; }
+  .brief-co .t { grid-column: 2; grid-row: 1; font-size: 15.5px; }
+  .brief-co .l { grid-column: 2; grid-row: 2; font-size: 12.5px; }
+  .brief-act { position: relative; order: 3; margin-top: auto; justify-content: flex-start; gap: 4px 22px; }
 }

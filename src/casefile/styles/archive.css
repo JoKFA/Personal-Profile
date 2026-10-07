@@ -76,6 +76,7 @@ body.cf-body { margin: 0; background: var(--bg); color: var(--ink); font-family:
   -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px);
   -webkit-mask-image: radial-gradient(ellipse 62% 60% at 45% 50%, #000 45%, transparent 100%); mask-image: radial-gradient(ellipse 62% 60% at 45% 50%, #000 45%, transparent 100%); }
 .panel.hide { transform: translateY(-44%); }
+.panel:focus, .panel:focus-visible { outline: none; }
 .panel-status { min-height: 30px; margin-bottom: 12px; animation: fadein .4s var(--ease-in); }
 .panel-status:empty { visibility: hidden; }
 .panel-status b { color: var(--acc-text); font-weight: 600; }

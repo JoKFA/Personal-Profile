@@ -14,27 +14,31 @@ export function Brief({ hidden }: { hidden: boolean }) {
   /** which corner each callout took last frame: kept while it stays free, so callouts do not flicker as the field breathes */
   const corner = useRef<number[]>([])
 
-  // leaders and callouts track the drives (they move while the lens opens and the field breathes)
+  // Callouts follow their drives while the camera opens on them, unseen. Once it has come to rest they
+  // fade in, 01 → 04, 80 ms apart, and stay exactly where they were placed: nothing moves while it is read.
   useEffect(() => {
-    if (hidden) return
-    let raf = 0
+    const r = root.current
+    if (hidden) { if (r && !archive.brief) r.classList.remove('brief--lit'); return }
+    let raf = 0, calm = 0, frozen = false
+    const unfreeze = () => { frozen = false; calm = 0; root.current?.classList.remove('brief--lit') }
+    addEventListener('resize', unfreeze)
     const f = () => {
       raf = requestAnimationFrame(f)
-      const r = root.current; if (!r) return
-      const W = innerWidth, H = innerHeight, phone = W < 900
+      const r = root.current; if (!r || frozen) return
+      const W = innerWidth, H = innerHeight
+      // a phone has no floating callouts: the four files are a list under the sentence (brief.css)
+      if (W < 900) { r.querySelectorAll<HTMLElement>('.brief-co').forEach((co) => { if (co.style.transform) co.style.transform = '' }); return }
       // the sentence, the actions and the header keep their space; callouts never cover them or each other
       const placed = [...r.querySelectorAll('.brief-say, .brief-act'), ...document.querySelectorAll('.hud-lock, .hud-top')].map((el) => el.getBoundingClientRect())
       const free = (b: DOMRect) => b.left >= 16 && b.right <= W - 16 && b.top >= 16 && b.bottom <= H - 16 && !placed.some((p) => b.left < p.right && b.right > p.left && b.top < p.bottom && b.bottom > p.top)
-      let d = ''
+      const leads = r.querySelectorAll<SVGPathElement>('.brief-leads path')
       archive.selectedAnchors().forEach((a, i) => {
         const co = r.querySelector<HTMLElement>(`.brief-co[data-i="${i}"]`), mk = r.querySelector<SVGRectElement>(`.brief-leads rect[data-i="${i}"]`)
         if (!co || !mk) return
         mk.setAttribute('x', String(a.x - 3)); mk.setAttribute('y', String(a.y - 3))
         // beside its drive: below right first (the drives rise to the right), then the other corners
-        const w = co.offsetWidth, h = co.offsetHeight, gx = phone ? 10 : 46, gy = phone ? 6 : 34
-        const spots: [number, number][] = phone
-          ? [[a.x + gx, a.y - h / 2], [a.x - gx - w, a.y - h / 2], [a.x + gx, a.y + gy], [a.x - gx - w, a.y + gy], [a.x + gx, a.y - gy - h], [a.x - gx - w, a.y - gy - h]]
-          : [[a.x + gx, a.y + gy], [a.x + gx, a.y - gy - h], [a.x - gx - w, a.y + gy], [a.x - gx - w, a.y - gy - h]]
+        const w = co.offsetWidth, h = co.offsetHeight, gx = 46, gy = 34
+        const spots: [number, number][] = [[a.x + gx, a.y + gy], [a.x + gx, a.y - gy - h], [a.x - gx - w, a.y + gy], [a.x - gx - w, a.y - gy - h]]
         const box = ([x, y]: [number, number]) => new DOMRect(x - 8, y - 6, w + 16, h + 12)
         const was = corner.current[i] ?? -1
         let k = was >= 0 && spots[was] && free(box(spots[was])) ? was : spots.findIndex((p) => free(box(p)))
@@ -43,14 +47,15 @@ export function Brief({ hidden }: { hidden: boolean }) {
         const [x, y] = spots[k]
         placed.push(box([x, y]))
         co.style.transform = `translate(${Math.round(x)}px, ${Math.round(y)}px)`
-        if (phone) return
         const left = x < a.x, ex = left ? x + w + 8 : x - 8, ey = y + h / 2 < a.y ? y + h - 8 : y + 10
-        d += `M${a.x},${a.y} L${ex + (left ? 14 : -14)},${ey} H${ex} `
+        leads[i]?.setAttribute('d', `M${a.x},${a.y} L${ex + (left ? 14 : -14)},${ey} H${ex}`)
       })
-      r.querySelector('.brief-leads path')?.setAttribute('d', d)
+      // at rest for a few frames: show them, and stop moving them
+      calm = archive.briefSettled() ? calm + 1 : 0
+      if (calm >= 4) { frozen = true; r.classList.add('brief--lit') }
     }
     raf = requestAnimationFrame(f)
-    return () => cancelAnimationFrame(raf)
+    return () => { cancelAnimationFrame(raf); removeEventListener('resize', unfreeze) }
   }, [archive, hidden])
 
   /** Open a selected file from home: step into the archive on its drive, then open it. */
@@ -60,8 +65,8 @@ export function Brief({ hidden }: { hidden: boolean }) {
   }
 
   return (
-    <div ref={root} className={`brief ${hidden ? 'hide' : ''}`} aria-hidden={hidden}>
-      <svg className="brief-leads" aria-hidden="true"><path />{SELECTED.map((s, i) => <rect key={s.id} data-i={i} width="6" height="6" />)}</svg>
+    <div ref={root} className={`brief ${hidden ? 'hide' : ''}`} aria-hidden={hidden} inert={hidden}>
+      <svg className="brief-leads" aria-hidden="true">{SELECTED.map((s, i) => <g key={s.id} data-i={i}><path /><rect data-i={i} width="6" height="6" /></g>)}</svg>
       <ol className="brief-cos" aria-label="Start here">
         {SELECTED.map((s, i) => (
           <li key={s.id}>
@@ -75,7 +80,7 @@ export function Brief({ hidden }: { hidden: boolean }) {
       </ol>
       <div className="brief-say">
         <h1 className="brief-thesis"><b>{THESIS.lead}</b> {THESIS.rest}</h1>
-        <p className="brief-meta lbl">Master of Cybersecurity, SFU · CCNA · Security+ · Full-time from Apr 2027</p>
+        <p className="brief-meta">Master of Cybersecurity, SFU · CCNA · Security+ · Full-time from Apr 2027</p>
       </div>
       <div className="brief-act">
         <button className="brief-inside" onClick={openProfile}>Inside my drive: six areas <span aria-hidden="true">→</span></button>

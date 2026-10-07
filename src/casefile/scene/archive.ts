@@ -299,6 +299,8 @@ export class Archive {
     this.publish()
   }
   get brief() { return this.briefOn }
+  /** Home is at rest: the entrance is over and the camera has finished opening on the selected files. */
+  briefSettled() { return this.briefOn && this.entranceDone() && Math.abs(1 - this.wide.value) < 0.01 && Math.abs(this.colCam.velocity) + Math.abs(this.rail.velocity) < 0.02 }
   /** The selected files' drives as one group: the copies that sit closest together near the selection. */
   private briefCells(): Cell[] {
     const slots = SELECTED.map((s) => ENTRIES.find((e) => e.id === s.id)!.slot)
