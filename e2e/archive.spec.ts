@@ -507,6 +507,31 @@ test('home: the callouts fade in 01 → 04 once the camera rests, and then do no
   expect(errors).toEqual([])
 })
 
+test('stepping down to the lowest quality does not recompile the scene', async ({ page }, info) => {
+  test.skip(info.project.name !== 'desktop-1440', 'a render-path check; the window size does not matter')
+  const errors = watchErrors(page)
+  await page.addInitScript(() => { localStorage.setItem('yw.entry', '1'); localStorage.setItem('yw.hint', '1') })
+  await page.goto('/?quality=medium')
+  await page.waitForFunction(() => { const s = (window as unknown as Win).__cf?.getSnapshot(); return s?.mode === 'archive' && s.brief && !!document.querySelector('.hud.on') && !document.querySelector('.cf--arriving') }, null, { timeout: 45_000 })
+  type Q = Window & { __cf: { getSnapshot(): { quality: string }; degrade(): void; host: { renderer: { info: { programs: unknown[] | null } } } } }
+  const before = await page.evaluate(() => (window as unknown as Q).__cf.host.renderer.info.programs!.length)
+  expect(before, 'the scene has its programs').toBeGreaterThan(50)
+  // the step-down that a slow device takes: shadows go off. Changing the light's shadow switch would change
+  // the shader of every lit material and recompile them all on the main thread (seconds, on a phone)
+  const took = await page.evaluate(async () => {
+    const w = window as unknown as Q, t0 = performance.now()
+    w.__cf.degrade()
+    await new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r())))
+    return performance.now() - t0
+  })
+  await page.waitForTimeout(500)
+  const after = await page.evaluate(() => ({ programs: (window as unknown as Q).__cf.host.renderer.info.programs!.length, quality: (window as unknown as Q).__cf.getSnapshot().quality }))
+  expect(after.quality).toBe('low')
+  expect(after.programs, 'no program was compiled for the step-down').toBe(before)
+  expect(took, 'two frames after the step-down').toBeLessThan(1000)
+  expect(errors).toEqual([])
+})
+
 test('contact is one click away', async ({ page }) => {
   const errors = watchErrors(page)
   await enter(page)

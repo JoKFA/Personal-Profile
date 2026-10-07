@@ -234,8 +234,17 @@ export function createStage(canvas: HTMLCanvasElement, quality: Quality) {
     /** contact shading on or off (it is off while the camera closes in on the drive: its depth range no longer fits) */
     setAo(on: boolean) { if (aoPass) aoPass.enabled = on },
     setBloom(strength: number) { bloom.strength = strength; bloom.enabled = strength > 0.01 },
-    /** shadows on or off for this scene's light (the renderer's own switch is shared with the interior and is left alone) */
-    setShadows(on: boolean) { key.castShadow = on },
+    /**
+     * Shadows off for this scene (the renderer's own switch is shared with the interior and is left alone).
+     * The light keeps its shadow switch: flipping it changes the shader of every lit material, and the
+     * whole scene would recompile on the main thread (seconds, on a phone, at the moment it is struggling).
+     * Instead nothing casts any more, and the shadow map is cleared once and left alone.
+     */
+    setShadows(on: boolean) {
+      if (on) { key.castShadow = true; return }
+      scene.traverse((o) => { if ((o as THREE.Mesh).isMesh) o.castShadow = false })   // (meshes only: a light's own castShadow is the shader switch)
+      key.shadow.autoUpdate = false; key.shadow.needsUpdate = true
+    },
     setExposure(x: number) { renderer.toneMappingExposure = x },
     /** Optical ivory while searching; the file exhibition keeps its own original lighting. */
     setEntranceLight(k: number) {
