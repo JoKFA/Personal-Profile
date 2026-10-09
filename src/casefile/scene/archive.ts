@@ -3,7 +3,7 @@
 // RhineLabUI src/scene.ts (MIT, github.com/LBEILC/RhineLabUI): telephoto yaw 59°, elevation 19°,
 // distance 140, span 7.33; the selection ripple fires with the selection itself.
 import * as THREE from 'three'
-import { LOOK, MOTION, SHELF, SHELF_K } from './look'
+import { LOOK, SHELF, SHELF_K } from './look'
 import { ENTRIES } from '../data/entries'
 import { SELECTED } from '../data/story'
 import { KIND_NAME, type Entry, type Lens } from '../data/types'
@@ -389,23 +389,12 @@ export class Archive {
     this.opening = true; this.faceTarget = 1; this.focus.target = 1
     if (!(await this.until(() => this.face > 0.85 && this.detail > 0.8))) this.stalled = true
   }
-  /** Light leaves the LED, runs over the top edge and across the face; the die flashes; the seam lights. */
-  async readDrive() {
-    const L = this.light
-    L.glow = L.glowTarget = 1.25; L.reveal = 0; this.bloom.target = 1
-    await this.tween(880, (k) => { L.reveal = k * 1.02 })
-    await this.tween(200, (k) => { L.die = k })
-    await this.tween(240, (k) => { L.seam = k; L.die = 1 - k * 0.6 })
-    // the page is out: lights come back up, the traces settle low so they never fight the demo
-    this.bloom.target = 0; this.focus.target = 0; L.glowTarget = 0.28
-    void this.tween(420, (k) => { L.seam = 1 - k })
-  }
   fileShown() { this.mode = 'file'; this.publish() }
   /**
-   * lookdev L2 (`?motion=1`): the file view drives the read. k 0 → 1: the key leaves the secure element
-   * (the die flashes), its light runs out along the traces as the blocks decrypt; at 1 it settles low.
+   * The key's light over the drive, k 0 → 1: it leaves the secure element (the die flashes) and runs out
+   * along the traces while the blocks decrypt; at 1 it settles low, so it never fights the demo. The file
+   * view drives k as it decrypts; `runSweep` runs it on its own clock (the subject drive, before its door).
    */
-  /** lookdev L2/L3: run the key's light on its own clock (the subject drive, before its door) */
   async runSweep(ms: number) { await this.tween(ms, (k) => this.setSweep(k)); this.setSweep(1) }
   setSweep(k: number) {
     const L = this.light
@@ -810,13 +799,11 @@ export class Archive {
 
     const L = this.light
     L.glow = approach(L.glow, L.glowTarget, this.reduced ? 60 : 3, dt)
-    // lookdev L3: through the door the circuit stays lit and the die comes up as the camera arrives on it
-    this.hero.setLight(L.reveal, MOTION && D ? Math.max(L.glow, 1.0) : L.glow, MOTION && D ? Math.max(L.die, D.die * 0.85) : L.die, L.seam, t)
+    // through the door the circuit stays lit and the die comes up as the camera arrives on it
+    this.hero.setLight(L.reveal, D ? Math.max(L.glow, 1.0) : L.glow, D ? Math.max(L.die, D.die * 0.85) : L.die, L.seam, t)
     this.hero.setLabel(this.detail < 0.5)
     // lookdev rack: a selected drive under the selection opens up on home like the other three
     this.hero.setClear(Math.max(smooth(Math.min(1, this.detail * 1.25)), SHELF && this.briefKeys.has(cellKey(this.sel)) ? smooth(Math.min(1, Math.max(0, this.wide.value))) : 0))
-    // lookdev L3: through the door, the cover lifts away first (the enclosure opens to the secure element)
-    if (MOTION) this.hero.setCover(D ? smooth(Math.min(1, D.stand * 1.3)) : 0)
     this.shake *= Math.exp(-dt * 6)
     this.heroGroup.position.set(chosen.x - trackX, BASE_Y + field(this.sel.row, this.sel.lane, fs) * calm + this.lift.value - (this.briefKeys.has(cellKey(this.sel)) ? 0 : LIFT.rest * homeW) + (D ? DOOR.lift * D.stand : 0) + (this.briefKeys.has(cellKey(this.sel)) ? (this.briefLift(cellKey(this.sel)) - LIFT.rest) * Math.max(0, this.wide.value) : 0) + (this.hovers.get(cellKey(this.sel)) || 0), chosen.z + this.rail.value)
     {
@@ -850,7 +837,7 @@ export class Archive {
     const arrived = age < ENTRANCE_END ? smooth((age - ENTRANCE.found) / (ENTRANCE_END - ENTRANCE.found)) : 1
     S.setEntranceLight((1 - this.detail) * (1 - 0.15 * arrived))
     S.setExposure(0.86 - 0.24 * this.focus.value + (age < ENTRANCE_END ? 0.1 * (1 - arrived) + 0.3 * (1 - smooth(age / 1.3)) : 0))
-    S.setFaceLight(this.detail * (MOTION && D ? 0.5 : 1))
+    S.setFaceLight(this.detail * (D ? 0.5 : 1))
     // depth of field: focus on the selected drive; the closer the camera has pushed in (an open
     // file), the shallower the focus, so the archive behind the file falls away
     this.tmp.copy(this.heroGroup.position); this.tmp.y += CARD.H * 0.5
@@ -876,7 +863,7 @@ export class Archive {
         }
         const f = this.focusEase, k = this.reduced ? 1 : 1 - Math.exp(-dt * 5)
         f[0] += (tx - f[0]) * k; f[1] += (ty - f[1]) * k; f[2] += (trx - f[2]) * k; f[3] += (try_ - f[3]) * k
-        S.setFocus(f[0], f[1], f[2] * 1.8, f[3] * 1.7, this.reduced || (MOTION && D) ? 0 : (4.5 + 6 * this.detail) * Math.min(innerWidth / 1440, 1.2))   // the overview stays sharp; only the far edges soften
+        S.setFocus(f[0], f[1], f[2] * 1.8, f[3] * 1.7, this.reduced || D ? 0 : (4.5 + 6 * this.detail) * Math.min(innerWidth / 1440, 1.2))   // the overview stays sharp; only the far edges soften
         // the PV's deep focus: a sharp band through the middle, the near and far rows soft
         if (age < ENTRANCE_END) {
           const stop = smooth((age - 1.2) / 2.2), handover = arrived

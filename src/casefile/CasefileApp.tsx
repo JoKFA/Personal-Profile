@@ -1,5 +1,4 @@
 // The Encrypted Archive: one canvas (the archive), one HUD, one file view.
-import { MOTION } from './scene/look'
 // Routes: "/" archive · "/projects/:slug" archive with that drive opened.
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
@@ -120,7 +119,7 @@ export default function CasefileApp() {
   // bumped when a transition releases the lock, so reconcile() looks again (the mode may have
   // settled while the lock was still held)
   const [settled, setSettled] = useState(0)
-  /** lookdev L2: between two files the browsing HUD stays down (no panel flashes up in transit) */
+  /** between two files the browsing HUD stays down (no panel flashes up in transit) */
   const [transit, setTransit] = useState(false)
   const mode = useSyncExternalStore(archive?.subscribe ?? noSubscribe, () => archive?.getSnapshot().mode ?? 'entry', () => 'entry')
   const doorOpen = useSyncExternalStore(archive?.subscribe ?? noSubscribe, () => archive?.getSnapshot().door ?? false, () => false)
@@ -138,9 +137,9 @@ export default function CasefileApp() {
         // first it opens and decrypts like any other drive; the light has crossed the face and flashed the die
         // when the door starts (the seam's last flicker plays under the first turn): nothing stands waiting
         await archive.beginOpen()
-        const read = MOTION && !reduced ? archive.runSweep(700) : archive.readDrive()
+        const read = archive.runSweep(700)
         // (the key's light is still running when the drive starts to stand: the door overlaps it)
-        const lead = reduced ? read : MOTION ? new Promise((r) => setTimeout(r, 300)) : new Promise((r) => setTimeout(r, 1050))
+        const lead = reduced ? read : new Promise((r) => setTimeout(r, 300))
         // (the interior may still be building on a slow machine: give it a few seconds before the file opens without it)
         const inside = spaceRef.current ?? await Promise.race([spaceBoot.current ?? Promise.resolve(null), new Promise<null>((r) => setTimeout(() => r(null), 8000))])
         await lead
@@ -199,7 +198,7 @@ export default function CasefileApp() {
   const close = useCallback(async ({ shred = false, to }: { shred?: boolean; to?: string } = {}) => {
     shredNext.current = shred
     const target = to ?? '/'
-    if (MOTION && target.startsWith('/projects/')) setTransit(true)
+    if (target.startsWith('/projects/')) setTransit(true)
     if (window.location.pathname !== target) navigate(target)
     else await closeFile()
   }, [closeFile, navigate])
@@ -269,12 +268,13 @@ export default function CasefileApp() {
     const want = slug ? entryBySlug.get(slug) ?? null : null
     if (slug && (!want || !routed(want))) { navigate('/', { replace: true }); return }
     if (mode === 'file' && file && (want ? want.id !== file.id : routed(file))) { void closeFile(); return }
+    if (mode === 'archive' && !want) setTransit(false)
     if (mode === 'archive' && want) {
       if (!archive.isReadable(want)) archive.grant()
       if (archive.isShredded(want)) archive.restore(want.id)
       const here = archive.selected?.id === want.id
       if (!here) archive.jumpTo(want.id)
-      const t = setTimeout(() => void openEntry(want), here || reduced ? 0 : MOTION ? 300 : 900)
+      const t = setTimeout(() => void openEntry(want), here || reduced ? 0 : 300)
       return () => clearTimeout(t)
     }
   }, [archive, gate, sceneReady, mode, settled, location.pathname, file, closeFile, openEntry, navigate, reduced])
@@ -324,8 +324,8 @@ export default function CasefileApp() {
     if (!archive || archive.getSnapshot().mode !== 'archive') return
     const subject = entryById.get('YW-000')!
     archive.setBrief(false); archive.jumpTo(subject.id)
-    if (MOTION) setTransit(true)
-    setTimeout(() => void openEntry(subject).finally(() => setTransit(false)), reduced ? 0 : MOTION ? 120 : 700)
+    setTransit(true)
+    setTimeout(() => void openEntry(subject).finally(() => setTransit(false)), reduced ? 0 : 120)
   }, [archive, openEntry, reduced])
 
   const ctx = useMemo<Ctx | null>(() => (archive ? { archive, visitor, reduced, status, open, openProfile, close, auditLog, record: audit, exitRef, space, runtime: runtimeRef, cut } : null), [archive, visitor, reduced, status, open, openProfile, close, auditLog, audit, space, cut])

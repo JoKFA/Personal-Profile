@@ -15,8 +15,7 @@ export const LOOK = {
   trans: 0.26, shellRough: 0.2, keyMul: 1.2, hemiMul: 0.85, sideMul: 0.8, fillMul: 1.1, ao: 1.0, motionBlur: 0.3,
 } as const
 
-// (removed with their code in P2.3 / P2.5: the timings and the home composition are folded in then)
-export const MOTION = true
+// (removed with their code in P2.5: the home composition is folded in then)
 export const SHELF = true
 export const SHELF_K = { spacing: 6.6, up: 2.6, toward: 9, turn: 0.55,
   mode: 'rack' as 'rack' | 'stair' | 'row', rows: 2.4, rise: 2.2, step: 0.75,
