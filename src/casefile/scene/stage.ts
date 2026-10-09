@@ -8,7 +8,6 @@ import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js'
 import { GTAOPass } from 'three/examples/jsm/postprocessing/GTAOPass.js'
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js'
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js'
-import { BokehPass } from 'three/examples/jsm/postprocessing/BokehPass.js'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { LANES, ROWS } from '../motion/grid'
 import { bodyMaterial, driveParts, ENTRY_IVORY, etchMaterial, etchUniforms, frameMaterial, hardwareMaterials, LED, TRANSLUCENCY, warmEtchMaps } from './drive'
@@ -198,11 +197,6 @@ export async function createStage(canvas: HTMLCanvasElement, quality: Quality) {
     ao.updateGtaoMaterial({ radius: 0.35, distanceExponent: 1.5, thickness: 0.6, scale: 1, samples: 16 }); ao.blendIntensity = LOOK.ao
     composer.addPass(ao)
   }
-  // depth of field (after RhineLabUI and the Arknights UI it comes from): the eye goes where the
-  // focus is. The archive keeps a shallow band around the selected drive; opening a file pulls
-  // focus onto it and lets the rest fall away. Off on the low tier.
-  const dof = quality.name === 'low' ? null : new BokehPass(scene, camera, { focus: 140, aperture: 0.0004, maxblur: 0.004 })
-  if (dof) composer.addPass(dof)
   // camera-speed blur (after the PV's whip into the archive): samples along the screen-space motion
   // of the field; off whenever the camera is still
   const motion = new ShaderPass({
@@ -340,12 +334,6 @@ export async function createStage(canvas: HTMLCanvasElement, quality: Quality) {
       rx *= LOOK.focusRadius; ry *= LOOK.focusRadius; max *= LOOK.focusMax
       focus.enabled = quality.name !== 'low' && innerWidth >= 900 && max > 0.4
       focus.uniforms.uCenter.value.set(cx, cy); focus.uniforms.uRadius.value.set(rx, ry); focus.uniforms.uMax.value = max; focus.uniforms.uRes.value.set(innerWidth, innerHeight)
-    },
-    setDof(focus: number, aperture: number, maxblur: number) {
-      if (!dof) return
-      const u = (dof as unknown as { uniforms: Record<string, { value: number }> }).uniforms
-      u.focus.value = focus; u.aperture.value = aperture; u.maxblur.value = maxblur
-      dof.enabled = aperture > 0
     },
     /**
      * Build the environment and compile every program the first frames will use, without blocking

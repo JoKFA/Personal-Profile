@@ -346,6 +346,39 @@ test('open: Esc, or Next file, while a tab is decrypting puts the text back firs
   expect(errors).toEqual([])
 })
 
+test('open: where the browser cannot encrypt, the page reads plain, says so, and still closes', async ({ page }, info) => {
+  test.skip(info.project.name !== 'desktop-1440', 'one run covers the fallback')
+  const errors = watchErrors(page)
+  // WebCrypto is only there on a secure origin: a phone testing over a LAN address has none
+  await page.addInitScript(() => { Object.defineProperty(Crypto.prototype, 'subtle', { get: () => undefined }) })
+  await enter(page)
+  await startOpen(page, 'X-001')
+  await page.waitForFunction(() => document.querySelector('.file')?.getAttribute('data-tag') === 'bad', null, { timeout: 20_000 })
+  await expect(page.locator('.file-verify span')).toHaveText(/not available/)
+  await expect(page.locator('.file-meta h1')).toBeVisible()
+  expect(await page.evaluate(() => getComputedStyle(document.querySelector('.file-meta')!).visibility)).toBe('visible')
+  // the text itself is there to read: not left in the blocks the cipher had begun to make
+  expect(await page.evaluate(() => document.querySelectorAll('.cb, .cb-cover').length)).toBe(0)
+  expect(await page.evaluate(() => getComputedStyle(document.querySelector('.file-meta h1')!).color)).not.toBe('rgba(0, 0, 0, 0)')
+  await closeFile(page)
+  expect(await page.locator('.file').count()).toBe(0)
+  expect(errors).toEqual([])
+})
+
+test('open and close: a browser with no requestIdleCallback (Safari) prepares the closing seal all the same', async ({ page }, info) => {
+  test.skip(info.project.name !== 'desktop-1440', 'one run covers the fallback')
+  const pageErrors: string[] = []
+  page.on('pageerror', (e) => pageErrors.push(e.message))
+  await page.addInitScript(() => { Object.defineProperty(window, 'requestIdleCallback', { value: undefined, configurable: true }); Object.defineProperty(window, 'cancelIdleCallback', { value: undefined, configurable: true }) })
+  await enter(page)
+  await openDrive(page, 'X-001')
+  await tagged(page)
+  // the seal was prepared (its covers are in the page, hidden) without an idle callback
+  await page.waitForFunction(() => document.querySelectorAll('.cb-cover.off').length > 0, null, { timeout: 5000 })
+  await closeFile(page)
+  expect(pageErrors).toEqual([])
+})
+
 test('close: the page is encrypted again first, the drive holds still, the whole page fades and goes only when it is gone', async ({ page }, info) => {
   test.skip(info.project.name !== 'desktop-1440', 'a frame-timing check on the desktop layout')
   const errors = watchErrors(page)
@@ -681,6 +714,22 @@ test('home: at three window sizes the list and the numbers are on screen and cle
     expect(tight, `${at}: the compact list`).toBe(height <= 720)
     if (tight) expect(await page.locator('.brief-co .l').evaluateAll((els) => els.every((e) => getComputedStyle(e).display === 'none'))).toBe(true)
   }
+  expect(errors).toEqual([])
+})
+
+test('home: narrowing the window below 900 px gives the phone list, not the desktop list pushed down', async ({ page }, info) => {
+  test.skip(info.project.name !== 'desktop-1440', 'sets its own window sizes')
+  test.setTimeout(120_000)
+  const errors = watchErrors(page)
+  await returnHome(page)
+  await page.waitForSelector('.brief--lit', { timeout: 15_000 })
+  expect(await page.locator('.brief-cos').evaluate((el) => (el as HTMLElement).style.top), 'on a desktop the list is placed under the sentence').not.toBe('')
+  await page.setViewportSize({ width: 800, height: 900 })
+  await page.waitForTimeout(600)
+  expect(await page.locator('.brief-cos').evaluate((el) => (el as HTMLElement).style.top), 'nothing left over from the desktop placement').toBe('')
+  const say = (await page.locator('.brief-say').boundingBox())!, list = (await page.locator('.brief-cos').boundingBox())!
+  expect(list.y, 'the list follows the sentence').toBeGreaterThanOrEqual(say.y + say.height - 1)
+  expect(list.y + list.height, 'and stays on screen').toBeLessThanOrEqual(900)
   expect(errors).toEqual([])
 })
 

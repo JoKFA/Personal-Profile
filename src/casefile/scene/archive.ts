@@ -152,7 +152,7 @@ export class Archive {
   clearanceMin = Infinity
   /** a motion wait gave up during the last open/close (it should never have to) */
   stalled = false
-  private light = { reveal: 1, glow: 0, glowTarget: 0, die: 0, seam: 0 }
+  private light = { reveal: 1, glow: 0, glowTarget: 0, die: 0 }
   private camAim = ARRAY_AIM.clone()
   private pointer = new THREE.Vector2(-9, -9)
   private ray = new THREE.Raycaster()
@@ -416,7 +416,6 @@ export class Archive {
     // inside the drive: the interior plays its intro backwards, then the door runs in reverse and the drive is as it was
     if (this.door.open) { await this.interior?.exit(); await this.endDoor() }
     const L = this.light, glow0 = Math.max(L.glow, 0.6)
-    L.seam = 0
     // the light retracts while the drive turns back, still up; it starts descending once most of
     // the turn is done
     this.holdHigh = true; this.opening = false; this.faceTarget = 0; this.focus.target = 0; this.bloom.target = 0
@@ -787,7 +786,7 @@ export class Archive {
     const L = this.light
     L.glow = approach(L.glow, L.glowTarget, this.reduced ? 60 : 3, dt)
     // through the door the circuit stays lit and the die comes up as the camera arrives on it
-    this.hero.setLight(L.reveal, D ? Math.max(L.glow, 1.0) : L.glow, D ? Math.max(L.die, D.die * 0.85) : L.die, L.seam, t)
+    this.hero.setLight(L.reveal, D ? Math.max(L.glow, 1.0) : L.glow, D ? Math.max(L.die, D.die * 0.85) : L.die, t)
     this.hero.setLabel(this.detail < 0.5)
     // a selected drive under the selection opens up on home like the other three
     this.hero.setClear(Math.max(smooth(Math.min(1, this.detail * 1.25)), this.briefKeys.has(cellKey(this.sel)) ? smooth(Math.min(1, Math.max(0, this.wide.value))) : 0))
@@ -827,11 +826,6 @@ export class Archive {
     S.setEntranceLight((1 - this.detail) * (1 - 0.15 * arrived))
     S.setExposure(0.86 - 0.24 * this.focus.value + (age < ENTRANCE_END ? 0.1 * (1 - arrived) + 0.3 * (1 - smooth(age / 1.3)) : 0))
     S.setFaceLight(this.detail * (D ? 0.5 : 1))
-    // depth of field: focus on the selected drive; the closer the camera has pushed in (an open
-    // file), the shallower the focus, so the archive behind the file falls away
-    this.tmp.copy(this.heroGroup.position); this.tmp.y += CARD.H * 0.5
-    const fd = S.camera.position.distanceTo(this.tmp)
-    S.setDof(fd, 0, 0)
     {
       // the focus follows the selected drive on screen; an open file widens it to the drive it holds
       const b = this.screenBox()

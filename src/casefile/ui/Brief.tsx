@@ -25,7 +25,7 @@ export function Brief({ hidden }: { hidden: boolean }) {
       const r = root.current; if (!r || frozen) return
       const W = innerWidth, H = innerHeight
       // a phone has no numbers on drives: the four files are a list under the sentence (brief.css)
-      if (W < 900) return
+      if (W < 900) { const list = r.querySelector<HTMLElement>('.brief-cos'); if (list?.style.top) { list.style.top = ''; list.classList.remove('tight') } return }
       // the list follows the sentence down the left margin; in a short window it drops the second lines
       const list = r.querySelector<HTMLElement>('.brief-cos'), say = r.querySelector('.brief-say'), act = r.querySelector('.brief-act')
       if (list && say && act) {

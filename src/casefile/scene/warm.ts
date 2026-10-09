@@ -29,6 +29,7 @@ export async function compileInSteps(renderer: THREE.WebGLRenderer, root: THREE.
   const jobs: Promise<unknown>[] = []
   let t = performance.now()
   for (const child of [...root.children]) {
+    if ((child as THREE.Light).isLight) continue   // (a light holds nothing to compile; its being counted twice would only skew the lights this call sees)
     jobs.push(run(() => renderer.compileAsync(child, camera, target)))
     if (performance.now() - t > SLICE) { await pause(); t = performance.now() }
   }

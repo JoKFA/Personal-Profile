@@ -104,7 +104,9 @@ export async function cipherText(targets: HTMLElement[], start: 'cipher' | 'plai
       text += t
     }
   }
-  const sealed = await seal(text)
+  let sealed: Sealed
+  // (no WebCrypto, say: the page is put back as it was, and the caller is told)
+  try { sealed = await seal(text) } catch (err) { restores.reverse().forEach((r) => r()); throw err }
   // each block's own 16 ciphertext bytes (the k-th AES block, in counter order)
   blocks.forEach((b, k) => { for (let j = 0; j < BLOCK; j++) b.bytes[j] = sealed.ct[(k * BLOCK + j) % sealed.ct.length] })
   // covers: one per line box of each block, drawn at the block's own size

@@ -102,6 +102,14 @@ describe('a run', () => {
     second.restore()
   })
 
+  it('leaves the page exactly as it was when the cipher cannot be made (no WebCrypto)', async () => {
+    const { host, targets } = page()
+    const before = host.innerHTML, real = globalThis.crypto
+    Object.defineProperty(globalThis, 'crypto', { value: { getRandomValues: real.getRandomValues.bind(real) }, configurable: true })
+    try { await expect(cipherText(targets)).rejects.toThrow() } finally { Object.defineProperty(globalThis, 'crypto', { value: real, configurable: true }) }
+    expect(host.innerHTML).toBe(before)
+  })
+
   it('a prepared seal starts readable and covers again from the last block', async () => {
     const { targets } = page()
     const run = await cipherText(targets, 'plain')

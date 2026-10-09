@@ -19,6 +19,11 @@ import gsap from 'gsap'
 import { checkText, cipherFace, cipherText, type FaceRun, type TextRun } from './cipher'
 
 const STAGE = { w: 640, h: 452 }
+/** run `f` in an idle moment (a short timer where the browser has no requestIdleCallback, as Safari has not); returns the cancel */
+const whenIdle = (f: () => void, timeout: number) => {
+  if (typeof requestIdleCallback === 'function') { const h = requestIdleCallback(f, { timeout }); return () => cancelIdleCallback(h) }
+  const h = setTimeout(f, 200); return () => clearTimeout(h)
+}
 const HAS_FILE = new Set(['case', 'service', 'education'])
 /** The file to read next: the next selected file; from any other file, the next one in its drawer. */
 function nextFile(e: Entry): Entry | null {
@@ -87,13 +92,17 @@ export function FileView({ entry: e }: { entry: Entry }) {
     const r = root.current!, { stage, targets } = sealParts(r)
     return (seal.current = Promise.all([cipherText(targets, 'plain'), stage ? cipherFace(stage, `${e.id} ${e.title} ${e.summary}`, 8, 5, 'plain') : Promise.resolve(null)]))
   }, [e])
-  const dropSeal = useCallback(() => { const p = seal.current; seal.current = null; void p?.then(([c, f]) => { c.restore(); f?.remove() }) }, [])
+  const dropSeal = useCallback(() => { const p = seal.current; seal.current = null; void p?.then(([c, f]) => { c.restore(); f?.remove() }, () => undefined) }, [])
   /** when nothing is moving, prepare the closing seal in an idle moment */
   const prepareWhenIdle = useCallback(() => {
     idle.current()
-    const h = requestIdleCallback(() => { if (root.current && closing.current === null && !arrival.current && !tabRun.current && !seal.current) void prepareSeal() }, { timeout: 1500 })
-    idle.current = () => cancelIdleCallback(h)
+    idle.current = whenIdle(() => { if (root.current && closing.current === null && !arrival.current && !tabRun.current && !seal.current) void prepareSeal().catch(() => undefined) }, 1500)
   }, [prepareSeal])
+  // The prepared seal stands the page's text in blocks while it is read. If React then changes some of that text
+  // (the visitor file's risk, its log), it changes a node the blocks have taken: the seal is put back, and made again.
+  useLayoutEffect(() => {
+    if (seal.current && closing.current === null) { dropSeal(); prepareWhenIdle() }
+  }, [snap.version, dropSeal, prepareWhenIdle])
   useEffect(() => {
     // a new window size changes every line break, so the prepared seal no longer fits: drop it and prepare another
     let again = 0
@@ -109,14 +118,14 @@ export function FileView({ entry: e }: { entry: Entry }) {
     const r = root.current!
     r.focus({ preventScroll: true })
     // the line under the title says what was checked; the result is the real one
-    const tag = (ok: boolean, blocks: number) => {
+    const tag = (ok: boolean, blocks: number, said?: string) => {
       r.dataset.tag = ok ? 'ok' : 'bad'
-      const v = r.querySelector('.file-verify span'); if (v) v.textContent = ok ? `AES-256-GCM · ${blocks} blocks · tag verified` : 'AES-256-GCM · tag check failed'
+      const v = r.querySelector('.file-verify span'); if (v) v.textContent = said ?? (ok ? `AES-256-GCM · ${blocks} blocks · tag verified` : 'AES-256-GCM · tag check failed')
     }
     let dead = false
     if (reduced) {
       // no motion: the text is plain at once, and the check still runs
-      void checkText(sealParts(r).targets).then(({ blocks, ok }) => { if (!dead) tag(ok, blocks) })
+      void checkText(sealParts(r).targets).then(({ blocks, ok }) => { if (!dead) tag(ok, blocks) }, () => { if (!dead) tag(false, 0, 'AES-256-GCM · not available in this browser') })
       const raf = requestAnimationFrame(() => { archive.setSweep(1); archive.fileShown() })
       return () => { dead = true; cancelAnimationFrame(raf) }
     }
@@ -126,7 +135,16 @@ export function FileView({ entry: e }: { entry: Entry }) {
     const stopped = () => { sweep?.kill(); text?.restore(); face?.remove(); text = face = null }
     arrival.current = { stop() { dead = true; stopped() } }
     r.classList.add('sealed')
-    void (async () => {
+    // where the cipher cannot be made (no WebCrypto off a secure origin, no canvas): the page reads plain, and says so
+    const failed = (err: unknown) => {
+      if (dead) return
+      console.warn('the page could not be encrypted; it is shown as it is', err)
+      stopped(); r.classList.remove('sealed'); tag(false, 0, 'AES-256-GCM · not available in this browser')
+      archive.setSweep(1); archive.fileShown(); arrival.current = null
+    }
+    // (a microtask later: a development double-run of this effect must not find the text already split)
+    void Promise.resolve().then(async () => {
+      if (dead) return
       const { stage, targets } = sealParts(r)
       const [t, f] = await Promise.all([cipherText(targets), stage ? cipherFace(stage, `${e.id} ${e.title} ${e.summary}`) : Promise.resolve(null)])
       if (dead) { t.restore(); f?.remove(); return }
@@ -145,7 +163,7 @@ export function FileView({ entry: e }: { entry: Entry }) {
       archive.setSweep(1); archive.fileShown()
       arrival.current = null
       prepareWhenIdle()
-    })()
+    }).catch(failed)
     return () => { dead = true; arrival.current = null; stopped() }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -154,18 +172,19 @@ export function FileView({ entry: e }: { entry: Entry }) {
     dropSeal()
     const r = root.current
     if (!r || !tab || reduced) return
-    const targets = [...r.querySelectorAll<HTMLElement>('.file-tab [data-redact]')]
     let dead = false, run: TextRun | null = null
     r.classList.add('sealed-tab')
     tabRun.current = { stop() { dead = true; run?.restore(); r.classList.remove('sealed-tab') } }
-    void cipherText(targets).then(async (c) => {
+    void Promise.resolve().then(async () => {
+      if (dead) return
+      const c = await cipherText([...r.querySelectorAll<HTMLElement>('.file-tab [data-redact]')])
       run = c
       if (dead) { c.restore(); return }
       r.classList.remove('sealed-tab')
       await c.decrypt(360)
       c.restore(); run = null; tabRun.current = null
       prepareWhenIdle()
-    })
+    }).catch((err) => { if (dead) return; console.warn('the tab could not be encrypted; it is shown as it is', err); run?.restore(); run = null; tabRun.current = null; r.classList.remove('sealed-tab') })
     return () => { dead = true; run?.restore(); tabRun.current = null; r.classList.remove('sealed-tab') }
   }, [tab, reduced, dropSeal, prepareWhenIdle])
 
