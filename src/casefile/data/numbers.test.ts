@@ -20,7 +20,6 @@ const NUMBER_SOURCES: Record<string, string> = {
   '~15%': `${DB}: BCIT phishing simulations (fact 601)`,
   '~30%': `${DB}: VibesMeet monthly AWS cost`,
   '30%': `${DB}: VibesMeet monthly AWS cost`,
-  '10+': `${DB}: VibesMeet approx. PR scope`,
   '500+': `${DB}: VIVA sole IT contact`,
   '3+': `${DB}: VIVA public services`,
   '4': `${DB}: BCIT 4 IR playbooks; pentest surfaces listed in fact 1361; campus network 4 sites`,

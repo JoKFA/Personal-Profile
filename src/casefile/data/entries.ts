@@ -195,7 +195,7 @@ export const SERVICE: Entry[] = [
     summary: 'Put security checks into a startup’s CI pipeline, tightened its AWS access, and cut its monthly AWS bill by about 30%.',
     roles: ['cloud', 'ai'], slot: { lane: 2, row: 15 },
     facts: [['CI security', 'Trivy · GitGuardian · Semgrep in GitHub Actions'], ['Cloud', 'AWS Security Hub · IAM least privilege'], ['Cost', '~30% lower monthly AWS spend'], ['Access', 'Joiner / leaver IAM process']],
-    numbers: [['~30%', 'monthly AWS cost'], ['10+', 'PRs gated (approx.)']],
+    numbers: [['~30%', 'monthly AWS cost']],
     sections: [{ eyebrow: 'What I did', title: 'Security that ships with the code', body: 'Checks ran on every pull request before merge, tuned so false positives did not stall the team.', points: ['Set up AWS Security Hub to centralise findings.', 'Integrated Trivy, GitGuardian and Semgrep into GitHub Actions and tuned false-positive handling.', 'Reviewed IAM, removed excess access, and helped build onboarding/offboarding for email, MFA and permissions.', 'Evaluated VPCs, images and services for cheaper equivalents: ~30% lower monthly AWS cost.'] }],
     stack: ['GitHub Actions', 'Trivy', 'GitGuardian', 'Semgrep', 'AWS Security Hub', 'IAM'],
     demo: 'vibes', demoNote: ['Sample pipeline run', 'Feb – Jul 2025'],
