@@ -11,6 +11,7 @@
 import * as THREE from 'three'
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
+import { LOOK } from './look'
 
 export const CARD = { W: 5, H: 3.7, T: 0.376 } as const
 const { W, H, T } = CARD
@@ -126,7 +127,7 @@ function grade(sh: THREE.WebGLProgramParametersWithUniforms) {
 /** The ivory carrier frame: opaque, satin, a soft clearcoat on the radiused edge. */
 export function frameMaterial(dark = false, graded = false) {
   const m = new THREE.MeshPhysicalMaterial({
-    color: dark ? 0x353c40 : graded ? 0xfff5e9 : 0xf3e7d5, roughness: graded ? 0.38 : 0.34, clearcoat: dark ? 0.5 : 0.2, clearcoatRoughness: 0.35,
+    color: dark ? 0x353c40 : graded ? 0xfff5e9 : 0xf6f0e7, roughness: graded ? 0.38 : 0.42, clearcoat: dark ? 0.5 : 0.2, clearcoatRoughness: 0.35,
     sheen: 0.15, sheenRoughness: 0.7, sheenColor: new THREE.Color(0xffffff), envMapIntensity: 0.6,
   })
   if (graded) { m.onBeforeCompile = grade; m.customProgramCacheKey = () => 'frame-graded' }
@@ -136,8 +137,8 @@ export function frameMaterial(dark = false, graded = false) {
 /** Frosted polymer after the reference: transmissive, rough, warm attenuation, a lit rim. */
 export function bodyMaterial(dark = false, graded = false) {
   const m = new THREE.MeshPhysicalMaterial({
-    color: dark ? 0x3c444a : graded ? 0xf6e2c8 : 0xfffdfa, roughness: graded ? 0.28 : 0.27, transmission: dark ? 0 : graded ? 0.78 : 0.9, thickness: 0.12, ior: 1.46,
-    attenuationColor: new THREE.Color(dark ? 0x141518 : 0xd9a873), attenuationDistance: dark ? 0.6 : 0.6,
+    color: dark ? 0x3c444a : graded ? 0xf6e2c8 : 0xfffdfa, roughness: graded ? LOOK.shellRough : 0.27, transmission: dark ? 0 : graded ? 0.78 : 0.9, thickness: 0.12, ior: 1.46,
+    attenuationColor: new THREE.Color(dark ? 0x141518 : 0xead3b4), attenuationDistance: dark ? 0.6 : 1.0,
     clearcoat: dark ? 0.12 : 0.3, clearcoatRoughness: dark ? 0.4 : 0.25, envMapIntensity: dark ? 0.22 : 0.6,
   })
   if (dark) m.roughness = 0.5   // slate reads as a solid, not a mirror for the bright room
@@ -157,7 +158,7 @@ export function bodyMaterial(dark = false, graded = false) {
       // the shell itself carries a record's light: a broad surface stays steady where a thin bright gap shimmers
       sh.fragmentShader = 'varying float vClear, vLamp;\n' + sh.fragmentShader
         .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = mix(roughnessFactor, 0.04, vClear);')
-        .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += vec3(1.0, 0.62, 0.30) * 0.075 * vLamp;')
+        .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += vec3(1.0, 0.62, 0.30) * ' + (0.075 * LOOK.lamp).toFixed(4) + ' * vLamp;')
     }
   }
   if (graded) m.customProgramCacheKey = () => 'glass-graded'
@@ -175,7 +176,7 @@ export interface EtchUniforms {
 export function etchMaterial({ part = 'face', dark = false, instanced = false }: { part?: 'face' | 'top'; dark?: boolean; instanced?: boolean } = {}) {
   const M = etchMaps()[part]
   const m = new THREE.MeshPhysicalMaterial({
-    color: dark ? 0x1d1e21 : part === 'face' ? (instanced ? 0x8a6c4c : 0xb9aa96) : 0xf4f0ea, roughness: 1, metalness: 1, roughnessMap: M.mr, metalnessMap: M.mr,
+    color: dark ? 0x1d1e21 : part === 'face' ? (instanced ? 0xb3a28b : 0xd3c8b8) : 0xf4f0ea, roughness: 1, metalness: 1, roughnessMap: M.mr, metalnessMap: M.mr,
     normalMap: M.normal, normalScale: new THREE.Vector2(1.1, 1.1), clearcoat: dark ? 0.6 : 0.35, clearcoatRoughness: dark ? 0.28 : 0.4,
     sheen: dark ? 0.15 : 0.4, sheenRoughness: 0.7, sheenColor: new THREE.Color(0xffffff),
     emissive: 0xffffff, emissiveMap: M.mask, emissiveIntensity: 1, envMapIntensity: 0.6,
@@ -185,7 +186,7 @@ export function etchMaterial({ part = 'face', dark = false, instanced = false }:
     uCol: { value: new THREE.Color(0xe6c98f) }, uHot: { value: new THREE.Color(0xffffff) },
     uRim: { value: 0.3 }, uRimColor: { value: new THREE.Color(0xfffaf2) }, uEntry: { value: ENTRY_UV },
     // the lantern: a record's whole plate glows warm behind the frost, and its top edge carries a line of it
-    uLamp: { value: new THREE.Color(0xffa458).multiplyScalar(1.6) },
+    uLamp: { value: new THREE.Color(0xffa458).multiplyScalar(1.6 * LOOK.lamp) },
   }
   m.userData.u = u
   // the etched plane sits exactly on the precision model's board face (BOARD_Z): pull it forward in depth so it always

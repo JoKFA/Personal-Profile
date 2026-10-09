@@ -1,4 +1,5 @@
 // The Encrypted Archive: one canvas (the archive), one HUD, one file view.
+import { MOTION } from './scene/look'
 // Routes: "/" archive · "/projects/:slug" archive with that drive opened.
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
@@ -120,10 +121,12 @@ export default function CasefileApp() {
   // The URL says which project file should be open; reconcile() makes the scene agree once any
   // running transition has settled. Clicks, related links and back/forward only change the URL.
   const shredNext = useRef(false)
-  const exitRef = useRef<null | (() => Promise<void>)>(null)
+  const exitRef = useRef<null | ((onSealed?: () => void) => Promise<void>)>(null)
   // bumped when a transition releases the lock, so reconcile() looks again (the mode may have
   // settled while the lock was still held)
   const [settled, setSettled] = useState(0)
+  /** lookdev L2: between two files the browsing HUD stays down (no panel flashes up in transit) */
+  const [transit, setTransit] = useState(false)
   const mode = useSyncExternalStore(archive?.subscribe ?? noSubscribe, () => archive?.getSnapshot().mode ?? 'entry', () => 'entry')
   const doorOpen = useSyncExternalStore(archive?.subscribe ?? noSubscribe, () => archive?.getSnapshot().door ?? false, () => false)
 
@@ -140,8 +143,9 @@ export default function CasefileApp() {
         // first it opens and decrypts like any other drive; the light has crossed the face and flashed the die
         // when the door starts (the seam's last flicker plays under the first turn): nothing stands waiting
         await archive.beginOpen()
-        const read = archive.readDrive()
-        const lead = reduced ? read : new Promise((r) => setTimeout(r, 1050))
+        const read = MOTION && !reduced ? archive.runSweep(700) : archive.readDrive()
+        // (the key's light is still running when the drive starts to stand: the door overlaps it)
+        const lead = reduced ? read : MOTION ? new Promise((r) => setTimeout(r, 300)) : new Promise((r) => setTimeout(r, 1050))
         // (the interior may still be building on a slow machine: give it a few seconds before the file opens without it)
         const inside = spaceRef.current ?? await Promise.race([spaceBoot.current ?? Promise.resolve(null), new Promise<null>((r) => setTimeout(() => r(null), 8000))])
         await lead
@@ -161,6 +165,14 @@ export default function CasefileApp() {
         // no interior (it could not be built): the file opens like any other, on the archive
         await read
         setFile(e); audit(`key issued · ${e.id} decrypted`)
+        return
+      }
+      if (MOTION && !reduced) {
+        // lookdev L2: the page comes out while the drive is still turning; the file view runs the read
+        const framed = archive.beginOpen()
+        await new Promise((r) => setTimeout(r, 300))
+        setFile(e); setTransit(false); audit(`key issued · ${e.id} decrypted`)
+        await framed
         return
       }
       await archive.beginOpen()
@@ -187,7 +199,11 @@ export default function CasefileApp() {
     try {
       if (shred) { archive.shred(e.id); audit(`${e.id} crypto-shredded`) } else audit(`${e.id} re-encrypted, key revoked`)
       // the page re-encrypts while the drive's light is already retracting (shred ran its own exit)
-      const gone = (shred ? Promise.resolve() : Promise.resolve(exitRef.current?.())).then(() => setFile(null))
+      // lookdev: the drive holds still, facing the reader, until the page and its face are encrypted again
+      let onSealed = () => {}
+      const sealed = new Promise<void>((res) => { onSealed = res })
+      const gone = (shred ? Promise.resolve() : Promise.resolve(exitRef.current?.(onSealed))).then(() => { onSealed(); setFile(null) })
+      if (MOTION && !shred) await sealed
       await archive.close(gone)
       runtimeRef.current?.stop(); runtimeRef.current = null; archive.interior = null; setCut(null)
       // leaving the briefing early still issues read access (nobody is left in a sealed archive)
@@ -200,6 +216,7 @@ export default function CasefileApp() {
   const close = useCallback(async ({ shred = false, to }: { shred?: boolean; to?: string } = {}) => {
     shredNext.current = shred
     const target = to ?? '/'
+    if (MOTION && target.startsWith('/projects/')) setTransit(true)
     if (window.location.pathname !== target) navigate(target)
     else await closeFile()
   }, [closeFile, navigate])
@@ -274,7 +291,7 @@ export default function CasefileApp() {
       if (archive.isShredded(want)) archive.restore(want.id)
       const here = archive.selected?.id === want.id
       if (!here) archive.jumpTo(want.id)
-      const t = setTimeout(() => void openEntry(want), here || reduced ? 0 : 900)
+      const t = setTimeout(() => void openEntry(want), here || reduced ? 0 : MOTION ? 300 : 900)
       return () => clearTimeout(t)
     }
   }, [archive, gate, sceneReady, mode, settled, location.pathname, file, closeFile, openEntry, navigate, reduced])
@@ -324,7 +341,8 @@ export default function CasefileApp() {
     if (!archive || archive.getSnapshot().mode !== 'archive') return
     const subject = entryById.get('YW-000')!
     archive.setBrief(false); archive.jumpTo(subject.id)
-    setTimeout(() => void openEntry(subject), reduced ? 0 : 700)
+    if (MOTION) setTransit(true)
+    setTimeout(() => void openEntry(subject).finally(() => setTransit(false)), reduced ? 0 : MOTION ? 120 : 700)
   }, [archive, openEntry, reduced])
 
   const ctx = useMemo<Ctx | null>(() => (archive ? { archive, visitor, reduced, status, open, openProfile, close, auditLog, record: audit, exitRef, space, runtime: runtimeRef, cut } : null), [archive, visitor, reduced, status, open, openProfile, close, auditLog, audit, space, cut])
@@ -347,7 +365,7 @@ export default function CasefileApp() {
       {!gate && !sceneReady && <div className="cf-boot lbl" role="status">Decrypting the portfolio</div>}
       {archive && (
         <ArchiveContext.Provider value={ctx as Ctx}>
-          <Hud statusLine={statusLine} hidden={gate || !sceneReady} arriving={arriving} />
+          <Hud statusLine={statusLine} hidden={gate || !sceneReady || transit} arriving={arriving} />
           {verify && <Verify hash={verify.hash} restricted={verify.restricted} />}
           {file && <Suspense fallback={null}><FileView entry={file} key={file.id} /></Suspense>}
         </ArchiveContext.Provider>

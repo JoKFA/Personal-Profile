@@ -6,6 +6,7 @@
 import * as THREE from 'three'
 import { DIE, STATION_AT, STATION_YAW } from './layout'
 import { clamp01, mix, smooth } from './kit'
+import { MOTION } from '../scene/look'
 
 type V3 = [number, number, number]
 export interface Pose { pos: THREE.Vector3; target: THREE.Vector3; fov: number; /** 0 = world up · 1 = screen-up is -z (a top-down shot) */ top: number }
@@ -168,11 +169,11 @@ export function hubPose(region: Region): Pose {
  */
 export const INTRO = {
   /** the whole intro: the camera is at the first station's shot when it ends */
-  dur: 2.6,
+  dur: MOTION ? 1.9 : 2.6,
   /** the camera reaches the wide hub shot (and the subject has finished moving into its region) */
-  hubAt: 1.6,
+  hubAt: MOTION ? 1.15 : 1.6,
   /** from here it flows on towards the first station, a flight of its own, so it never rests at the hub */
-  blendFrom: 1.1,
+  blendFrom: MOTION ? 0.8 : 1.1,
   extrudeFrom: 0.08, extrudeTo: 1.4,
 }
 /** how far the intro has flowed on into the first station's shot: 0 until `blendFrom`, 1 at the end */

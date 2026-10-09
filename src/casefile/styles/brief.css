@@ -71,3 +71,30 @@
   .brief-co .l { grid-column: 2; grid-row: 2; font-size: 12.5px; }
   .brief-act { position: relative; inset: auto; order: 3; margin-top: auto; justify-content: flex-start; gap: 4px 22px; }
 }
+
+/* lookdev T1 (?shelf=1): the four selected files stand on one shelf; each label hangs under its drive,
+   on one baseline, like the label under an exhibit. Labels arrive one by one, 01 → 04, once the lens rests. */
+.brief.shelf .brief-co { max-width: 290px; grid-template-columns: 26px 1fr; justify-items: start; text-align: left; column-gap: 10px; row-gap: 3px; }
+.brief.shelf .brief-co .n { grid-row: 1 / 3; padding-top: 4px; }
+.brief.shelf .brief-co .t, .brief.shelf .brief-co .l { grid-column: 2; }
+.brief.shelf .brief-leads path { stroke: var(--ink2); }
+.brief.shelf .brief-leads rect { width: 4px; height: 4px; fill: var(--acc); }
+.brief.shelf .brief-leads text { font: 500 11px/1 var(--mono); letter-spacing: .1em; fill: var(--ink); paint-order: stroke; stroke: var(--bg); stroke-width: 3px; stroke-linejoin: round; transition: fill .2s; }
+/* pointing at a list item lifts its drive a little and lights its number */
+.brief.shelf[data-point="0"] g[data-i="0"] text, .brief.shelf[data-point="1"] g[data-i="1"] text, .brief.shelf[data-point="2"] g[data-i="2"] text, .brief.shelf[data-point="3"] g[data-i="3"] text { fill: var(--acc-text); }
+/* the parts list: a column at the right, in the story's order; the drives carry the numbers */
+.brief.shelf .brief-cos { position: absolute; left: var(--g); display: flex; flex-direction: column; gap: 18px; width: 300px; }
+.brief.shelf .brief-cos.tight { gap: 10px; } .brief.shelf .brief-cos.tight .brief-co .l { display: none; }
+/* the type keeps a paper margin on the left; the archive is the right of the page */
+.brief.shelf::before { width: 100vw; height: 100vh; background: linear-gradient(90deg, color-mix(in srgb, var(--bg) 92%, transparent) 0%, color-mix(in srgb, var(--bg) 84%, transparent) 30%, color-mix(in srgb, var(--bg) 40%, transparent) 44%, transparent 56%); }
+.brief.shelf .brief-co::before { display: none; }
+.brief.shelf .brief-cos li { position: relative; }
+.brief.shelf .brief-co { position: relative; transform: none !important; }
+/* the list is type, not a callout: it arrives with the sentence; only the numbers on the drives wait for the lens */
+.brief.shelf .brief-co { opacity: 1; visibility: visible; transition: none; }
+.brief.shelf .brief-co .k { display: none; }
+.brief.shelf .brief-co .n { font: 500 10.5px/1 var(--mono); letter-spacing: .12em; }
+.brief.shelf .brief-co .t { font: 700 16px/1.2 var(--sans); }
+.brief.shelf .brief-co .l { font: 500 13px/1.4 var(--sans); color: var(--ink2); max-width: 250px; }
+.brief.shelf .brief-co::before { inset: -18px -26px -18px -26px; }
+

@@ -5,6 +5,7 @@ import { entryById } from '../data/entries'
 import { SELECTED, THESIS } from '../data/story'
 import { useCtx } from './context'
 import '../styles/brief.css'
+import { SHELF } from '../scene/look'
 
 const label = (id: string) => { const e = entryById.get(id)!; return e.kind === 'service' ? e.org! : e.title }
 
@@ -20,6 +21,28 @@ export function Brief({ hidden }: { hidden: boolean }) {
     const r = root.current
     if (hidden) { if (r && !archive.brief) r.classList.remove('brief--lit'); return }
     let raf = 0, calm = 0, frozen = false
+    /**
+     * lookdev rack: one column of labels to the right of the four drives, in the order they stand on
+     * screen (top first); each leader leaves its drive's top corner level, then steps to its label.
+     */
+    const rack = (r: HTMLDivElement, _W: number, H: number, leads: NodeListOf<SVGPathElement>) => {
+      // the list follows the sentence down the left margin; in a short window it drops the second lines
+      const list = r.querySelector<HTMLElement>('.brief-cos'), say = r.querySelector('.brief-say'), act = r.querySelector('.brief-act')
+      if (list && say && act) {
+        const top = Math.round(say.getBoundingClientRect().bottom + 40)
+        list.style.top = `${top}px`
+        list.classList.remove('tight')
+        if (top + list.scrollHeight > Math.min(H - 24, act.getBoundingClientRect().top - 16)) list.classList.add('tight')
+      }
+      archive.selectedAnchors().forEach((a, i) => {
+        const mk = r.querySelector<SVGRectElement>(`.brief-leads rect[data-i="${i}"]`), n = r.querySelector<SVGTextElement>(`.brief-leads text[data-i="${i}"]`)
+        const x = Math.round(a.x), y = Math.round(a.y)
+        mk?.setAttribute('x', String(x - 2)); mk?.setAttribute('y', String(y - 2))
+        // the item number stands just off the drive's top corner, on a short tick
+        n?.setAttribute('x', String(x + 14)); n?.setAttribute('y', String(y - 10))
+        leads[i]?.setAttribute('d', `M${x + 3},${y - 3} L${x + 11},${y - 11}`)
+      })
+    }
     const unfreeze = () => { frozen = false; calm = 0; root.current?.classList.remove('brief--lit') }
     addEventListener('resize', unfreeze)
     const f = () => {
@@ -32,6 +55,7 @@ export function Brief({ hidden }: { hidden: boolean }) {
       const placed = [...r.querySelectorAll('.brief-say, .brief-act'), ...document.querySelectorAll('.hud-lock, .hud-top')].map((el) => el.getBoundingClientRect())
       const free = (b: DOMRect) => b.left >= 16 && b.right <= W - 16 && b.top >= 16 && b.bottom <= H - 16 && !placed.some((p) => b.left < p.right && b.right > p.left && b.top < p.bottom && b.bottom > p.top)
       const leads = r.querySelectorAll<SVGPathElement>('.brief-leads path')
+      if (SHELF) { rack(r, W, H, leads); calm = archive.briefSettled() ? calm + 1 : 0; if (calm >= 4) { frozen = true; r.classList.add('brief--lit') } return }
       archive.selectedAnchors().forEach((a, i) => {
         const co = r.querySelector<HTMLElement>(`.brief-co[data-i="${i}"]`), mk = r.querySelector<SVGRectElement>(`.brief-leads rect[data-i="${i}"]`)
         if (!co || !mk) return
@@ -65,12 +89,16 @@ export function Brief({ hidden }: { hidden: boolean }) {
   }
 
   return (
-    <div ref={root} className={`brief ${hidden ? 'hide' : ''}`} aria-hidden={hidden} inert={hidden}>
-      <svg className="brief-leads" aria-hidden="true">{SELECTED.map((s, i) => <g key={s.id} data-i={i}><path /><rect data-i={i} width="6" height="6" /></g>)}</svg>
+    <div ref={root} className={`brief ${hidden ? 'hide' : ''} ${SHELF ? 'shelf' : ''}`} aria-hidden={hidden} inert={hidden}>
+      <svg className="brief-leads" aria-hidden="true">{SELECTED.map((s, i) => <g key={s.id} data-i={i}><path /><rect data-i={i} width="6" height="6" />{SHELF && <text data-i={i}>{String(i + 1).padStart(2, '0')}</text>}</g>)}</svg>
       <ol className="brief-cos" aria-label="Start here">
         {SELECTED.map((s, i) => (
           <li key={s.id}>
-            <button className="brief-co" data-i={i} onClick={() => go(s.id)}>
+            <button className="brief-co" data-i={i} onClick={() => go(s.id)}
+              onPointerEnter={() => { archive.pointSelected(i); root.current?.setAttribute('data-point', String(i)) }}
+              onPointerLeave={() => { archive.pointSelected(null); root.current?.removeAttribute('data-point') }}
+              onFocus={() => { archive.pointSelected(i); root.current?.setAttribute('data-point', String(i)) }}
+              onBlur={() => { archive.pointSelected(null); root.current?.removeAttribute('data-point') }}>
               <span className="n">{String(i + 1).padStart(2, '0')}</span><span className="k lbl">{s.tag}</span>
               <span className="t">{label(s.id)}</span>
               <span className="l">{s.line}</span>

@@ -286,11 +286,15 @@ function titleOf(id: string) {
 // X-000 sits a little beyond the end of its run: an easter egg to find, not the first thing the eye lands on
 const ORDER: Record<string, number> = { subject: 0, service: 1, case: 2, education: 3, visitor: 4, credential: 5, skill: 6, restricted: 7 }
 const CENTRE = 16, DIAGONAL = 3
+// Home shows the four selected files standing up in their own slots, as an even 2 × 2 (01 over 02, 03 over
+// 04). Within its kind, PwnScan leads its drawer's projects and Coast Capital follows BCIT, so the two pairs
+// sit the same three rows apart.
+const RANK: Record<string, number> = { 'X-009': -1, 'SR-01': 1 }
 function layout(list: Entry[]) {
   const lanes = new Map<number, Entry[]>()
   for (const e of list) lanes.set(e.slot.lane, [...(lanes.get(e.slot.lane) ?? []), e])
   for (const [lane, group] of lanes) {
-    group.sort((a, b) => ORDER[a.kind] - ORDER[b.kind])
+    group.sort((a, b) => ORDER[a.kind] - ORDER[b.kind] || (RANK[a.id] ?? 0) - (RANK[b.id] ?? 0))
     const centre = CENTRE + Math.round((lane - (LANES_N - 1) / 2) * DIAGONAL)
     const run = group.filter((e) => e.kind !== 'restricted'), egg = group.filter((e) => e.kind === 'restricted')
     const first = centre - Math.floor((run.length - 1) / 2)

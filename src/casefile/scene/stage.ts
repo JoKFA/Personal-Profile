@@ -17,6 +17,7 @@ import { RectAreaLightUniformsLib } from 'three/examples/jsm/lights/RectAreaLigh
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js'
 import type { DriveModel } from './model'
 import type { Quality } from './quality'
+import { LOOK } from './look'
 
 export const BG = 0xebe6de
 export const FLOOR_Y = -4.63
@@ -52,6 +53,7 @@ export function createStage(canvas: HTMLCanvasElement, quality: Quality) {
   renderer.toneMappingExposure = 1.05
   renderer.outputColorSpace = THREE.SRGBColorSpace
 
+  TRANSLUCENCY.amount.value = LOOK.trans
   const scene = new THREE.Scene()
   scene.background = new THREE.Color(BG)
   scene.fog = new THREE.Fog(BG, 145, 165)
@@ -60,10 +62,10 @@ export function createStage(canvas: HTMLCanvasElement, quality: Quality) {
   // ~2 units, so the focused drive is actually sharp
   const camera = new THREE.PerspectiveCamera(3, innerWidth / innerHeight, 40, 220)
 
-  scene.environmentIntensity = 0.22
-  const hemi = new THREE.HemisphereLight(0xfff1e2, 0x8f6e4c, 0.24)
+  scene.environmentIntensity = 0.34
+  const hemi = new THREE.HemisphereLight(0xfff1e2, 0xc4b29b, 0.24)
   scene.add(hemi)
-  const key = new THREE.DirectionalLight(0xfff0dc, 1.25); key.position.set(9, 13, -9)   // behind the field: faces read in shade, the resin glows
+  const key = new THREE.DirectionalLight(0xfff0dc, 1.25 * LOOK.keyMul); key.position.set(9, 13, -9)   // behind the field: faces read in shade, the resin glows
   key.castShadow = quality.shadows > 0
   Object.assign(key.shadow.camera, { left: -16, right: 16, top: 15, bottom: -15, near: 0.1, far: 50 })
   key.shadow.mapSize.set(quality.shadows || 1, quality.shadows || 1); key.shadow.normalBias = 0.035; key.shadow.bias = -0.0003; key.shadow.radius = 4
@@ -126,8 +128,8 @@ export function createStage(canvas: HTMLCanvasElement, quality: Quality) {
   // the lantern: a drive that holds a record glows from its diffuser plate, softly, through the frost
   const lampAttr = new THREE.InstancedBufferAttribute(new Float32Array(N), 1); lampAttr.setUsage(THREE.DynamicDrawUsage)
   P.core.setAttribute('aLamp', lampAttr); P.face.setAttribute('aLamp', lampAttr); P.top.setAttribute('aLamp', lampAttr); P.body.setAttribute('aLamp', lampAttr)
-  const coreMat = new THREE.MeshStandardMaterial({ color: 0x806447, roughness: 0.7, envMapIntensity: 0.6 })
-  const lampCol = { value: new THREE.Color(0xffa95c).multiplyScalar(1.3) }
+  const coreMat = new THREE.MeshStandardMaterial({ color: 0xb8a58e, roughness: 0.7, envMapIntensity: 0.6 })
+  const lampCol = { value: new THREE.Color(0xffa95c).multiplyScalar(1.3 * LOOK.lamp) }
   coreMat.onBeforeCompile = (sh) => {
     sh.uniforms.uLampCol = lampCol
     sh.vertexShader = 'attribute float aLamp; varying float vLamp;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\nvLamp = aLamp;')
@@ -155,7 +157,7 @@ export function createStage(canvas: HTMLCanvasElement, quality: Quality) {
   let aoPass: GTAOPass | null = null
   if (quality.ao) {
     const ao = aoPass = new GTAOPass(scene, camera, innerWidth, innerHeight)
-    ao.updateGtaoMaterial({ radius: 0.35, distanceExponent: 1.5, thickness: 0.6, scale: 1, samples: 16 }); ao.blendIntensity = 0.85
+    ao.updateGtaoMaterial({ radius: 0.35, distanceExponent: 1.5, thickness: 0.6, scale: 1, samples: 16 }); ao.blendIntensity = LOOK.ao
     composer.addPass(ao)
   }
   // depth of field (after RhineLabUI and the Arknights UI it comes from): the eye goes where the
@@ -186,8 +188,8 @@ export function createStage(canvas: HTMLCanvasElement, quality: Quality) {
         vec4 c = texture2D(tDiffuse, vUv);
         if (r < 0.4) { gl_FragColor = c; return; }
         vec4 acc = c; float n = 1.0;
-        for (int i = 0; i < 24; i++) {
-          float a = float(i) * 2.39996, rr = sqrt((float(i) + 0.5) / 24.0) * r;
+        for (int i = 0; i < 56; i++) {
+          float a = float(i) * 2.39996, rr = sqrt((float(i) + 0.5) / 56.0) * r;
           acc += texture2D(tDiffuse, vUv + vec2(cos(a), sin(a)) * rr / uRes); n += 1.0;
         }
         gl_FragColor = acc / n;
@@ -197,12 +199,32 @@ export function createStage(canvas: HTMLCanvasElement, quality: Quality) {
   composer.addPass(focus)
   // bloom only while a drive is being read: the threshold sits above the lit cream surfaces, so
   // only the trace light (emissive ×4) blooms; the pass is disabled whenever strength is 0
-  const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth / 2, innerHeight / 2), 0, 0.6, 1.0)
+  const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth / 2, innerHeight / 2), 0, LOOK.haloRadius, LOOK.haloThreshold)
   bloom.enabled = false
   composer.addPass(bloom)
   const smaa = new SMAAPass(); composer.addPass(smaa)
   composer.addPass(new OutputPass())
-  const resize = () => { renderer.setSize(innerWidth, innerHeight, false); composer.setSize(innerWidth, innerHeight); bloom.setSize(innerWidth / 2, innerHeight / 2); camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix() }
+  // the display-space grade, after the output transform: a touch of warm gain, contrast, a soft vignette,
+  // and a light unsharp mask so edges read machined
+  const grade = new ShaderPass({
+    uniforms: { tDiffuse: { value: null }, uGain: { value: new THREE.Vector3(...LOOK.gain) }, uCon: { value: LOOK.contrast }, uSharp: { value: LOOK.sharpen }, uVig: { value: LOOK.vignette }, uRes: { value: new THREE.Vector2(innerWidth, innerHeight) } },
+    vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+    fragmentShader: `uniform sampler2D tDiffuse; uniform vec3 uGain; uniform float uCon, uSharp, uVig; uniform vec2 uRes; varying vec2 vUv;
+      void main() {
+        vec4 c = texture2D(tDiffuse, vUv);
+        vec2 px = 1.0 / uRes;
+        vec3 blur = (texture2D(tDiffuse, vUv + vec2(px.x, 0.0)).rgb + texture2D(tDiffuse, vUv - vec2(px.x, 0.0)).rgb + texture2D(tDiffuse, vUv + vec2(0.0, px.y)).rgb + texture2D(tDiffuse, vUv - vec2(0.0, px.y)).rgb) * 0.25;
+        vec3 col = uGain * (c.rgb + (c.rgb - blur) * uSharp);
+        col = max((col - 0.5) * uCon + 0.5, vec3(0.0));
+        vec2 q = vUv - 0.5; q.x *= uRes.x / uRes.y;
+        col *= mix(1.0 - uVig, 1.0, smoothstep(0.98, 0.32, length(q)));
+        gl_FragColor = vec4(col, c.a);
+      }`,
+  })
+  composer.addPass(grade)
+  const gradeRes = () => grade.uniforms.uRes.value.set(innerWidth * renderer.getPixelRatio(), innerHeight * renderer.getPixelRatio())
+  gradeRes()
+  const resize = () => { renderer.setSize(innerWidth, innerHeight, false); composer.setSize(innerWidth, innerHeight); bloom.setSize(innerWidth / 2, innerHeight / 2); gradeRes(); camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix() }
   addEventListener('resize', resize)
 
   const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), p = new THREE.Vector3(), sc = new THREE.Vector3(), zero = new THREE.Vector3(), CAPC = new THREE.Color()
@@ -214,8 +236,8 @@ export function createStage(canvas: HTMLCanvasElement, quality: Quality) {
       swap(body, 'Frosted_Shell'); body.geometry.setAttribute('aClear', clearAttr); body.geometry.setAttribute('aLamp', lampAttr); swap(glass, 'Ivory_Frame'); swap(core, 'Diffuser'); core.geometry.setAttribute('aLamp', lampAttr); swap(screws, 'Titanium'); swap(inlay, 'Champagne')
     },
     /** led: null = off · glow 0/1 · dark = X-000 */
-    set(i: number, x: number, y: number, z: number, tilt: number, labelCell: number, led: THREE.Color | null, hidden: boolean, glow: number, dark: boolean, ledKind: 'long' | 'double' | 'dot' = 'long', shade = 1, topGlow = glow, clear = 0, lamp = 0, form: Form = PLAIN) {
-      e.set(tilt, 0, 0); q.setFromEuler(e); p.set(x + form.ox, y, z); sc.set(form.sx, 1, 1)
+    set(i: number, x: number, y: number, z: number, tilt: number, labelCell: number, led: THREE.Color | null, hidden: boolean, glow: number, dark: boolean, ledKind: 'long' | 'double' | 'dot' = 'long', shade = 1, topGlow = glow, clear = 0, lamp = 0, form: Form = PLAIN, yaw = 0) {
+      e.set(tilt, yaw, 0); q.setFromEuler(e); p.set(x + form.ox, y, z); sc.set(form.sx, 1, 1)
       m4.compose(p, q, hidden ? zero : sc); body.setMatrixAt(i, m4)
       for (const [k, l] of Object.entries(ledSets)) l.setMatrixAt(i, k === ledKind && led ? m4 : ZERO)   // an unlit slit is not drawn
       const w = shade < 1 ? SHADE.setScalar(shade) : WHITE
@@ -233,7 +255,12 @@ export function createStage(canvas: HTMLCanvasElement, quality: Quality) {
     /** trace-light bloom (0 = off) and scene exposure, both animated by the read */
     /** contact shading on or off (it is off while the camera closes in on the drive: its depth range no longer fits) */
     setAo(on: boolean) { if (aoPass) aoPass.enabled = on },
-    setBloom(strength: number) { bloom.strength = strength; bloom.enabled = strength > 0.01 },
+    setBloom(strength: number) {
+      // the threshold falls as the strength rises, so only the trace light blooms while a drive is read
+      const k = THREE.MathUtils.clamp(strength / 0.95, 0, 1)
+      bloom.strength = strength; bloom.threshold = LOOK.haloThreshold + (1 - LOOK.haloThreshold) * k
+      bloom.enabled = strength > 0.01
+    },
     /**
      * Shadows off for this scene (the renderer's own switch is shared with the interior and is left alone).
      * The light keeps its shadow switch: flipping it changes the shader of every lit material, and the
@@ -246,14 +273,15 @@ export function createStage(canvas: HTMLCanvasElement, quality: Quality) {
       scene.traverse((o) => { if ((o as THREE.Mesh).isMesh) o.castShadow = false })   // (meshes only: a light's own castShadow is the shader switch)
       key.shadow.autoUpdate = false; key.shadow.needsUpdate = true
     },
-    setExposure(x: number) { renderer.toneMappingExposure = x },
+    setExposure(x: number) { renderer.toneMappingExposure = x * LOOK.exposure },
     /** Optical ivory while searching; the file exhibition keeps its own original lighting. */
     setEntranceLight(k: number) {
+      k = Math.max(k, LOOK.ivoryMin)
       ENTRY_IVORY.value = k
       bodyMat.color.copy(baseBody).lerp(ivoryBody, k)
       coreMat.color.copy(baseCore).lerp(ivoryCore, k)
       faceEtch.color.copy(baseFace).lerp(ivoryFace, k)
-      hemi.intensity = 0.24 + 0.2 * k; fill.intensity = 0.6 + 0.18 * k; side.intensity = 0.75 - 0.42 * k
+      hemi.intensity = (0.24 + 0.2 * k) * LOOK.hemiMul; fill.intensity = (0.6 + 0.18 * k) * LOOK.fillMul; side.intensity = (0.75 - 0.42 * k) * LOOK.sideMul
     },
     /** the key light sits behind the field so faces read in shade; an open file gets a reading light on its face */
     /** the selection light: where it stands, what it looks at, how bright */
@@ -264,13 +292,14 @@ export function createStage(canvas: HTMLCanvasElement, quality: Quality) {
       slots[1].position.set(x, y, z - gap); slots[1].lookAt(x, y, z)
       for (const s of slots) s.intensity = intensity
     },
-    setFaceLight(k: number) { reading.intensity = 0.9 * k },
+    setFaceLight(k: number) { reading.intensity = 1.35 * k },
     /** focus distance (world units from the camera), aperture (blur per unit of defocus), max blur */
     /** screen-space blur vector in UV units; below a hair it switches off */
     setMotion(dx: number, dy: number) { motion.uniforms.uDelta.value.set(dx, dy); motion.enabled = Math.hypot(dx, dy) > 0.0015 },
     /** screen focus: centre (uv), radii (uv) of the sharp region, max blur radius (px) */
     setFocus(cx: number, cy: number, rx: number, ry: number, max: number) {
       // a phone shows the field small: skip the cost there
+      rx *= LOOK.focusRadius; ry *= LOOK.focusRadius; max *= LOOK.focusMax
       focus.enabled = quality.name !== 'low' && innerWidth >= 900 && max > 0.4
       focus.uniforms.uCenter.value.set(cx, cy); focus.uniforms.uRadius.value.set(rx, ry); focus.uniforms.uMax.value = max; focus.uniforms.uRes.value.set(innerWidth, innerHeight)
     },

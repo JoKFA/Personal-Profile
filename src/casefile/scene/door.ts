@@ -4,22 +4,23 @@
 // so the exterior's camera can be tested without a GPU. The camera is described the way the archive's
 // own is: a span (world units across the frame's height at the aim) at a distance; the lens (fov) follows.
 import * as THREE from 'three'
+import { MOTION } from './look'
 
 export const DOOR = {
   /** the drive stands, the camera comes round to its front and centres it */
-  stand: 1.1,
+  stand: MOTION ? 0.8 : 1.1,
   /** the cut */
-  end: 3.0,
+  end: MOTION ? 2.1 : 3.0,
   /** the dolly starts well before the stand ends, so the move never stops in the middle */
-  dollyFrom: 0.5,
+  dollyFrom: MOTION ? 0.3 : 0.5,
   /** the aim leaves the face's centre for the die */
-  dieFrom: 1.8,
+  dieFrom: MOTION ? 1.2 : 1.8,
   /** the way out runs the door backwards this much faster than it came (seconds of door per second) */
   backSpeed: 2.7,
   /** the extra height the drive rises to clear the field in front of it */
   lift: 3.0,
   /** the camera's last distance from the drive's front, and its lens there (the die fills the frame) */
-  finalDistance: 2.0,
+  finalDistance: MOTION ? 8.5 : 2.0,
   finalFov: 24.5,
 } as const
 

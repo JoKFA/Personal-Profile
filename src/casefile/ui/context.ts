@@ -18,7 +18,7 @@ export interface Ctx {
   auditLog: [string, string][]
   record: (s: string) => void
   /** the open file registers its exit animation here; closing waits for it */
-  exitRef: MutableRefObject<null | (() => Promise<void>)>
+  exitRef: MutableRefObject<null | ((onSealed?: () => void) => Promise<void>)>
   /** the interior (null until it is built, or if it could not be) and the running show; `cut` is set while the interior is the subject file's exhibit */
   space: { space: Space; clock: Clock } | null
   runtime: MutableRefObject<Runtime | null>
