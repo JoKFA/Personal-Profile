@@ -15,7 +15,7 @@ const PAPER = '#e7e4dd', INK = '#16171a', THREAT = '#a33b22', OLIVE = '#5c6b12'
 const T = {
   read: [0.35, 2.75], cap1: 0.5, sub1: 1.85, prof: 2.9,
   seal: 4.4, sealScan: [4.4, 4.95], cap3: 4.6, morph: 5.0, labelsOut: [5.15, 5.55], hash: [5.5, 5.95],
-  // the scene is built under the still, sealed grid (it blocks the main thread for about 2 s)
+  // (the scene is built in small steps from the first frame, while all this plays: onBuild)
   title: 5.95, end: 6.6,
 } as const
 const PHASES: [string, number][] = [['Read', T.read[0]], ['Profile', T.prof], ['Seal', T.seal]]
@@ -60,9 +60,10 @@ function layout(): Layout {
   return { W, H, phone, stack, cols: layoutCols, g, top, print, labelX, labelTop, capBottom, lat: { cx: print.cx, cy: print.cy, size: print.w * 0.92 } }
 }
 
-export function Gate({ visitor, reduced, sceneReady, onTitle, onReveal, onStrike, onDone }: {
+export function Gate({ visitor, reduced, sceneReady, onBuild, onReveal, onStrike, onDone }: {
   visitor: Visitor; reduced: boolean; sceneReady: boolean
-  onTitle: () => void; onReveal: () => void
+  /** the entry is on screen: the archive can start to be built, a step at a time, under it */
+  onBuild: () => void; onReveal: () => void
   /** `skipped`: the visitor left the entry before it had finished */
   onStrike: (skipped: boolean) => void; onDone: () => void
 }) {
@@ -89,7 +90,7 @@ export function Gate({ visitor, reduced, sceneReady, onTitle, onReveal, onStrike
     const groups = hex.match(/.{8}/g)!, hashText = groups.slice(0, 4).join(' ') + '\n' + groups.slice(4).join(' ')
     let L: Layout, P: Print, ink: Inked, morph: Morph, grain: CanvasPattern | null = null
     let labelY: number[] = [], scanAt: number[] = []
-    let t = reduced ? T.end : 0, last = performance.now(), raf = 0, titled = false, done = false
+    let t = reduced ? T.end : 0, last = performance.now(), raf = 0, started = false, done = false
 
     const scanY = (tt: number) => { const pr = L.print, k = eio(seg(tt, T.read[0], T.read[1])); return lerp(pr.cy - pr.h / 2 - 18, pr.cy + pr.h / 2 + 18, k) }
     const timeForScan = (y: number) => { for (let i = 0; i <= 400; i++) { const tt = lerp(T.read[0], T.read[1], i / 400); if (scanY(tt) >= y) return tt } return T.read[1] }
@@ -306,7 +307,7 @@ export function Gate({ visitor, reduced, sceneReady, onTitle, onReveal, onStrike
       const dt = Math.min(0.05, (now - last) / 1000); last = now
       if (!done) t = Math.min(T.end, t + dt)
       draw(t); dom(t)
-      if (!titled && t >= T.title) { titled = true; onTitle() }
+      if (!started) { started = true; onBuild() }
       // reduced motion opens on the sealed still and waits for Continue
       if (t >= T.end && !done) { done = true; if (!reduced) leaveRef.current() }
     }
@@ -323,7 +324,7 @@ export function Gate({ visitor, reduced, sceneReady, onTitle, onReveal, onStrike
       // a skip lands on the sealed grid (the point of the page), then leaves from there
       st.current.skipped ??= t < T.end - 0.05
       t = T.end; done = true
-      if (!titled) { titled = true; onTitle() }
+      if (!started) { started = true; onBuild() }
       if (!sceneReadyRef.current) { st.current.waiting = true; r.classList.add('waiting'); return }
       st.current.leaving = true; st.current.waiting = false; r.classList.remove('waiting'); r.dataset.phase = 'transfer'
       if (reduced) { onReveal(); onStrike(false); onDone(); return }

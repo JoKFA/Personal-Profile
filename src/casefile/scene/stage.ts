@@ -11,7 +11,9 @@ import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPa
 import { BokehPass } from 'three/examples/jsm/postprocessing/BokehPass.js'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { LANES, ROWS } from '../motion/grid'
-import { bodyMaterial, driveParts, ENTRY_IVORY, etchMaterial, etchUniforms, frameMaterial, hardwareMaterials, LED, TRANSLUCENCY } from './drive'
+import { bodyMaterial, driveParts, ENTRY_IVORY, etchMaterial, etchUniforms, frameMaterial, hardwareMaterials, LED, TRANSLUCENCY, warmEtchMaps } from './drive'
+import { tick } from './tick'
+import { compileInSteps, standIns, warmPrograms, warmTextures } from './warm'
 import { SMAAPass } from 'three/examples/jsm/postprocessing/SMAAPass.js'
 import { RectAreaLightUniformsLib } from 'three/examples/jsm/lights/RectAreaLightUniformsLib.js'
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js'
@@ -38,7 +40,36 @@ export interface Atlas { canvas: HTMLCanvasElement; texture: THREE.CanvasTexture
 export const CIPHER_CELLS = 56
 export const RECORD_CELL0 = 64
 
-export function createStage(canvas: HTMLCanvasElement, quality: Quality) {
+/**
+ * The room that lights the archive, and the filter that turns it into an environment map. Their shaders would
+ * compile in one blocking step (about 0.7 s the first time) when the map is made, so they compile in parallel,
+ * in the background, while the rest of the stage is built. (three's own PMREM materials are reached through its
+ * private fields; if they are not there, the map is simply made the plain way.)
+ */
+async function warmEnvironment(renderer: THREE.WebGLRenderer) {
+  const room = new RoomEnvironment(), cube = new THREE.PerspectiveCamera(90, 1, 0.1, 100), pmrem = new THREE.PMREMGenerator(renderer)
+  // the map is drawn into a render target (linear, no tone mapping): compile the room the way it will be drawn
+  const target = new THREE.WebGLRenderTarget(16, 16, { type: THREE.HalfFloatType }), prev = renderer.getRenderTarget()
+  const jobs: Promise<unknown>[] = []
+  renderer.setRenderTarget(target)
+  try {
+    jobs.push(renderer.compileAsync(room, cube))
+    try {
+      const p = pmrem as unknown as { _setSize(size: number): void; _allocateTargets(): THREE.WebGLRenderTarget; _blurMaterial?: THREE.Material; _ggxMaterial?: THREE.Material }
+      p._setSize(256); p._allocateTargets().dispose()
+      const meshes = [p._blurMaterial, p._ggxMaterial].filter((m): m is THREE.Material => !!m).map((m) => new THREE.Mesh(new THREE.BufferGeometry(), m))
+      if (meshes.length) jobs.push(renderer.compileAsync(new THREE.Scene().add(...meshes), new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1)))
+    } catch { /* a different three: the map compiles these when it is made */ }
+  } finally { renderer.setRenderTarget(prev) }
+  await Promise.all(jobs); target.dispose()
+  return { room, pmrem }
+}
+
+/**
+ * Built a step at a time, with the main thread given back between steps: the archive is made under the entry's
+ * animation, which must not stop for it (see tick.ts).
+ */
+export async function createStage(canvas: HTMLCanvasElement, quality: Quality) {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' })
   // shader error checks read every program's info logs on first use: synchronous round trips to
   // the GPU process that cost ~3 s at boot in Chrome/ANGLE. Kept in development only.
@@ -87,6 +118,9 @@ export function createStage(canvas: HTMLCanvasElement, quality: Quality) {
   scene.add(key, fill, reading)
   const floor = new THREE.Mesh(new THREE.PlaneGeometry(400, 400), new THREE.MeshStandardMaterial({ color: 0xddd3c6, roughness: 0.95 }))
   floor.rotation.x = -Math.PI / 2; floor.position.y = FLOOR_Y; floor.receiveShadow = true; scene.add(floor)
+  const environment = warmEnvironment(renderer)
+  void environment.catch(() => undefined)
+  await tick()
 
   // ── label atlas ──
   const ac = document.createElement('canvas'); ac.width = 2048; ac.height = 2048
@@ -104,6 +138,7 @@ export function createStage(canvas: HTMLCanvasElement, quality: Quality) {
   const atlasTex = new THREE.CanvasTexture(ac); atlasTex.colorSpace = THREE.SRGBColorSpace; atlasTex.anisotropy = 8
   const atlas: Atlas = { canvas: ac, texture: atlasTex, cell }
   const labelMat = new THREE.MeshBasicMaterial({ map: atlasTex, transparent: true, depthWrite: false })
+  await tick()
   labelMat.onBeforeCompile = (sh) => {
     sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute float aCell;')
       .replace('#include <uv_vertex>', '#include <uv_vertex>\n#ifdef USE_MAP\nvMapUv = vec2((vMapUv.x + mod(aCell, 8.0)) / 8.0, (vMapUv.y + (15.0 - floor(aCell / 8.0))) / 16.0);\n#endif')
@@ -111,6 +146,9 @@ export function createStage(canvas: HTMLCanvasElement, quality: Quality) {
 
   // ── instanced archive: one rigid transform buffer shared by every part ──
   const P = driveParts(), HW = hardwareMaterials()
+  await tick()
+  await warmEtchMaps()
+  await tick()
   const cellAttr = new THREE.InstancedBufferAttribute(new Float32Array(N), 1)
   const glowAttr = new THREE.InstancedBufferAttribute(new Float32Array(N), 1)
   // per drive: how lit its top edge is, and how clear (decrypted) its shell reads
@@ -319,13 +357,13 @@ export function createStage(canvas: HTMLCanvasElement, quality: Quality) {
     async prepare(extra: [THREE.BufferGeometry, THREE.Material][] = []) {
       const rt = composer.readBuffer
       const asTarget = <T,>(f: () => T) => { const prev = renderer.getRenderTarget(); renderer.setRenderTarget(rt); try { return f() } finally { renderer.setRenderTarget(prev) } }
-      // the environment: precompile the room, then filter it (only PMREM's own blur runs synchronously)
-      const room = new RoomEnvironment(), cube = new THREE.PerspectiveCamera(90, 1, 0.1, 100)
-      await asTarget(() => renderer.compileAsync(room, cube))
-      const pmrem = new THREE.PMREMGenerator(renderer)
+      // the environment: its shaders have been compiling since the stage began; now it is filtered
+      const { room, pmrem } = await environment
+      await tick()
       try { scene.environment = pmrem.fromScene(room, 0.04).texture } finally { room.dispose(); pmrem.dispose() }
+      await tick()
       // stand-ins that carry every other material the first frames need
-      const proxies = new THREE.Scene(), quad = new THREE.PlaneGeometry(2, 2)
+      const proxies = new THREE.Scene(), put = standIns(proxies), quad = new THREE.PlaneGeometry(2, 2)
       const meshes: THREE.Mesh[] = []
       scene.traverse((o) => { if ((o as THREE.Mesh).isMesh) meshes.push(o as THREE.Mesh) })
       const like = (src: THREE.Mesh, m: THREE.Material) => {
@@ -336,19 +374,22 @@ export function createStage(canvas: HTMLCanvasElement, quality: Quality) {
       for (const pass of composer.passes) for (const v of Object.values(pass)) {
         for (const m of (Array.isArray(v) ? v : [v]) as unknown[]) {
           if (!(m instanceof THREE.Material)) continue
-          if ((m as THREE.ShaderMaterial).isShaderMaterial) proxies.add(new THREE.Mesh(quad, m)); else overrides.push(m)
+          if ((m as THREE.ShaderMaterial).isShaderMaterial) put(new THREE.Mesh(quad, m)); else overrides.push(m)
         }
       }
-      for (const m of overrides) for (const src of meshes) if (src.castShadow || !(m as THREE.MeshDepthMaterial).isMeshDepthMaterial) proxies.add(like(src, m))
-      for (const [g, m] of extra) proxies.add(new THREE.Mesh(g, m))
+      for (const m of overrides) for (const src of meshes) if (src.castShadow || !(m as THREE.MeshDepthMaterial).isMeshDepthMaterial) put(like(src, m))
+      for (const [g, m] of extra) put(new THREE.Mesh(g, m))
+      await tick()
       // shadow depth and full-screen passes render outside the scene: with its lights but no fog, or
-      // with neither; compile the stand-ins in every one of those contexts (duplicates are cached)
+      // with neither; compile the stand-ins in every one of those contexts (duplicates are cached).
+      // The compiles run in the background; starting them is done a few at a time (see warm.ts).
       const fog = scene.fog
-      const jobs = asTarget(() => {
-        const out = [renderer.compileAsync(scene, camera), renderer.compileAsync(proxies, camera, scene), renderer.compileAsync(proxies, camera)]
-        scene.fog = null; out.push(renderer.compileAsync(proxies, camera, scene)); scene.fog = fog
-        return out
-      })
+      const jobs = [
+        ...await compileInSteps(renderer, scene, camera, scene, asTarget),
+        ...await compileInSteps(renderer, proxies, camera, scene, asTarget),
+        ...await compileInSteps(renderer, proxies, camera, proxies, asTarget),
+      ]
+      scene.fog = null; jobs.push(...await compileInSteps(renderer, proxies, camera, scene, asTarget)); scene.fog = fog
       // the output pass sets its defines on first render; set them now, the way it would
       const out = composer.passes.find((x) => x instanceof OutputPass) as (OutputPass & { _outputColorSpace: string | null; _toneMapping: number | null }) | undefined
       if (out) {
@@ -358,6 +399,9 @@ export function createStage(canvas: HTMLCanvasElement, quality: Quality) {
         const screen = new THREE.Scene(); screen.add(new THREE.Mesh(quad, out.material)); jobs.push(renderer.compileAsync(screen, camera))
       }
       await Promise.all(jobs)
+      // what the first frame would otherwise do inside itself: the programs' tables, and the textures' upload
+      await warmPrograms(renderer)
+      await warmTextures(renderer, scene)
       quad.dispose()
     },
     render() { TRANSLUCENCY.dir.value.copy(key.position).normalize().transformDirection(camera.matrixWorldInverse); composer.render() },
@@ -368,4 +412,4 @@ export function createStage(canvas: HTMLCanvasElement, quality: Quality) {
     },
   }
 }
-export type Stage = ReturnType<typeof createStage>
+export type Stage = Awaited<ReturnType<typeof createStage>>

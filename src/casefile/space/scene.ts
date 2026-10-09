@@ -17,6 +17,7 @@ import { COLOR, createKit } from './kit'
 import { AREAS, DIE, fogFor, STATION_AT, STATION_RADIUS, STATION_YAW } from './layout'
 import { clonePose, flightPose, hubPose, INTRO, introBlend, introPose, stationPose, type Pose, type Region } from './shots'
 import { loadDriveModel } from '../scene/model'
+import { compileInSteps, standIns, warmPrograms, warmTextures } from '../scene/warm'
 import { BUILDERS } from './stations'
 import type { Station } from './station'
 import { createWorld } from './world'
@@ -195,17 +196,21 @@ export async function createSpace(host: Host, quality: Quality, idle: () => Prom
   async function prepare() {
     const rt = composer.readBuffer
     const asTarget = <T,>(f: () => T) => { const prev = renderer.getRenderTarget(); renderer.setRenderTarget(rt); try { return f() } finally { renderer.setRenderTarget(prev) } }
-    const proxies = new THREE.Scene(), quad = new THREE.PlaneGeometry(2, 2), meshes: THREE.Mesh[] = []
+    const proxies = new THREE.Scene(), put = standIns(proxies), quad = new THREE.PlaneGeometry(2, 2), meshes: THREE.Mesh[] = []
     scene.traverse((o) => { if ((o as THREE.Mesh).isMesh) meshes.push(o as THREE.Mesh) })
     const overrides: THREE.Material[] = [new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking })]
     for (const pass of composer.passes) for (const v of Object.values(pass)) {
       for (const m of (Array.isArray(v) ? v : [v]) as unknown[]) {
         if (!(m instanceof THREE.Material)) continue
-        if ((m as THREE.ShaderMaterial).isShaderMaterial) proxies.add(new THREE.Mesh(quad, m)); else overrides.push(m)
+        if ((m as THREE.ShaderMaterial).isShaderMaterial) put(new THREE.Mesh(quad, m)); else overrides.push(m)
       }
     }
-    for (const m of overrides) for (const src of meshes) proxies.add(new THREE.Mesh(src.geometry, m))
-    const jobs = asTarget(() => [renderer.compileAsync(scene, camera), renderer.compileAsync(proxies, camera, scene), renderer.compileAsync(proxies, camera)])
+    for (const m of overrides) for (const src of meshes) put(new THREE.Mesh(src.geometry, m))
+    const jobs = [
+      ...await compileInSteps(renderer, scene, camera, scene, asTarget, idle),
+      ...await compileInSteps(renderer, proxies, camera, scene, asTarget, idle),
+      ...await compileInSteps(renderer, proxies, camera, proxies, asTarget, idle),
+    ]
     const out = composer.passes.find((x) => x instanceof OutputPass) as (OutputPass & { _outputColorSpace: string | null; _toneMapping: number | null }) | undefined
     if (out) {
       out.material.defines = { SRGB_TRANSFER: '', ...(renderer.toneMapping === THREE.ACESFilmicToneMapping ? { ACES_FILMIC_TONE_MAPPING: '' } : {}) }
@@ -213,6 +218,7 @@ export async function createSpace(host: Host, quality: Quality, idle: () => Prom
       const screen = new THREE.Scene(); screen.add(new THREE.Mesh(quad, out.material)); jobs.push(renderer.compileAsync(screen, camera))
     }
     await Promise.all(jobs.map((j) => j.catch(() => undefined)))
+    await warmPrograms(renderer, idle); await warmTextures(renderer, scene, idle)
     quad.dispose()
   }
 

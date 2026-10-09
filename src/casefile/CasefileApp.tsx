@@ -51,10 +51,9 @@ export default function CasefileApp() {
   const [arriving, setArriving] = useState(true)
   /** the entry page is clearing over the archive (the hand-over of the visitor's request) */
   const [gateLeaving, setGateLeaving] = useState(false)
-  // building the scene blocks the main thread for about two seconds (setup, then shader
-  // precompile), which would stall any animation it ran under. A first visit builds it once the
-  // entry has reached its last, still frame (the sealed profile, held to be read); return visits
-  // build it at once.
+  // the scene is built in small steps (each a few tens of milliseconds, the main thread given back between
+  // them, shaders compiling in the background), so it can be built under the entry's animation: a first
+  // visit starts it as the entry's first frame is on screen, a return visit at once.
   const [loadScene, setLoadScene] = useState(() => !gate)
   const [statusLine, setStatusLine] = useState<{ html: string; key: number } | null>(null)
   // one mutable log for the session, read by the Access log tab
@@ -76,16 +75,18 @@ export default function CasefileApp() {
     if (!loadScene) return
     const canvas = canvasRef.current!
     let a: Archive | null = null, dead = false
-    void import('./scene/archive').then(({ Archive }) => {
+    void import('./scene/archive').then(async ({ Archive }) => {
     if (dead) return
+    let made: Archive
     try {
-      a = new Archive(canvas, {
+      // built a step at a time, so the entry's animation does not stop for it
+      made = await Archive.create(canvas, {
         reduced,
         onAlert: (al) => { status(`<span class="x">Anomaly · ${visitor.id} (you)</span> · ${al.what} · <b>${al.action}</b>`, 4200); audit(`UEBA ${visitor.id}: ${al.what} → ${al.action}`) },
       })
-    // the WebGL controller is an external system: it can only be created after mount
-     
-    } catch { setNoGL(true); return }
+    } catch { if (!dead) setNoGL(true); return }
+    if (dead) { made.dispose(); return }
+    a = made
     a.veil = veilRef.current
     setArchive(a)
     ;(window as unknown as { __cf: Archive }).__cf = a
@@ -96,9 +97,10 @@ export default function CasefileApp() {
     return () => { dead = true; a?.dispose(); setArchive(null) }
   }, [loadScene, reduced, status, audit, visitor.id])
 
-  // the interior: built a frame at a time once the archive is on screen (it never holds the main thread for one step)
+  // the interior: built a frame at a time once the archive is on screen (it never holds the main thread for one step);
+  // not under the entry, which is still playing when the archive itself is ready
   useEffect(() => {
-    if (!archive || !sceneReady || noGL) return
+    if (!archive || !sceneReady || noGL || gate) return
     let dead = false
     // the open flow waits for this (briefly) rather than falling back while the interior is merely still being built
     spaceBoot.current = loadSpace().then((m) => m.bootSpace(archive, reduced)).then((s) => {
@@ -109,7 +111,7 @@ export default function CasefileApp() {
     void import('./ui/FileView')   // the file view too, so the cut never waits on a download
     void import('./space/runtime')
     return () => { dead = true; runtimeRef.current?.stop(); runtimeRef.current = null; spaceRef.current?.space.dispose(); spaceRef.current = null; spaceBoot.current = null; setSpace(null) }
-  }, [archive, sceneReady, noGL, reduced])
+  }, [archive, sceneReady, noGL, gate, reduced])
 
   // ── open / close flow ──
   // The URL says which project file should be open; reconcile() makes the scene agree once any
@@ -352,7 +354,7 @@ export default function CasefileApp() {
           {file && <Suspense fallback={null}><FileView entry={file} key={file.id} /></Suspense>}
         </ArchiveContext.Provider>
       )}
-      {(gate || gateLeaving) && <Suspense fallback={null}><Gate visitor={visitor} reduced={reduced} sceneReady={sceneReady || noGL} onTitle={() => setLoadScene(true)} onReveal={onReveal} onStrike={onStrike} onDone={onGateDone} /></Suspense>}
+      {(gate || gateLeaving) && <Suspense fallback={null}><Gate visitor={visitor} reduced={reduced} sceneReady={sceneReady || noGL} onBuild={() => setLoadScene(true)} onReveal={onReveal} onStrike={onStrike} onDone={onGateDone} /></Suspense>}
       <noscript>{ENTRIES.map((e) => e.title).join(' · ')}</noscript>
     </div>
   )

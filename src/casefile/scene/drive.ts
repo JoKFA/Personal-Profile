@@ -12,6 +12,7 @@ import * as THREE from 'three'
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { LOOK } from './look'
+import { drain, drainTicking, tick } from './tick'
 
 export const CARD = { W: 5, H: 3.7, T: 0.376 } as const
 const { W, H, T } = CARD
@@ -26,12 +27,14 @@ const ENTRY_UV = new THREE.Vector2(0.28, 1.0)
 
 type Canvas = HTMLCanvasElement
 const canvas = (w: number, h: number) => { const c = document.createElement('canvas'); c.width = w; c.height = h; return c }
+/** these canvases are read back pixel by pixel to make the maps: a context that lives in memory, so the readback does not wait on the GPU */
+const ctx2d = (c: Canvas) => c.getContext('2d', { willReadFrequently: true })!
 
 function rng(seed: number) { return () => (seed = (seed * 16807) % 2147483647) / 2147483647 }
 
 // face: orthogonal buses with 45° doglegs ending in vias, one die, and trunks that run to the top edge
 function faceTraces(): Canvas {
-  const c = canvas(1024, 760), g = c.getContext('2d')!
+  const c = canvas(1024, 760), g = ctx2d(c)
   g.fillStyle = '#000'; g.fillRect(0, 0, c.width, c.height); g.strokeStyle = '#fff'; g.fillStyle = '#fff'; g.lineCap = 'square'
   const rnd = rng(11), grid = 24, snap = (v: number) => Math.round(v / grid) * grid
   const via = (x: number, y: number) => { g.beginPath(); g.arc(x, y, 8, 0, 7); g.fill(); g.fillStyle = '#000'; g.beginPath(); g.arc(x, y, 3, 0, 7); g.fill(); g.fillStyle = '#fff' }
@@ -57,7 +60,7 @@ function faceTraces(): Canvas {
 }
 // top edge strip (x along the drive, y across its thickness): three traces from the LED to the edge
 function topTraces(): Canvas {
-  const c = canvas(1024, 80), g = c.getContext('2d')!
+  const c = canvas(1024, 80), g = ctx2d(c)
   g.fillStyle = '#000'; g.fillRect(0, 0, 1024, 80); g.strokeStyle = '#fff'; g.lineCap = 'square'; g.lineWidth = 4
   // LED sits near x = 0.24; traces run from it toward the front edge (y = 80) where they wrap onto the face
   for (const [x, y] of [[290, 18], [340, 40], [390, 62]] as const) { g.beginPath(); g.moveTo(250, y); g.lineTo(x - 12, y); g.lineTo(x, y + 12); g.lineTo(x, 80); g.stroke() }
@@ -66,30 +69,50 @@ function topTraces(): Canvas {
   return c
 }
 
-function normalFromHeight(src: Canvas, depth = 2.1): Canvas {
-  const w = src.width, h = src.height, blur = canvas(w, h), bg = blur.getContext('2d')!
+/** the normal map of a height canvas, in steps of 64 rows (a step is a few milliseconds; see warmEtchMaps) */
+function* normalSteps(src: Canvas, depth = 2.1): Generator<void, Canvas> {
+  const w = src.width, h = src.height, blur = canvas(w, h), bg = ctx2d(blur)
   bg.filter = 'blur(1.4px)'; bg.drawImage(src, 0, 0)
   const b = bg.getImageData(0, 0, w, h).data, out = new ImageData(w, h), o = out.data
+  yield
   const hgt = (x: number, y: number) => 1 - b[(Math.min(h - 1, Math.max(0, y)) * w + Math.min(w - 1, Math.max(0, x))) << 2] / 255
-  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
-    const dx = (hgt(x + 1, y) - hgt(x - 1, y)) * depth, dy = (hgt(x, y + 1) - hgt(x, y - 1)) * depth, l = Math.hypot(dx, dy, 1), i = (y * w + x) << 2
-    o[i] = (-dx / l * 0.5 + 0.5) * 255; o[i + 1] = (dy / l * 0.5 + 0.5) * 255; o[i + 2] = (1 / l * 0.5 + 0.5) * 255; o[i + 3] = 255
+  for (let y0 = 0; y0 < h; y0 += 64) {
+    for (let y = y0; y < Math.min(h, y0 + 64); y++) for (let x = 0; x < w; x++) {
+      const dx = (hgt(x + 1, y) - hgt(x - 1, y)) * depth, dy = (hgt(x, y + 1) - hgt(x, y - 1)) * depth, l = Math.hypot(dx, dy, 1), i = (y * w + x) << 2
+      o[i] = (-dx / l * 0.5 + 0.5) * 255; o[i + 1] = (dy / l * 0.5 + 0.5) * 255; o[i + 2] = (1 / l * 0.5 + 0.5) * 255; o[i + 3] = 255
+    }
+    yield
   }
-  const c = canvas(w, h); c.getContext('2d')!.putImageData(out, 0, 0); return c
+  const c = canvas(w, h); ctx2d(c).putImageData(out, 0, 0); return c
 }
 function metalRough(src: Canvas): Canvas {   // G = roughness, B = metalness: polished groove floor, satin elsewhere
-  const w = src.width, h = src.height, d = src.getContext('2d')!.getImageData(0, 0, w, h).data, out = new ImageData(w, h), o = out.data
+  const w = src.width, h = src.height, d = ctx2d(src).getImageData(0, 0, w, h).data, out = new ImageData(w, h), o = out.data
   for (let i = 0; i < d.length; i += 4) { const k = d[i] / 255; o[i + 1] = 128 * (1 - k) + 72 * k; o[i + 2] = 170 * k; o[i + 3] = 255 }
-  const c = canvas(w, h); c.getContext('2d')!.putImageData(out, 0, 0); return c
+  const c = canvas(w, h); ctx2d(c).putImageData(out, 0, 0); return c
 }
-function lip(src: Canvas): Canvas { const c = canvas(src.width, src.height), g = c.getContext('2d')!; g.filter = 'blur(2.5px)'; g.drawImage(src, 0, 0); g.drawImage(src, 0, 0); return c }
+function lip(src: Canvas): Canvas { const c = canvas(src.width, src.height), g = ctx2d(c); g.filter = 'blur(2.5px)'; g.drawImage(src, 0, 0); g.drawImage(src, 0, 0); return c }
 const tex = (c: Canvas) => { const t = new THREE.CanvasTexture(c); t.anisotropy = 8; return t }
 interface EtchMaps { normal: THREE.Texture; mr: THREE.Texture; mask: THREE.Texture; lip: THREE.Texture }
 let maps: { face: EtchMaps; top: EtchMaps } | null = null
 function etchMaps() {
   if (maps) return maps
-  const build = (c: Canvas): EtchMaps => ({ normal: tex(normalFromHeight(c)), mr: tex(metalRough(c)), mask: tex(c), lip: tex(lip(c)) })
+  const build = (c: Canvas): EtchMaps => ({ normal: tex(drain(normalSteps(c))), mr: tex(metalRough(c)), mask: tex(c), lip: tex(lip(c)) })
   return (maps = { face: build(faceTraces()), top: build(topTraces()) })
+}
+/**
+ * The same maps, built a step at a time with the main thread given back between steps (the pixel work for the
+ * face's normal map is a quarter of a second in one piece). Once it has run, etchMaps() finds them ready.
+ */
+export async function warmEtchMaps() {
+  if (maps) return
+  const build = async (c: Canvas): Promise<EtchMaps> => {
+    const normal = await drainTicking(normalSteps(c)); await tick()
+    const mr = metalRough(c); await tick()
+    return { normal: tex(normal), mr: tex(mr), mask: tex(c), lip: tex(lip(c)) }
+  }
+  const face = await build(faceTraces()); await tick()
+  const top = await build(topTraces())
+  maps ??= { face, top }
 }
 
 const RIM = /* glsl */ `float fr = pow(1.0 - saturate(dot(normalize(vNormal), normalize(vViewPosition))), 3.0);

@@ -19,6 +19,7 @@ import { createHero, type Hero } from './hero'
 import { loadDriveModel } from './model'
 import { FrameBudget, initialQuality, lower, type Quality } from './quality'
 import { CIPHER_CELLS, COLS, createStage, DROWS, PLAIN, RECORD_CELL0, type Form, type Stage } from './stage'
+import { tick } from './tick'
 
 export type Mode = 'entry' | 'archive' | 'opening' | 'file' | 'closing'
 /** the legend's groups: the kinds a visitor can light on their own, and the home's selected files */
@@ -178,10 +179,21 @@ export class Archive {
 
   private canvas: HTMLCanvasElement
   private opts: ArchiveOptions
-  constructor(canvas: HTMLCanvasElement, opts: ArchiveOptions) {
+  /**
+   * The archive, built in small steps (the stage a step at a time, see stage.ts) so the entry's animation keeps
+   * running; the drive model downloads meanwhile.
+   */
+  static async create(canvas: HTMLCanvasElement, opts: ArchiveOptions) {
+    const quality = initialQuality()
+    void loadDriveModel().catch(() => undefined)
+    const stage = await createStage(canvas, quality)
+    await tick()
+    return new Archive(canvas, opts, quality, stage)
+  }
+  private constructor(canvas: HTMLCanvasElement, opts: ArchiveOptions, quality: Quality, stage: Stage) {
     this.canvas = canvas; this.opts = opts
-    this.quality = initialQuality()
-    this.stage = createStage(canvas, this.quality)
+    this.quality = quality
+    this.stage = stage
     this.hero = createHero(this.quality.transmission)
     this.heroGroup.add(this.hero.group); this.stage.scene.add(this.heroGroup)
     const c = cellPos(this.sel)
