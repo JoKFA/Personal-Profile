@@ -236,8 +236,8 @@ export function createStage(canvas: HTMLCanvasElement, quality: Quality) {
       swap(body, 'Frosted_Shell'); body.geometry.setAttribute('aClear', clearAttr); body.geometry.setAttribute('aLamp', lampAttr); swap(glass, 'Ivory_Frame'); swap(core, 'Diffuser'); core.geometry.setAttribute('aLamp', lampAttr); swap(screws, 'Titanium'); swap(inlay, 'Champagne')
     },
     /** led: null = off · glow 0/1 · dark = X-000 */
-    set(i: number, x: number, y: number, z: number, tilt: number, labelCell: number, led: THREE.Color | null, hidden: boolean, glow: number, dark: boolean, ledKind: 'long' | 'double' | 'dot' = 'long', shade = 1, topGlow = glow, clear = 0, lamp = 0, form: Form = PLAIN, yaw = 0) {
-      e.set(tilt, yaw, 0); q.setFromEuler(e); p.set(x + form.ox, y, z); sc.set(form.sx, 1, 1)
+    set(i: number, x: number, y: number, z: number, tilt: number, labelCell: number, led: THREE.Color | null, hidden: boolean, glow: number, dark: boolean, ledKind: 'long' | 'double' | 'dot' = 'long', shade = 1, topGlow = glow, clear = 0, lamp = 0, form: Form = PLAIN) {
+      e.set(tilt, 0, 0); q.setFromEuler(e); p.set(x + form.ox, y, z); sc.set(form.sx, 1, 1)
       m4.compose(p, q, hidden ? zero : sc); body.setMatrixAt(i, m4)
       for (const [k, l] of Object.entries(ledSets)) l.setMatrixAt(i, k === ledKind && led ? m4 : ZERO)   // an unlit slit is not drawn
       const w = shade < 1 ? SHADE.setScalar(shade) : WHITE

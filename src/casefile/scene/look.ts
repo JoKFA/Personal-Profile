@@ -15,10 +15,10 @@ export const LOOK = {
   trans: 0.26, shellRough: 0.2, keyMul: 1.2, hemiMul: 0.85, sideMul: 0.8, fillMul: 1.1, ao: 1.0, motionBlur: 0.3,
 } as const
 
-// (removed with their code in P2.5: the home composition is folded in then)
-export const SHELF = true
-export const SHELF_K = { spacing: 6.6, up: 2.6, toward: 9, turn: 0.55,
-  mode: 'rack' as 'rack' | 'stair' | 'row', rows: 2.4, rise: 2.2, step: 0.75,
-  lift: 1.8, liftStep: 0, dip: 0, dipRows: 2,
-  zoom: 0.62, shiftX: 0.30, shiftY: -0.09, flat: 1,
-  quiet: 0.85 }
+/**
+ * Home: the four selected files each stand straight up out of their own slot, and nothing else moves.
+ * `lift` is how far they rise (drive units); `zoom`, `shiftX`, `shiftY` frame them (how much wider than the
+ * archive's lens, and where they sit as fractions of the frame); `flat` is how still the field lies on home
+ * (1 = no swell round the selection); `quiet` is how far the other records' light drops (1 = dark).
+ */
+export const SHELF_K = { lift: 1.8, zoom: 0.62, shiftX: 0.30, shiftY: -0.09, flat: 1, quiet: 0.85 } as const

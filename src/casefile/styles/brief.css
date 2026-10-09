@@ -1,31 +1,31 @@
-/* Home (the brief): the sentence over the archive, four callouts drawn from their drives. No boxes:
-   a soft fog behind the type, hairline leaders, the drives' own light. */
+/* Home (the brief): the sentence over the archive and the four selected files standing up in their own
+   slots. No boxes: a paper margin behind the type, hairline ticks, the drives' own light. */
 .hud > .brief { position: fixed; inset: 0; z-index: 10; pointer-events: none; transition: opacity var(--t-enter) var(--ease-in); }
 .brief.hide { opacity: 0; } .brief.hide * { pointer-events: none !important; }
-/* the archive dissolves into warm paper where the sentence sits */
-.brief::before { content: ""; position: absolute; left: 0; top: 0; width: 70vw; height: 62vh; pointer-events: none;
-  background: radial-gradient(ellipse 100% 100% at 0% 0%, color-mix(in srgb, var(--bg) 94%, transparent) 0%, color-mix(in srgb, var(--bg) 80%, transparent) 44%, transparent 76%); }
+/* the archive dissolves into warm paper where the type sits (its size and fade are set per width, below) */
+.brief::before { content: ""; position: absolute; left: 0; top: 0; pointer-events: none; }
 
+/* each drive carries the number of its list item, on a short tick */
 .brief-leads { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
 .brief-leads path { fill: none; stroke: var(--ink2); stroke-width: 1; }
-.brief-leads rect { fill: var(--ink); }
+.brief-leads rect { width: 4px; height: 4px; fill: var(--acc); }
+.brief-leads text { font: 500 11px/1 var(--mono); letter-spacing: .1em; fill: var(--ink); paint-order: stroke; stroke: var(--bg); stroke-width: 3px; stroke-linejoin: round; transition: fill .2s; }
+/* the numbers stay unseen while the camera is still opening on the drives; once it rests they fade in,
+   01 → 04, 80 ms apart, and do not move again (Brief.tsx) */
+.brief-leads g { opacity: 0; visibility: hidden; transition: opacity 320ms var(--ease-in), visibility 0s linear 320ms; }
+.brief--lit .brief-leads g { opacity: 1; visibility: visible; transition: opacity 320ms var(--ease-in) var(--d, 0ms), visibility 0s linear var(--d, 0ms); }
+.brief-leads g[data-i="1"] { --d: 80ms; }
+.brief-leads g[data-i="2"] { --d: 160ms; }
+.brief-leads g[data-i="3"] { --d: 240ms; }
+/* pointing at a list item lights its drive's circuit (the scene) and its number */
+.brief[data-point="0"] g[data-i="0"] text, .brief[data-point="1"] g[data-i="1"] text, .brief[data-point="2"] g[data-i="2"] text, .brief[data-point="3"] g[data-i="3"] text { fill: var(--acc-text); }
 
+/* the list: the four files in the story's order; the drives carry the numbers */
 .brief-cos { list-style: none; margin: 0; padding: 0; }
-.brief-co { position: absolute; left: 0; top: 0; pointer-events: auto; display: grid; grid-template-columns: auto auto; justify-content: start; align-items: baseline; column-gap: 12px; row-gap: 5px; max-width: 262px; padding: 4px 0; text-align: left; }
-.brief-co::before { content: ""; position: absolute; inset: -26px -44px -24px -34px; z-index: -1; pointer-events: none;
-  background: radial-gradient(ellipse 60% 58% at 45% 50%, color-mix(in srgb, var(--bg) 74%, transparent) 0%, color-mix(in srgb, var(--bg) 44%, transparent) 55%, transparent 100%);
-  -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px);
-  -webkit-mask-image: radial-gradient(ellipse 62% 60% at 45% 50%, #000 45%, transparent 100%); mask-image: radial-gradient(ellipse 62% 60% at 45% 50%, #000 45%, transparent 100%); }
+.brief-co { pointer-events: auto; display: grid; grid-template-columns: auto auto; justify-content: start; align-items: baseline; column-gap: 12px; row-gap: 5px; padding: 4px 0; text-align: left; }
 .brief-co .n { font: 500 11px/1.3 var(--mono); letter-spacing: .1em; color: var(--acc-text); }
 .brief-co .t { grid-column: 1 / -1; font: 600 16px/1.2 var(--sans); letter-spacing: -.01em; color: var(--ink); }
 .brief-co .l { grid-column: 1 / -1; font: 500 13px/1.4 var(--sans); font-variant-numeric: tabular-nums; color: var(--ink2); }
-/* the callouts stay unseen while the camera is still opening on the drives; once it rests they fade in,
-   01 → 04, 80 ms apart, and do not move again (Brief.tsx) */
-.brief-co, .brief-leads g { opacity: 0; visibility: hidden; transition: opacity 320ms var(--ease-in), visibility 0s linear 320ms; }
-.brief--lit .brief-co, .brief--lit .brief-leads g { opacity: 1; visibility: visible; transition: opacity 320ms var(--ease-in) var(--d, 0ms), visibility 0s linear var(--d, 0ms); }
-.brief-co[data-i="1"], .brief-leads g[data-i="1"] { --d: 80ms; }
-.brief-co[data-i="2"], .brief-leads g[data-i="2"] { --d: 160ms; }
-.brief-co[data-i="3"], .brief-leads g[data-i="3"] { --d: 240ms; }
 .brief-co:hover .t, .brief-co:focus-visible .t { text-decoration: underline; text-underline-offset: 4px; text-decoration-thickness: 1px; }
 
 .brief-say { position: absolute; left: var(--g); top: calc(var(--top) + 96px); max-width: min(690px, 47vw); pointer-events: auto; isolation: isolate; }
@@ -46,12 +46,26 @@
 .brief-meta { margin: 20px 0 0; font: 500 14px/1.45 var(--sans); letter-spacing: 0; color: var(--ink2); }
 
 /* the entrance first, then home: while the archive slides in and the swell runs, the frame holds
-   only the status line (after the PV); home's sentence and callouts follow once it has settled */
+   only the status line (after the PV); home's sentence and list follow once it has settled */
 .cf--arriving .hud > .brief { opacity: 0; transition: none; }
 .cf--arriving .brief * { pointer-events: none !important; }
 /* home replaces the browsing HUD; the name, Contact and Index stay, above the home's wash */
 .hud--brief > .hud-lock, .hud--brief > .hud-top, .hud--brief > .index { z-index: 12; }
 .hud--brief > .panel, .hud--brief > .leader, .hud--brief > .hud-sel, .hud--brief > .kind-key, .hud--brief > .hud-foot, .hud--brief > .hud-hint { opacity: 0 !important; pointer-events: none !important; }
+
+/* a desktop: the list is type, a column under the sentence on the left margin (it arrives with the sentence);
+   the archive is the right of the page, and only the numbers on the drives wait for the lens */
+@media (min-width: 900px) {
+  .brief::before { width: 100vw; height: 100vh; background: linear-gradient(90deg, color-mix(in srgb, var(--bg) 92%, transparent) 0%, color-mix(in srgb, var(--bg) 84%, transparent) 30%, color-mix(in srgb, var(--bg) 40%, transparent) 44%, transparent 56%); }
+  .brief-cos { position: absolute; left: var(--g); display: flex; flex-direction: column; gap: 18px; width: 300px; }
+  .brief-cos.tight { gap: 10px; } .brief-cos.tight .brief-co .l { display: none; }
+  .brief-cos li { position: relative; }
+  .brief-co { position: relative; max-width: 290px; grid-template-columns: 26px 1fr; justify-items: start; column-gap: 10px; row-gap: 3px; }
+  .brief-co .n { grid-row: 1 / 3; padding-top: 4px; font: 500 10.5px/1 var(--mono); letter-spacing: .12em; }
+  .brief-co .t { grid-column: 2; font: 700 16px/1.2 var(--sans); }
+  .brief-co .l { grid-column: 2; max-width: 250px; }
+  .brief-co .k { display: none; }
+}
 
 /* a phone: the sentence, then the four files as a list (01 → 04), then the ways in; nothing floats */
 @media (max-width: 899px) {
@@ -62,39 +76,11 @@
   .brief-thesis { font-size: clamp(24px, 6.6vw, 30px); }
   .brief-meta { display: none; }
   .brief-cos { position: relative; order: 2; margin: 16px 0 12px; border-bottom: 1px solid var(--hair); }
-  .brief-co { position: relative; display: grid; grid-template-columns: 28px 1fr; column-gap: 8px; row-gap: 1px; align-items: baseline; align-content: center; width: 100%; max-width: none; min-height: 48px; padding: 7px 0; border-top: 1px solid var(--hair); transform: none !important; }
-  .brief-co::before, .brief-say::before { display: none; }
-  .brief-co, .brief-leads g { opacity: 1; visibility: visible; transition: none; }
+  .brief-co { position: relative; display: grid; grid-template-columns: 28px 1fr; column-gap: 8px; row-gap: 1px; align-items: baseline; align-content: center; width: 100%; max-width: none; min-height: 48px; padding: 7px 0; border-top: 1px solid var(--hair); }
+  .brief-say::before { display: none; }
   .brief-co .k { display: none; }
   .brief-co .n { grid-column: 1; grid-row: 1; }
   .brief-co .t { grid-column: 2; grid-row: 1; font-size: 15.5px; }
   .brief-co .l { grid-column: 2; grid-row: 2; font-size: 12.5px; }
   .brief-act { position: relative; inset: auto; order: 3; margin-top: auto; justify-content: flex-start; gap: 4px 22px; }
 }
-
-/* lookdev T1 (?shelf=1): the four selected files stand on one shelf; each label hangs under its drive,
-   on one baseline, like the label under an exhibit. Labels arrive one by one, 01 → 04, once the lens rests. */
-.brief.shelf .brief-co { max-width: 290px; grid-template-columns: 26px 1fr; justify-items: start; text-align: left; column-gap: 10px; row-gap: 3px; }
-.brief.shelf .brief-co .n { grid-row: 1 / 3; padding-top: 4px; }
-.brief.shelf .brief-co .t, .brief.shelf .brief-co .l { grid-column: 2; }
-.brief.shelf .brief-leads path { stroke: var(--ink2); }
-.brief.shelf .brief-leads rect { width: 4px; height: 4px; fill: var(--acc); }
-.brief.shelf .brief-leads text { font: 500 11px/1 var(--mono); letter-spacing: .1em; fill: var(--ink); paint-order: stroke; stroke: var(--bg); stroke-width: 3px; stroke-linejoin: round; transition: fill .2s; }
-/* pointing at a list item lifts its drive a little and lights its number */
-.brief.shelf[data-point="0"] g[data-i="0"] text, .brief.shelf[data-point="1"] g[data-i="1"] text, .brief.shelf[data-point="2"] g[data-i="2"] text, .brief.shelf[data-point="3"] g[data-i="3"] text { fill: var(--acc-text); }
-/* the parts list: a column at the right, in the story's order; the drives carry the numbers */
-.brief.shelf .brief-cos { position: absolute; left: var(--g); display: flex; flex-direction: column; gap: 18px; width: 300px; }
-.brief.shelf .brief-cos.tight { gap: 10px; } .brief.shelf .brief-cos.tight .brief-co .l { display: none; }
-/* the type keeps a paper margin on the left; the archive is the right of the page */
-.brief.shelf::before { width: 100vw; height: 100vh; background: linear-gradient(90deg, color-mix(in srgb, var(--bg) 92%, transparent) 0%, color-mix(in srgb, var(--bg) 84%, transparent) 30%, color-mix(in srgb, var(--bg) 40%, transparent) 44%, transparent 56%); }
-.brief.shelf .brief-co::before { display: none; }
-.brief.shelf .brief-cos li { position: relative; }
-.brief.shelf .brief-co { position: relative; transform: none !important; }
-/* the list is type, not a callout: it arrives with the sentence; only the numbers on the drives wait for the lens */
-.brief.shelf .brief-co { opacity: 1; visibility: visible; transition: none; }
-.brief.shelf .brief-co .k { display: none; }
-.brief.shelf .brief-co .n { font: 500 10.5px/1 var(--mono); letter-spacing: .12em; }
-.brief.shelf .brief-co .t { font: 700 16px/1.2 var(--sans); }
-.brief.shelf .brief-co .l { font: 500 13px/1.4 var(--sans); color: var(--ink2); max-width: 250px; }
-.brief.shelf .brief-co::before { inset: -18px -26px -18px -26px; }
-

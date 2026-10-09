@@ -487,19 +487,20 @@ test('entrance: a returning visitor follows a populated wave to the selected fil
   expect(errors).toEqual([])
 })
 
-test('home: the selected files are lit, called out without overlap, and open their files', async ({ page }, info) => {
+test('home: the selected files are listed and numbered without overlap, and open their files', async ({ page }, info) => {
   test.setTimeout(120_000)
   const errors = watchErrors(page)
   await page.addInitScript(() => { localStorage.setItem('yw.entry', '1'); localStorage.setItem('yw.hint', '1') })
   await page.goto('/')
   await page.waitForFunction(() => { const s = (window as unknown as Win).__cf?.getSnapshot(); return s?.mode === 'archive' && s.brief && !!document.querySelector('.hud.on') && !document.querySelector('.cf--arriving') }, null, { timeout: 45_000 })
   const phone = info.project.name.startsWith('phone')
-  // the lens has opened: on a desktop the callouts fade in once the camera rests (a phone shows its list at once)
+  // the lens has opened: on a desktop the numbers on the drives fade in once the camera rests (a phone has none)
   if (!phone) await page.waitForSelector('.brief--lit', { timeout: 15_000 })
   await page.waitForTimeout(1200)
-  // the four callouts, the sentence and the actions sit inside the screen and never on each other
-  const boxes = await page.evaluate(() => ['.brief-co', '.brief-say', '.brief-act', '.hud-lock', '.hud-top'].flatMap((s) => [...document.querySelectorAll(s)].map((e) => ({ s, b: e.getBoundingClientRect().toJSON() as DOMRect }))))
+  // the list, the numbers on the drives, the sentence and the actions sit inside the screen and never on each other
+  const boxes = await page.evaluate((withNumbers) => ['.brief-co', ...(withNumbers ? ['.brief-leads text'] : []), '.brief-say', '.brief-act', '.hud-lock', '.hud-top'].flatMap((s) => [...document.querySelectorAll(s)].map((e) => ({ s, b: e.getBoundingClientRect().toJSON() as DOMRect }))), !phone)
   expect(boxes.filter((x) => x.s === '.brief-co')).toHaveLength(4)
+  if (!phone) expect(boxes.filter((x) => x.s === '.brief-leads text'), 'a number on each drive').toHaveLength(4)
   const vw = page.viewportSize()!
   for (const { s, b } of boxes) expect(b.left >= 0 && b.right <= vw.width && b.top >= 0 && b.bottom <= vw.height, `${s} on screen`).toBe(true)
   for (let i = 0; i < boxes.length; i++) for (let j = i + 1; j < boxes.length; j++) {
@@ -520,7 +521,7 @@ test('home: the selected files are lit, called out without overlap, and open the
   }
   expect(await noOverflow(page)).toBe(true)
   await page.screenshot({ path: `.codex-runtime/design/home/${info.project.name}-home.png` })
-  // a callout opens its file; closing it leaves the reader in the archive; the name brings them home
+  // a list item opens its file; closing it leaves the reader in the archive; the name brings them home
   await page.locator('.brief-co').first().click()
   await page.waitForURL(/\/projects\/mcp-security-framework/)
   await page.waitForFunction(() => (window as unknown as Win).__cf.getSnapshot().mode === 'file', null, { timeout: 20_000 })
@@ -618,28 +619,68 @@ test('home: the line under the sentence is readable over the archive at three wi
   expect(errors).toEqual([])
 })
 
-test('home: the callouts fade in 01 → 04 once the camera rests, and then do not move', async ({ page }, info) => {
-  test.skip(info.project.name !== 'desktop-1440', 'a phone shows a list, not callouts')
+test('home: the list arrives with the sentence; the numbers on the drives fade in 01 → 04 once the camera rests, and then do not move', async ({ page }, info) => {
+  test.skip(info.project.name !== 'desktop-1440', 'a phone shows a list, no numbers on the drives')
   test.setTimeout(120_000)
   const errors = watchErrors(page)
   await returnHome(page)
-  // unseen while the camera is still opening on the drives
-  expect(await page.evaluate(() => Number(getComputedStyle(document.querySelector('.brief-co')!).opacity))).toBe(0)
+  // the list is type: it is there as the sentence is; the numbers are unseen while the camera is still opening on the drives
+  expect(await page.locator('.brief-co').evaluateAll((els) => els.map((e) => Number(getComputedStyle(e).opacity)))).toEqual([1, 1, 1, 1])
+  expect(await page.evaluate(() => Number(getComputedStyle(document.querySelector('.brief-leads g')!).opacity))).toBe(0)
   await page.waitForSelector('.brief--lit', { timeout: 15_000 })
   expect(await page.evaluate(() => (window as unknown as { __cf: { briefSettled(): boolean } }).__cf.briefSettled()), 'they appear only once the camera has settled').toBe(true)
   // in order, 80 ms apart
-  expect(await page.locator('.brief-co').evaluateAll((els) => els.map((e) => parseFloat(getComputedStyle(e).transitionDelay.split(',').pop()!) * 1000))).toEqual([0, 80, 160, 240])
+  expect(await page.locator('.brief-leads g').evaluateAll((els) => els.map((e) => parseFloat(getComputedStyle(e).transitionDelay.split(',').pop()!) * 1000))).toEqual([0, 80, 160, 240])
   await page.waitForTimeout(900)   // the last one has finished fading
-  expect(await page.locator('.brief-co').evaluateAll((els) => els.map((e) => Number(getComputedStyle(e).opacity)))).toEqual([1, 1, 1, 1])
-  // for the next two seconds each callout stays within a pixel of where it was
-  const read = () => page.locator('.brief-co').evaluateAll((els) => els.map((e) => { const r = e.getBoundingClientRect(); return [r.x, r.y] }))
+  expect(await page.locator('.brief-leads g').evaluateAll((els) => els.map((e) => Number(getComputedStyle(e).opacity)))).toEqual([1, 1, 1, 1])
+  // for the next two seconds each number stays within a pixel of where it was
+  const read = () => page.locator('.brief-leads text').evaluateAll((els) => els.map((e) => { const r = e.getBoundingClientRect(); return [r.x, r.y] }))
   const first = await read()
+  expect(first).toHaveLength(4)
   let worst = 0
   for (let k = 0; k < 20; k++) {
     await page.waitForTimeout(100)
     ;(await read()).forEach(([x, y], i) => { worst = Math.max(worst, Math.abs(x - first[i][0]), Math.abs(y - first[i][1])) })
   }
   expect(worst, 'largest move in 2 s').toBeLessThanOrEqual(1)
+  expect(errors).toEqual([])
+})
+
+// the list sits under the sentence on the left margin, the numbers on the drives to the right; at every window
+// size they stay on screen and clear of the sentence, the actions and the header, and a short window drops
+// the second lines of the list
+test('home: at three window sizes the list and the numbers are on screen and clear of everything else', async ({ page }, info) => {
+  test.skip(info.project.name !== 'desktop-1440', 'sets its own window sizes')
+  test.setTimeout(240_000)
+  const errors = watchErrors(page)
+  for (const [width, height] of [[1440, 900], [1920, 1080], [1280, 720]]) {
+    await page.setViewportSize({ width, height })
+    await returnHome(page)
+    await page.waitForSelector('.brief--lit', { timeout: 15_000 })
+    await page.waitForTimeout(800)
+    const at = `${width}×${height}`
+    const box = (sel: string) => page.evaluate((q) => [...document.querySelectorAll(q)].map((e) => e.getBoundingClientRect().toJSON() as DOMRect), sel)
+    const list = await box('.brief-co'), numbers = await box('.brief-leads text'), say = await box('.brief-say'), act = await box('.brief-act'), hud = [...await box('.hud-lock'), ...await box('.hud-top')]
+    expect(list, at).toHaveLength(4); expect(numbers, at).toHaveLength(4)
+    const inside = (b: DOMRect) => b.left >= 0 && b.right <= width && b.top >= 0 && b.bottom <= height
+    const hit = (a: DOMRect, b: DOMRect) => Math.min(a.right, b.right) - Math.max(a.left, b.left) > 1 && Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top) > 1
+    // the list: on screen, under the sentence, clear of the actions and the header
+    list.forEach((b, i) => {
+      expect(inside(b), `${at}: list item ${i + 1} on screen`).toBe(true)
+      for (const o of [...say, ...act, ...hud]) expect(hit(b, o), `${at}: list item ${i + 1} on something`).toBe(false)
+      if (i) expect(b.top, `${at}: item ${i + 1} follows item ${i}`).toBeGreaterThanOrEqual(list[i - 1].bottom - 1)
+    })
+    // the numbers: on screen, apart from each other, and off the header
+    numbers.forEach((b, i) => {
+      expect(inside(b), `${at}: number ${i + 1} on screen`).toBe(true)
+      for (const o of hud) expect(hit(b, o), `${at}: number ${i + 1} on the header`).toBe(false)
+      for (let j = i + 1; j < numbers.length; j++) expect(hit(b, numbers[j]), `${at}: numbers ${i + 1} and ${j + 1} overlap`).toBe(false)
+    })
+    // a short window keeps the titles only
+    const tight = await page.locator('.brief-cos').evaluate((el) => el.classList.contains('tight'))
+    expect(tight, `${at}: the compact list`).toBe(height <= 720)
+    if (tight) expect(await page.locator('.brief-co .l').evaluateAll((els) => els.every((e) => getComputedStyle(e).display === 'none'))).toBe(true)
+  }
   expect(errors).toEqual([])
 })
 

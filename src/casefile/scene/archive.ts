@@ -3,11 +3,12 @@
 // RhineLabUI src/scene.ts (MIT, github.com/LBEILC/RhineLabUI): telephoto yaw 59°, elevation 19°,
 // distance 140, span 7.33; the selection ripple fires with the selection itself.
 import * as THREE from 'three'
-import { LOOK, SHELF, SHELF_K } from './look'
+import { LOOK, SHELF_K } from './look'
 import { ENTRIES } from '../data/entries'
 import { SELECTED } from '../data/story'
 import { KIND_NAME, type Entry, type Lens } from '../data/types'
 import { isPlain, land, rekey, sealAll, slotIndex, type ShownMap } from '../model/archive'
+import { briefCells } from '../model/brief'
 import { Ueba, type Alert } from '../model/ueba'
 import { COLUMN_SPACING as CS, LANES, ROW_SPACING as RS, ROWS, cellKey, nearest, nearestCell, sameCell, wrap, type Cell } from '../motion/grid'
 import { approach, damp, LIFT, RATES, REDUCED_FACTOR, spring, type Spring } from '../motion/spring'
@@ -23,9 +24,12 @@ export type Mode = 'entry' | 'archive' | 'opening' | 'file' | 'closing'
 /** the legend's groups: the kinds a visitor can light on their own, and the home's selected files */
 export type KindGroup = 'service' | 'case' | 'education' | 'skill' | 'selected'
 const SELECTED_IDS = new Set(SELECTED.map((s) => s.id))
+const SELECTED_ENTRIES = SELECTED.map((s) => ENTRIES.find((e) => e.id === s.id)!)
+/** where a stood-up drive's number hangs: its top corner (drive-local) */
+const NUMBER_AT = new THREE.Vector3(CARD.W / 2, CARD.H, CARD.T / 2)
 export const inGroup = (e: Entry, g: KindGroup) => g === 'selected' ? SELECTED_IDS.has(e.id) : e.kind === g || (g === 'skill' && e.kind === 'credential')
 /** Home: how much wider the lens opens on the selected files, and how fast */
-const BRIEF = { zoom: 0.42, rate: 2.6, lift: 0.6, shift: [0.21, -0.08], shiftPortrait: [0, -0.1] } as const
+const BRIEF = { rate: 2.6, shiftPortrait: [0, -0.1] } as const
 export interface Snapshot {
   mode: Mode
   kindFocus: KindGroup | null
@@ -57,6 +61,7 @@ const right = new THREE.Vector3().crossVectors(new THREE.Vector3(0, 1, 0), viewD
 const upV = new THREE.Vector3().crossVectors(viewDir, right).normalize()
 const ARRAY_AIM = new THREE.Vector3(-1.091, -0.045, 0.481)
 const TRACE = new THREE.Color(0xe6c98f), SHRED = new THREE.Color(0xe0502a)
+/** Yaw that turns a drive's face toward the camera (the opened drive faces the reader, as in the reference). */
 /** Yaw that turns a drive's face toward the camera (the opened drive faces the reader, as in the reference). */
 const FACE_YAW = Math.atan2(viewDir.x, viewDir.z)
 const BASE_Y = -4.6
@@ -118,7 +123,7 @@ export class Archive {
   private wide = spring(0)
   private briefCentre = new THREE.Vector3()
   private briefKeys = new Set<string>()
-  /** lookdev T1: each selected drive's order on the shelf, and where it stood this frame (render space, its base) */
+  /** each selected drive's place in the list (01 → 04), and where it stood this frame (render space, its base) */
   private shelfIndex = new Map<string, number>()
   private shelfAt: THREE.Vector3[] = [0, 1, 2, 3].map(() => new THREE.Vector3())
   private lifts = new Map<string, Spring>()
@@ -304,33 +309,20 @@ export class Archive {
     this.publish()
   }
   get brief() { return this.briefOn }
-  private get briefZoom() { return SHELF ? SHELF_K.zoom : BRIEF.zoom }
   /** home: the list item under the pointer lifts its drive the way pointing at the drive does (index into SELECTED) */
   private listHover: string | null = null
   private pointKey: string | null = null
   private pointAmt = 0
   pointSelected(i: number | null) { const c = i == null ? null : this.briefCells()[i]; this.listHover = c ? cellKey(c) : null }
-  /** how far a selected drive stands up out of its slot on home (lookdev rack: straight up, it never leaves the slot) */
-  private briefLift(k: string) {
-    if (!this.briefKeys.has(k)) return 0
-    return SHELF && SHELF_K.mode === 'rack' ? SHELF_K.lift + SHELF_K.liftStep * (this.shelfIndex.get(k) ?? 0) : BRIEF.lift
-  }
+  /** how far a selected drive stands up out of its slot on home: straight up, it never leaves the slot */
+  private briefLift(k: string) { return this.briefKeys.has(k) ? SHELF_K.lift : 0 }
   /** Home is at rest: the entrance is over and the camera has finished opening on the selected files. */
   briefSettled() { return this.briefOn && this.entranceDone() && Math.abs(1 - this.wide.value) < 0.01 && Math.abs(this.colCam.velocity) + Math.abs(this.rail.velocity) < 0.02 }
   /** The selected files' drives as one group: the copies that sit closest together near the selection. */
-  private briefCells(): Cell[] {
-    const slots = SELECTED.map((s) => ENTRIES.find((e) => e.id === s.id)!.slot)
-    let best: Cell[] = [], spread = Infinity
-    for (let k = -3; k <= 3; k++) {
-      const cells = slots.map((sl) => nearestCell(sl, { lane: this.sel.lane + k, row: this.sel.row }))
-      const lanes = cells.map((c) => c.lane), w = Math.max(...lanes) - Math.min(...lanes)
-      if (w < spread || (w === spread && Math.abs(k) < 1)) { best = cells; spread = w }
-    }
-    return best
-  }
+  private briefCells(): Cell[] { return briefCells(this.sel, SELECTED_ENTRIES) }
   /** Where each selected file's drive is on screen, in the brief's order (for the callouts). */
   selectedAnchors(): { id: string; x: number; y: number }[] {
-    if (SHELF && this.wide.value > 0.02) return this.shelfAt.map((p, i) => { this.tmp.copy(p).add(new THREE.Vector3(SHELF_K.mode === 'rack' ? CARD.W / 2 : CARD.W / 2, SHELF_K.mode === 'rack' ? CARD.H : CARD.H * 0.62, SHELF_K.mode === 'rack' ? CARD.T / 2 : 0)).project(this.stage.camera); return { id: SELECTED[i].id, x: (this.tmp.x + 1) / 2 * innerWidth, y: (1 - this.tmp.y) / 2 * innerHeight } })
+    if (this.wide.value > 0.02) return this.shelfAt.map((p, i) => { this.tmp.copy(p).add(NUMBER_AT).project(this.stage.camera); return { id: SELECTED[i].id, x: (this.tmp.x + 1) / 2 * innerWidth, y: (1 - this.tmp.y) / 2 * innerHeight } })
     return this.briefCells().map((c, i) => ({ id: SELECTED[i].id, ...this.project(c.lane, c.row, 0.6) }))
   }
   /** a lens or the legend is narrowing what is lit */
@@ -714,8 +706,8 @@ export class Archive {
 
     const fs: FieldState = { shoulder: this.shoulder.value, laneFocus: this.laneFocus.value, idleGain: this.idleGain, pulseGain: this.pulseGain, pulses: this.pulses, time: t, entry: age === Infinity ? 0 : age }
     const cLane = Math.round(trackX / CS) + 2, cRow = Math.round((-2.17 - this.rail.value) / RS + 15.5)
-    // lookdev rack: on home the field lies still (no swell round the selection), so only the four stand up
-    const homeW = SHELF ? smooth(Math.min(1, Math.max(0, this.wide.value))) : 0, calm = 1 - SHELF_K.flat * homeW
+    // on home the field lies still (no swell round the selection), so only the four stand up
+    const homeW = smooth(Math.min(1, Math.max(0, this.wide.value))), calm = 1 - SHELF_K.flat * homeW
     for (let i = 0; i < S.N; i++) {
       const c = { lane: cLane - (COLS >> 1) + Math.floor(i / DROWS), row: cRow - (DROWS >> 1) + (i % DROWS) }
       this.drawn[i] = c
@@ -726,12 +718,7 @@ export class Archive {
       this.copies[i] = copy ? 1 : 0
       const e = copy ? null : this.entryAt(c)
       // home: the selected files stand up out of the field while the lens is open
-      let raised = this.briefLift(k) * Math.max(0, this.wide.value)
-      // lookdev rack: the rows just in front of a selected drive settle a little, so more of its face shows
-      if (SHELF && SHELF_K.dip && !raised) for (const sk of this.briefKeys) {
-        const [sl, sr] = sk.split(':').map(Number), d = c.row - sr
-        if (c.lane === sl && d > 0 && d <= SHELF_K.dipRows) raised = -SHELF_K.dip * Math.max(0, this.wide.value) * (1 - (d - 1) / (SHELF_K.dipRows + 1))
-      }
+      const raised = this.briefLift(k) * Math.max(0, this.wide.value)
       const y = BASE_Y + field(c.row, c.lane, fs) * calm + lifted + raised + (this.hovers.get(k) || 0)
       // tops of the drives the selected one could sweep when it turns (same lane, ±4 rows), and every
       // drive's box, for the clearance check
@@ -762,38 +749,26 @@ export class Archive {
       const hidden = isSel || (age < 1.6 && c.row - this.sel.row > 19 + Math.max(0, age - ENTRANCE.slide) * 30)
       // The entrance resolves to one answer. Other records remain discoverable, with quieter light.
       lamp *= 1 - 0.68 * this.entryLook * (1 - this.detail)
-      // lookdev: on home the four selected files are the lit ones; the rest of the field quietens
+      // on home the four selected files are the lit ones; the rest of the field quietens
       if (this.wide.value > 0.001) {
         const w = Math.min(1, this.wide.value)
         if (this.briefKeys.has(k)) { lamp += (LOOK.briefLamp - lamp) * w; shade += (1 - shade) * w }
-        else lamp *= 1 - (SHELF ? SHELF_K.quiet : 0.55) * w
+        else lamp *= 1 - SHELF_K.quiet * w
       }
-      let px = (c.lane - 2) * CS - trackX, py = y, pz = (c.row - 15.5) * RS + this.rail.value, yawI = 0, tiltK = 1, clearI = 0
-      // lookdev rack: the drive whose list item is pointed at carries the key light (its circuit runs bright; no lantern)
+      const px = (c.lane - 2) * CS - trackX, pz = (c.row - 15.5) * RS + this.rail.value
+      let tiltK = 1, clearI = 0
+      // the drive whose list item is pointed at carries the key light: its circuit runs bright (no lantern)
       const pointed = k === this.pointKey ? this.pointAmt : 0
-      const si = SHELF ? this.shelfIndex.get(k) : undefined
+      const si = this.shelfIndex.get(k)
       if (si !== undefined && this.wide.value > 0.0005) {
-        // drawn out of the field onto one shelf, toward the reader and a little up, turned to face them
-        const w = smooth(Math.min(1, this.wide.value)), centre = this.briefCentre
-        let sx: number, sy: number, sz: number
-        if (SHELF_K.mode === 'rack') {
-          // it stays in its slot: the lift is already in `y`; it just stands straight and opens up
-          sx = px; sy = py; sz = pz
-        } else if (SHELF_K.mode === 'stair') {
-          // one drawer (the centre's lane), consecutive rows, each a step higher: 01 at the front and lowest
-          const lane = Math.round(centre.x / CS) * CS
-          sx = lane - trackX; sz = centre.z + this.rail.value + (si - 1.5) * RS * SHELF_K.rows; sy = BASE_Y + SHELF_K.rise + (3 - si) * SHELF_K.step
-        } else {
-          sx = centre.x - trackX + right.x * (si - 1.5) * SHELF_K.spacing + viewDir.x * SHELF_K.toward
-          sz = centre.z + this.rail.value + right.z * (si - 1.5) * SHELF_K.spacing + viewDir.z * SHELF_K.toward
-          sy = BASE_Y + SHELF_K.up + viewDir.y * SHELF_K.toward; yawI = FACE_YAW * SHELF_K.turn * w
-        }
-        px += (sx - px) * w; py += (sy - py) * w; pz += (sz - pz) * w; tiltK = 1 - w; clearI = w
-        this.shelfAt[si].set(px, py, pz)
+        // it stays in its slot (the lift is already in `y`): it stands straight and opens up
+        const w = smooth(Math.min(1, this.wide.value))
+        tiltK = 1 - w; clearI = w
+        this.shelfAt[si].set(px, y, pz)
       }
-      S.set(i, px, py, pz, slope(c.row, c.lane, fs) * calm * TILT * (1 - smooth(lifted / 0.4)) * tiltK,
+      S.set(i, px, y, pz, slope(c.row, c.lane, fs) * calm * TILT * (1 - smooth(lifted / 0.4)) * tiltK,
         e && (isPlain(this.shown, e) || e.kind === 'restricted') ? RECORD_CELL0 + ENTRY_INDEX.get(e.id)! : cipherCell(c),
-        this.ledOf(e), hidden, Math.max(this.fieldGlow(e, r), LOOK.briefEtch * clearI * (1 + 2.6 * pointed)), e?.kind === 'restricted', ledKind(e), shade, Math.max(this.fieldGlow(e, r), LOOK.briefEtch * clearI * (1 + 2.6 * pointed)), clearI, lamp, formOf(e), yawI)
+        this.ledOf(e), hidden, Math.max(this.fieldGlow(e, r), LOOK.briefEtch * clearI * (1 + 2.6 * pointed)), e?.kind === 'restricted', ledKind(e), shade, Math.max(this.fieldGlow(e, r), LOOK.briefEtch * clearI * (1 + 2.6 * pointed)), clearI, lamp, formOf(e))
     }
     S.commit(t)
 
@@ -802,8 +777,8 @@ export class Archive {
     // through the door the circuit stays lit and the die comes up as the camera arrives on it
     this.hero.setLight(L.reveal, D ? Math.max(L.glow, 1.0) : L.glow, D ? Math.max(L.die, D.die * 0.85) : L.die, L.seam, t)
     this.hero.setLabel(this.detail < 0.5)
-    // lookdev rack: a selected drive under the selection opens up on home like the other three
-    this.hero.setClear(Math.max(smooth(Math.min(1, this.detail * 1.25)), SHELF && this.briefKeys.has(cellKey(this.sel)) ? smooth(Math.min(1, Math.max(0, this.wide.value))) : 0))
+    // a selected drive under the selection opens up on home like the other three
+    this.hero.setClear(Math.max(smooth(Math.min(1, this.detail * 1.25)), this.briefKeys.has(cellKey(this.sel)) ? smooth(Math.min(1, Math.max(0, this.wide.value))) : 0))
     // through the door, the cover lifts away first (the enclosure opens to the secure element)
     this.hero.setCover(D ? smooth(Math.min(1, D.stand * 1.3)) : 0)
     this.shake *= Math.exp(-dt * 6)
@@ -852,7 +827,7 @@ export class Archive {
         const cx = (b.x0 + b.x1) / 2 / innerWidth, cy = 1 - (b.y0 + b.y1) / 2 / innerHeight
         const rx = Math.max(0.14, (b.x1 - b.x0) / innerWidth * 0.72), ry = Math.max(0.16, (b.y1 - b.y0) / innerHeight * 0.85)
         let tx = cx, ty = cy, trx = rx, try_ = ry
-        // lookdev: on home the focus holds the four selected drives, not the selection
+        // on home the focus holds the four selected drives, not the selection
         if (this.wide.value > 0.001) {
           const pts = this.selectedAnchors()
           if (pts.length) {
@@ -895,12 +870,12 @@ export class Archive {
     if (this.opening || this.holdHigh) aim.addScaledVector(upV, Math.max(0, this.lift.value - LIFT.rest) * 0.55 * (1 - d))
     // home: the selected files sit low and to the right of the frame, leaving the upper left to the sentence
     if (this.wide.value > 0.001) {
-      const w = this.wide.value, px = span * (1 + this.briefZoom * w) / H, [sx, sy] = portrait ? BRIEF.shiftPortrait : SHELF ? [SHELF_K.shiftX, SHELF_K.shiftY] : BRIEF.shift
+      const w = this.wide.value, px = span * (1 + SHELF_K.zoom * w) / H, [sx, sy] = portrait ? BRIEF.shiftPortrait : [SHELF_K.shiftX, SHELF_K.shiftY]
       aim.addScaledVector(right, -sx * W * px * w).addScaledVector(upV, -sy * H * px * w)
     }
     // the entrance: riding the wave, low and close, side-on to the drives; after the cut, a higher,
     // steeper angle that eases to the archive's own as the stair settles
-    let yawE = yaw, elevE = elev, spanE = span * (1 + this.briefZoom * Math.max(0, this.wide.value)), distanceE = distance
+    let yawE = yaw, elevE = elev, spanE = span * (1 + SHELF_K.zoom * Math.max(0, this.wide.value)), distanceE = distance
     if (age < ENTRANCE_END) {
       // close and side-on at first, along the drawers, the drives standing as slats; up in a fifth of
       // a second, turning while the swell runs; then back into the archive's telephoto view, which
