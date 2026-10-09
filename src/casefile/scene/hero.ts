@@ -43,7 +43,7 @@ export function createHero(transmission: boolean) {
       skins.white.glass.roughness = 0.27 - 0.24 * k; skins.white.glass.clearcoatRoughness = 0.25 - 0.2 * k
       skins.black.glass.roughness = 0.5 - 0.3 * k
     },
-    /** lookdev L3: the frosted cover slides up and off the board (k 0 → 1), so the dolly reads the circuit, not the frost */
+    /** the frosted cover slides up and off the board (k 0 → 1), so a close look reads the circuit, not the frost */
     setCover(k: number) { glass.position.y = k * CARD.H * 1.25; glass.visible = k < 0.98 },
     /** the end caps tell the kind of record (ink: a job, champagne: education); null = ivory */
     setCap(c: THREE.Color | null) { skins.white.body.color.copy(ivory); if (c) skins.white.body.color.multiply(c) },

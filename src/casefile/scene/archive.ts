@@ -804,6 +804,8 @@ export class Archive {
     this.hero.setLabel(this.detail < 0.5)
     // lookdev rack: a selected drive under the selection opens up on home like the other three
     this.hero.setClear(Math.max(smooth(Math.min(1, this.detail * 1.25)), SHELF && this.briefKeys.has(cellKey(this.sel)) ? smooth(Math.min(1, Math.max(0, this.wide.value))) : 0))
+    // through the door, the cover lifts away first (the enclosure opens to the secure element)
+    this.hero.setCover(D ? smooth(Math.min(1, D.stand * 1.3)) : 0)
     this.shake *= Math.exp(-dt * 6)
     this.heroGroup.position.set(chosen.x - trackX, BASE_Y + field(this.sel.row, this.sel.lane, fs) * calm + this.lift.value - (this.briefKeys.has(cellKey(this.sel)) ? 0 : LIFT.rest * homeW) + (D ? DOOR.lift * D.stand : 0) + (this.briefKeys.has(cellKey(this.sel)) ? (this.briefLift(cellKey(this.sel)) - LIFT.rest) * Math.max(0, this.wide.value) : 0) + (this.hovers.get(cellKey(this.sel)) || 0), chosen.z + this.rail.value)
     {
