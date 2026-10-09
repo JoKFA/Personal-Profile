@@ -137,6 +137,9 @@ test('reduced motion: everything readable, files open fast', async ({ browser },
   await openDrive(page, 'X-001')
   await expect(page.locator('.file-meta h1')).toHaveText('MCP Security Framework')
   expect(Date.now() - t0).toBeLessThan(2500)
+  // no motion, but the check is still real: the text is plain and the line says what was verified
+  await expect(page.locator('.file-verify span')).toHaveText(/^AES-256-GCM · \d+ blocks · tag verified$/)
+  expect(await page.locator('.cb, .cb-cover, .cg').count()).toBe(0)
   expect(errors).toEqual([])
   await ctx.close()
 })
@@ -261,6 +264,131 @@ test('open never clips, close is quick, every shred step stays readable', async 
   const shown = steps.filter((x) => /Pass \d of 3|Key zeroized/.test(x.s))
   expect(shown.map((x) => x.s.slice(0, 9))).toEqual(['Pass 1 of', 'Pass 2 of', 'Pass 3 of', 'Key zeroi'])
   for (const x of shown) expect(x.ms, x.s).toBeGreaterThanOrEqual(900)
+  expect(errors).toEqual([])
+})
+
+// A file opens by decrypting for real (ui/cipher.ts): the page is its own ciphertext, a tag line says what was checked.
+const TAG_LINE = /^AES-256-GCM · (\d+) blocks · tag verified$/
+async function startOpen(page: Page, id: string) {
+  await page.evaluate((i) => (window as unknown as Win).__cf.jumpTo(i), id)
+  await page.waitForTimeout(900)
+  await page.locator('.panel .go').click()
+}
+const tagged = (page: Page) => page.waitForFunction(() => document.querySelector('.file')?.getAttribute('data-tag') === 'ok', null, { timeout: 20_000 })
+
+test('open: the page arrives as ciphertext, decrypts in blocks, and the tag is really checked', async ({ page }) => {
+  const errors = watchErrors(page)
+  await enter(page)
+  await startOpen(page, 'X-001')
+  // while it runs the text sits under bits of its own ciphertext (the covers), and it is still in the DOM
+  const seen = await (await page.waitForFunction(() => { const n = document.querySelectorAll('.cb.enc').length; return n > 0 ? { enc: n, covers: document.querySelectorAll('.cb-cover').length, h1: document.querySelector('.file-meta h1')?.textContent } : false }, null, { timeout: 20_000 })).jsonValue()
+  expect(seen.covers).toBeGreaterThan(0)
+  expect(seen.h1).toBe('MCP Security Framework')
+  await tagged(page)
+  const line = (await page.locator('.file-verify span').textContent()) ?? ''
+  expect(line).toMatch(TAG_LINE)
+  expect(Number(line.match(TAG_LINE)![1])).toBeGreaterThan(10)
+  // done: the text is plain and no ciphertext is showing (the arrival's face grid goes a beat later; the closing
+  // seal, readable until Esc, is prepared in the page meanwhile)
+  await page.waitForFunction(() => !document.querySelector('.cb.enc, .cb-cover:not(.off), .cg:not(.clear)'), null, { timeout: 5000 })
+  await expect(page.locator('.file-meta h1')).toHaveText('MCP Security Framework')
+  expect(errors).toEqual([])
+})
+
+test('open (phone): the text decrypts and the drive face gets no block grid', async ({ page }, info) => {
+  test.skip(info.project.name !== 'phone-390', 'the face grid is left out on a phone only')
+  const errors = watchErrors(page)
+  await enter(page)
+  await page.evaluate(() => { const w = window as unknown as { __cg: number }; w.__cg = 0; new MutationObserver(() => { w.__cg += document.querySelectorAll('.cg').length }).observe(document.body, { subtree: true, childList: true }) })
+  await startOpen(page, 'X-001')
+  await tagged(page)
+  await expect(page.locator('.file-verify span')).toHaveText(TAG_LINE)
+  expect(await page.evaluate(() => (window as unknown as { __cg: number }).__cg)).toBe(0)
+  expect(await page.locator('.cg').count()).toBe(0)
+  expect(errors).toEqual([])
+})
+
+test('open: Esc pressed while it decrypts waits for the page, then goes back to browsing without an error', async ({ page }, info) => {
+  test.skip(info.project.name.startsWith('phone-short'), 'a phone covers this in the flow test')
+  const errors = watchErrors(page)
+  await enter(page)
+  await startOpen(page, 'X-001')
+  await page.waitForFunction(() => document.querySelectorAll('.cb.enc').length > 0, null, { timeout: 20_000 })
+  await page.keyboard.press('Escape')
+  await page.waitForFunction(() => (window as unknown as Win).__cf.getSnapshot().mode === 'archive', null, { timeout: 15_000 })
+  await expect(page).toHaveURL(/\/$/)
+  expect(await page.locator('.file').count()).toBe(0)
+  expect(errors).toEqual([])
+})
+
+test('open: Esc, or Next file, while a tab is decrypting puts the text back first and closes cleanly', async ({ page }, info) => {
+  test.skip(info.project.name !== 'desktop-1440', 'the tab strip is the same on every width; one run covers it')
+  const errors = watchErrors(page)
+  await enter(page)
+  await openDrive(page, 'X-001')
+  await tagged(page)
+  await page.waitForTimeout(400)
+  for (const how of ['esc', 'next'] as const) {
+    if (how === 'next') { await openDrive(page, 'X-001'); await tagged(page); await page.waitForTimeout(400) }
+    await page.locator('.file-tabs [role=tab]').nth(1).click()
+    // the tab is mid-decrypt (its text is split into blocks) when the file is asked to leave
+    expect(await page.evaluate(() => document.querySelectorAll('.file-tab .cb').length)).toBeGreaterThan(0)
+    if (how === 'esc') await page.keyboard.press('Escape'); else await page.locator('.file-next').click()
+    if (how === 'esc') {
+      await page.waitForFunction(() => (window as unknown as Win).__cf.getSnapshot().mode === 'archive', null, { timeout: 15_000 })
+      expect(await page.locator('.file').count()).toBe(0)
+    } else {
+      // the next file opens in its place
+      await page.waitForFunction(() => /Coast Capital/i.test(document.querySelector('.file-meta h1')?.textContent ?? '') && document.querySelector('.file')?.getAttribute('data-tag') === 'ok', null, { timeout: 25_000 })
+      await closeFile(page)
+    }
+  }
+  expect(errors).toEqual([])
+})
+
+test('close: the page is encrypted again first, the drive holds still, the whole page fades and goes only when it is gone', async ({ page }, info) => {
+  test.skip(info.project.name !== 'desktop-1440', 'a frame-timing check on the desktop layout')
+  const errors = watchErrors(page)
+  await enter(page)
+  await openDrive(page, 'X-001')
+  await tagged(page)
+  await page.waitForTimeout(2500)   // the closing seal is prepared in an idle moment while the file is read
+  type Row = { t: number; covered: number; face: number; file: boolean; leaving: boolean; page: number }
+  await page.evaluate(() => {
+    const w = window as unknown as { __cf: { face: number }; __rows: Row[] }; w.__rows = []
+    addEventListener('keydown', (e) => {
+      if (e.key !== 'Escape') return
+      const t0 = performance.now()
+      const op = (sel: string) => { const el = document.querySelector(sel); return el ? Number(getComputedStyle(el).opacity) : 0 }
+      const f = () => {
+        const t = performance.now() - t0, file = document.querySelector('.file')
+        w.__rows.push({ t, covered: document.querySelectorAll('.cb-cover:not(.off)').length, face: w.__cf.face, file: !!file, leaving: !!file?.classList.contains('leaving'), page: file ? Math.max(op('.file-meta'), op('.file-stage'), op('.file-bar'), op('.file-no')) : 0 })
+        if (t < 1500) requestAnimationFrame(f)
+      }
+      requestAnimationFrame(f)
+    }, { capture: true, once: true })
+  })
+  await closeFile(page)
+  await page.waitForTimeout(1500)
+  const rows = await page.evaluate(() => (window as unknown as { __rows: Row[] }).__rows)
+  expect(rows.length).toBeGreaterThan(20)
+  // the seal starts at once: the first block is covered within 100 ms of Esc
+  const first = rows.find((r) => r.covered > 0)
+  expect(first, 'a block was covered').toBeTruthy()
+  expect(first!.t).toBeLessThanOrEqual(100)
+  // the drive faces the reader while it is sealed (the turn starts at 180 ms)
+  const held = rows.filter((r) => r.t <= 180)
+  expect(held.length).toBeGreaterThan(3)
+  for (const r of held) expect(r.face, `at ${Math.round(r.t)} ms`).toBeGreaterThanOrEqual(0.95)
+  // the page is whole until it starts to go, then fades without ever dropping out in one frame
+  const leaving = rows.filter((r) => r.file && r.leaving)
+  expect(leaving.length).toBeGreaterThan(5)
+  expect(rows.find((r) => r.file && !r.leaving)!.page).toBeGreaterThan(0.95)
+  for (let i = 1; i < leaving.length; i++) expect(leaving[i - 1].page - leaving[i].page, `frame ${i} at ${Math.round(leaving[i].t)} ms`).toBeLessThan(0.6)
+  // the last frame before it is removed is already gone, and the fade got its 220 ms
+  expect(leaving[leaving.length - 1].page).toBeLessThanOrEqual(0.05)
+  const gone = rows.find((r) => !r.file)!
+  expect(gone.t - leaving[0].t).toBeGreaterThanOrEqual(200)
   expect(errors).toEqual([])
 })
 
@@ -638,7 +766,8 @@ test('subject file: the drive opens into six areas, each alone in its space, and
   await expect(cells).toHaveCount(6)
   await cells.nth(4).locator('.space-go').click()   // awareness: the BCIT file
   await page.waitForURL(/\/projects\/bcit-cyber-security-office/, { timeout: 15_000 })
-  await page.waitForFunction(() => (window as unknown as FilmWin).__cf.getSnapshot().mode === 'file', null, { timeout: 20_000 })
+  // (the mode is still "file" for the subject's own page while it hands over: wait for the BCIT page itself, read and decrypted)
+  await page.locator('.file--service[data-tag="ok"]').waitFor({ timeout: 25_000 })
   await closeFile(page)
   // coming back in the same session opens on the work space again with the tour off, and the six results still pictured
   await openDrive(page, 'YW-000')

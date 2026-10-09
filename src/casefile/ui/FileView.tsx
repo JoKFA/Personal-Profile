@@ -1,6 +1,6 @@
 // An opened drive (spec D6). As in the reference, the drive itself is the exhibit: it turns to the
 // reader and the project's demo is projected onto its face; the right column holds the file.
-// Text arrives under ink bars that retract line by line (Rhine-style document decryption).
+// The page arrives as its own ciphertext and is decrypted block by block (ui/cipher.ts); closing encrypts it again.
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { CAPABILITIES } from '../data/capabilities'
 import { CERTIFICATIONS, CONTACT, ENTRIES, entryById, shortName } from '../data/entries'
@@ -10,14 +10,13 @@ import { DRAWERS, roleById } from '../data/roles'
 import { KIND_NAME, type Entry } from '../data/types'
 import { Demo } from './demos'
 import { useCtx, useSnapshot } from './context'
-import { redact, scramble, wipe, WIPE_PASSES } from './effects'
+import { wipe, WIPE_PASSES } from './effects'
 import '../styles/subject.css'
 import { quadMatrix } from './project'
 import { SpaceExhibit } from './SpaceExhibit'
 import { PrivacyStat } from './PrivacyStat'
 import gsap from 'gsap'
-import { MOTION } from '../scene/look'
-import { cipherFace, cipherText } from './cipher'
+import { checkText, cipherFace, cipherText, type FaceRun, type TextRun } from './cipher'
 
 const STAGE = { w: 640, h: 452 }
 const HAS_FILE = new Set(['case', 'service', 'education'])
@@ -42,7 +41,7 @@ function sealParts(r: HTMLElement) {
 export function FileView({ entry: e }: { entry: Entry }) {
   const { archive, visitor, reduced, close, auditLog: audit, exitRef, cut } = useCtx()
   const snap = useSnapshot()
-  const root = useRef<HTMLDivElement>(null), stage = useRef<HTMLDivElement>(null), title = useRef<HTMLHeadingElement>(null)
+  const root = useRef<HTMLDivElement>(null), stage = useRef<HTMLDivElement>(null)
   const [tab, setTab] = useState(0)
   const [shredStep, setShredStep] = useState<null | number>(null)
   const narrow = typeof innerWidth !== 'undefined' && innerWidth < 900
@@ -75,93 +74,123 @@ export function FileView({ entry: e }: { entry: Entry }) {
     return () => { removeEventListener('keydown', trap); before?.focus?.({ preventScroll: true }) }
   }, [])
 
-  // decrypt the text on arrival
-  const seal = useRef<Promise<[Awaited<ReturnType<typeof cipherText>>, Awaited<ReturnType<typeof cipherFace>> | null]> | null>(null)
+  // The page is its own ciphertext on arrival, and again on the way out. Everything here is stopped
+  // by `restore()`, synchronously, before React unmounts or re-renders what the cipher covers.
+  type Parts = [TextRun, FaceRun | null]
+  /** the closing seal, prepared while the file is read (a fresh IV, its bits drawn) so Esc starts it at once */
+  const seal = useRef<Promise<Parts> | null>(null)
+  /** the arrival (decrypting now) and a tab's own decryption: the exit stops whichever is still running */
+  const arrival = useRef<{ stop(): void } | null>(null), tabRun = useRef<{ stop(): void } | null>(null)
+  /** the exit has begun: nothing more is prepared, and the run it used is put back when the page goes */
+  const closing = useRef<Parts | null | false>(null), idle = useRef(() => {})
   const prepareSeal = useCallback(() => {
     const r = root.current!, { stage, targets } = sealParts(r)
     return (seal.current = Promise.all([cipherText(targets, 'plain'), stage ? cipherFace(stage, `${e.id} ${e.title} ${e.summary}`, 8, 5, 'plain') : Promise.resolve(null)]))
   }, [e])
+  const dropSeal = useCallback(() => { const p = seal.current; seal.current = null; void p?.then(([c, f]) => { c.restore(); f?.remove() }) }, [])
+  /** when nothing is moving, prepare the closing seal in an idle moment */
+  const prepareWhenIdle = useCallback(() => {
+    idle.current()
+    const h = requestIdleCallback(() => { if (root.current && closing.current === null && !arrival.current && !tabRun.current && !seal.current) void prepareSeal() }, { timeout: 1500 })
+    idle.current = () => cancelIdleCallback(h)
+  }, [prepareSeal])
   useEffect(() => {
-    const drop = () => { const p = seal.current; seal.current = null; void p?.then(([c, f]) => { c.restore(); f?.remove() }) }
-    addEventListener('resize', drop)
-    return () => { removeEventListener('resize', drop); drop() }
-  }, [])
+    // a new window size changes every line break, so the prepared seal no longer fits: drop it and prepare another
+    let again = 0
+    const resized = () => { dropSeal(); clearTimeout(again); again = window.setTimeout(prepareWhenIdle, 250) }
+    addEventListener('resize', resized)
+    return () => {
+      removeEventListener('resize', resized); clearTimeout(again); idle.current(); dropSeal()
+      const spent = closing.current; if (spent) { spent[0].restore(); spent[1]?.remove() }
+    }
+  }, [dropSeal, prepareWhenIdle])
 
   useLayoutEffect(() => {
-    if (MOTION && !reduced) {
-      // lookdev L2b: the file arrives as its own ciphertext (AES-256-GCM, encrypted in this tab). The key
-      // leaves the drive's secure element, the face decrypts block by block in counter order, then the
-      // column, 16 characters to a block; the GCM tag is checked at the end.
-      const r = root.current!
-      let dead = false
-      const kills: (() => void)[] = []
-      r.classList.add('sealed')
-      r.focus({ preventScroll: true })
-      void (async () => {
-        const { stage, targets } = sealParts(r)
-        const [text, face] = await Promise.all([cipherText(targets), stage ? cipherFace(stage, `${e.id} ${e.title} ${e.summary}`) : Promise.resolve(null)])
-        if (dead) { text.restore(); face?.remove(); return }
-        kills.push(() => { text.restore(); face?.remove() })
-        r.classList.remove('sealed')
-        const st = { k: 0 }
-        const tw = gsap.to(st, { k: 1, duration: 0.95, ease: 'power1.inOut', onUpdate: () => archive.setSweep(st.k) }); kills.push(() => tw.kill())
-        const faceDone = face ? face.decrypt(420) : Promise.resolve()
-        await new Promise((res) => setTimeout(res, 110))
-        if (dead) return
-        const ok = await text.decrypt(560)
-        await faceDone
-        if (dead) return
-        text.restore()
-        r.dataset.tag = ok ? 'ok' : 'bad'
-        const v = r.querySelector('.file-verify span'); if (v) v.textContent = ok ? `AES-256-GCM · ${text.blocks} blocks · tag verified` : 'AES-256-GCM · tag check failed'
-        archive.setSweep(1); archive.fileShown()
-        // the closing seal is prepared while the file is read (a fresh IV, its bits drawn), so Esc starts it at once
-        const idle = requestIdleCallback(() => { if (!dead) prepareSeal() }, { timeout: 1500 }); kills.push(() => cancelIdleCallback(idle))
-      })()
-      return () => { dead = true; kills.forEach((k) => k()) }
-    }
-    const r = root.current!; const cover = redact(r)
-    const stop = scramble(title.current, heading, reduced)
-    requestAnimationFrame(() => { void cover.reveal(reduced).then(() => archive.fileShown()) })
+    const r = root.current!
     r.focus({ preventScroll: true })
-    return () => { cover.dispose(); stop() }
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
-  useLayoutEffect(() => {
-    if (!tab || !root.current) return
-    if (MOTION && !reduced) {
-      const r = root.current, t = [...r.querySelectorAll<HTMLElement>('.file-tab [data-redact]')]
-      let dead = false; r.classList.add('sealed-tab')
-      void cipherText(t).then(async (c) => { if (dead) { c.restore(); return } r.classList.remove('sealed-tab'); await c.decrypt(360); c.restore() })
-      return () => { dead = true; r.classList.remove('sealed-tab') }
+    // the line under the title says what was checked; the result is the real one
+    const tag = (ok: boolean, blocks: number) => {
+      r.dataset.tag = ok ? 'ok' : 'bad'
+      const v = r.querySelector('.file-verify span'); if (v) v.textContent = ok ? `AES-256-GCM · ${blocks} blocks · tag verified` : 'AES-256-GCM · tag check failed'
     }
-    const c = redact(root.current, '.file-tab [data-redact]'); void c.reveal(reduced, 0.4)
-  }, [tab, reduced])
+    let dead = false
+    if (reduced) {
+      // no motion: the text is plain at once, and the check still runs
+      void checkText(sealParts(r).targets).then(({ blocks, ok }) => { if (!dead) tag(ok, blocks) })
+      const raf = requestAnimationFrame(() => { archive.setSweep(1); archive.fileShown() })
+      return () => { dead = true; cancelAnimationFrame(raf) }
+    }
+    // The key leaves the drive's secure element, the face decrypts block by block in counter order, then
+    // the column, 16 characters to a block; the GCM tag is checked at the end.
+    let text: TextRun | null = null, face: FaceRun | null = null, sweep: gsap.core.Tween | null = null
+    const stopped = () => { sweep?.kill(); text?.restore(); face?.remove(); text = face = null }
+    arrival.current = { stop() { dead = true; stopped() } }
+    r.classList.add('sealed')
+    void (async () => {
+      const { stage, targets } = sealParts(r)
+      const [t, f] = await Promise.all([cipherText(targets), stage ? cipherFace(stage, `${e.id} ${e.title} ${e.summary}`) : Promise.resolve(null)])
+      if (dead) { t.restore(); f?.remove(); return }
+      text = t; face = f
+      r.classList.remove('sealed')
+      const st = { k: 0 }
+      sweep = gsap.to(st, { k: 1, duration: 0.95, ease: 'power1.inOut', onUpdate: () => archive.setSweep(st.k) })
+      const faceDone = f ? f.decrypt(420) : Promise.resolve()
+      await new Promise((res) => setTimeout(res, 110))
+      if (dead) return
+      const ok = await t.decrypt(560)
+      await faceDone
+      if (dead || ok === null) return
+      t.restore(); text = null
+      tag(ok, t.blocks)
+      archive.setSweep(1); archive.fileShown()
+      arrival.current = null
+      prepareWhenIdle()
+    })()
+    return () => { dead = true; arrival.current = null; stopped() }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // close: every line is covered again, the demo withdraws into the drive
+  // a tab opens the same way (the first one arrived with the page); what was prepared belonged to the tab before it
+  useLayoutEffect(() => {
+    dropSeal()
+    const r = root.current
+    if (!r || !tab || reduced) return
+    const targets = [...r.querySelectorAll<HTMLElement>('.file-tab [data-redact]')]
+    let dead = false, run: TextRun | null = null
+    r.classList.add('sealed-tab')
+    tabRun.current = { stop() { dead = true; run?.restore(); r.classList.remove('sealed-tab') } }
+    void cipherText(targets).then(async (c) => {
+      run = c
+      if (dead) { c.restore(); return }
+      r.classList.remove('sealed-tab')
+      await c.decrypt(360)
+      c.restore(); run = null; tabRun.current = null
+      prepareWhenIdle()
+    })
+    return () => { dead = true; run?.restore(); tabRun.current = null; r.classList.remove('sealed-tab') }
+  }, [tab, reduced, dropSeal, prepareWhenIdle])
+
+  // close: the page is encrypted again, last block first, and the drive holds still, facing the reader, until it is
   useEffect(() => {
     exitRef.current = async (onSealed?: () => void) => {
       const r = root.current; if (!r) return
-      if (MOTION && !reduced) {
-        // re-encrypted under a fresh IV (the bits differ from the ones on the way in), last block first; the key is revoked
-        const [c, face] = await (seal.current ?? prepareSeal())
-        seal.current = null
-        r.dataset.tag = ''
-        // the drive starts to turn back when the seal is 70% done (the next beat overlaps the last third)
-        const turn = setTimeout(() => onSealed?.(), 180)
-        await Promise.all([c.encrypt(260), face ? face.encrypt(230) : Promise.resolve()])
-        clearTimeout(turn); onSealed?.()
-        r.classList.add('leaving')
-        // the page is taken away only once its fade (220 ms) has finished
-        await new Promise((res) => setTimeout(res, 250))
-        return
-      }
-      const c = redact(r, '.file-meta [data-redact], .file-meta h1')
-      await c.conceal(reduced, 0.16)
+      closing.current = false; idle.current()
+      if (reduced) { onSealed?.(); r.classList.add('leaving'); return }
+      // an arrival or a tab still decrypting is stopped where it stands (its text put back); the seal is made fresh
+      if (arrival.current || tabRun.current) { arrival.current?.stop(); tabRun.current?.stop(); arrival.current = tabRun.current = null; dropSeal() }
+      const made = await (seal.current ?? prepareSeal())
+      seal.current = null; closing.current = made
+      const [c, face] = made
+      r.dataset.tag = ''
+      // the drive starts to turn back when the seal is 70% done (the next beat overlaps the last third)
+      const turn = setTimeout(() => onSealed?.(), 180)
+      await Promise.all([c.encrypt(260), face ? face.encrypt(230) : Promise.resolve()])
+      clearTimeout(turn); onSealed?.()
       r.classList.add('leaving')
-      await new Promise((res) => setTimeout(res, reduced ? 0 : 230))
+      // the page is taken away only once its fade (220 ms) has finished
+      await new Promise((res) => setTimeout(res, 250))
     }
     return () => { exitRef.current = null }
-  }, [exitRef, reduced, e, prepareSeal])
+  }, [exitRef, reduced, prepareSeal, dropSeal])
 
   // crypto-shred: three passes run down the file while the drive's light flashes red and dies;
   // the key is zeroized; the page collapses to a line; then the drive goes home
@@ -179,7 +208,7 @@ export function FileView({ entry: e }: { entry: Entry }) {
   void snap
 
   return (
-    <div ref={root} className={`file file--${e.kind} ${MOTION ? 'motion' : ''} ${shredStep !== null ? 'wiping' : ''}`} role="dialog" aria-modal="true" aria-label={e.title} tabIndex={-1}>
+    <div ref={root} className={`file file--${e.kind} ${shredStep !== null ? 'wiping' : ''}`} role="dialog" aria-modal="true" aria-label={e.title} tabIndex={-1}>
       <header className="file-bar">
         <button className="file-back" onClick={() => void close()}><span aria-hidden="true">←</span> All files <kbd>ESC</kbd></button>
         {/* the way on is the next file; shredding is the visitor's own file's business (V-FILE) */}
@@ -209,8 +238,8 @@ export function FileView({ entry: e }: { entry: Entry }) {
           </div>
         )}
         <div className="file-eyebrow lbl"><span>File {e.id} · Drawer {String(e.slot.lane + 1).padStart(2, '0')} · {drawer.name}</span></div>
-        <h1 ref={title}>{heading}</h1>
-        {MOTION && <div className="file-verify lbl" aria-live="polite"><i /><span /></div>}
+        <h1>{heading}</h1>
+        <div className="file-verify lbl" aria-live="polite"><i /><span /></div>
         <div className="file-kicker" data-redact>{e.kind === 'service' ? `${e.title} · ${e.dates} · ${e.place}` : e.kind === 'education' ? `${e.org} · ${e.dates} · ${e.place}` : e.kicker}</div>
         {e.era && <div className="file-era lbl" data-redact>{e.era}</div>}
         {e.kind === 'subject' && (

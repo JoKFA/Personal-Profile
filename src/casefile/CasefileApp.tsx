@@ -13,7 +13,6 @@ import type { Space } from './space/scene'
 import { ArchiveContext, type Ctx } from './ui/context'
 import { Hud } from './ui/Hud'
 import { NoWebGL } from './ui/NoWebGL'
-import { Verify } from './ui/Verify'
 import { reconVisitor } from './visitor'
 import './styles/tokens.css'
 import './styles/archive.css'
@@ -25,9 +24,6 @@ const loadSpace = () => import('./space/boot')
 // the entry (and GSAP with it) only loads for a first visit
 const Gate = lazy(() => import('./ui/Gate').then((m) => ({ default: m.Gate })))
 
-const sha256 = async (s: string) => {
-  try { return [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s)))].map((b) => b.toString(16).padStart(2, '0')).join('') } catch { return '' }
-}
 const slugFromPath = (p: string) => p.match(/^\/projects\/([^/]+)/)?.[1] ?? null
 /** Files with their own URL; the subject and visitor files open in place at "/". */
 const routed = (e: Entry) => e.kind === 'case' || e.kind === 'service' || e.kind === 'education' || e.kind === 'restricted'
@@ -61,7 +57,6 @@ export default function CasefileApp() {
   // entry has reached its last, still frame (the sealed profile, held to be read); return visits
   // build it at once.
   const [loadScene, setLoadScene] = useState(() => !gate)
-  const [verify, setVerify] = useState<{ hash: string; restricted: boolean } | null>(null)
   const [statusLine, setStatusLine] = useState<{ html: string; key: number } | null>(null)
   // one mutable log for the session, read by the Access log tab
   const [auditLog] = useState<[string, string][]>(() => [])
@@ -167,25 +162,12 @@ export default function CasefileApp() {
         setFile(e); audit(`key issued · ${e.id} decrypted`)
         return
       }
-      if (MOTION && !reduced) {
-        // lookdev L2: the page comes out while the drive is still turning; the file view runs the read
-        const framed = archive.beginOpen()
-        await new Promise((r) => setTimeout(r, 300))
-        setFile(e); setTransit(false); audit(`key issued · ${e.id} decrypted`)
-        await framed
-        return
-      }
-      await archive.beginOpen()
-      // the integrity check runs with the read, not before it: the hash streams in while the light
-      // crosses the face, and resolves as the chip lights
-      const hash = await sha256(e.id + e.title)
-      setVerify({ hash, restricted: archive.isLocked(e) })
-      await archive.readDrive()
-      setVerify(null)
-      setFile(e)
-      audit(`key issued · ${e.id} decrypted`)
+      // the page comes out while the drive is still turning (the file view runs the read: the key's light and the decryption)
+      const framed = archive.beginOpen()
+      if (!reduced) await new Promise((r) => setTimeout(r, 300))
+      setFile(e); setTransit(false); audit(`key issued · ${e.id} decrypted`)
+      await framed
     } finally {
-      setVerify(null)
       busy.current = false
       setSettled((n) => n + 1)
     }
@@ -198,12 +180,13 @@ export default function CasefileApp() {
     shredNext.current = false
     try {
       if (shred) { archive.shred(e.id); audit(`${e.id} crypto-shredded`) } else audit(`${e.id} re-encrypted, key revoked`)
-      // the page re-encrypts while the drive's light is already retracting (shred ran its own exit)
-      // lookdev: the drive holds still, facing the reader, until the page and its face are encrypted again
+      // the drive holds still, facing the reader, until the page and its face are encrypted again; then it turns back
+      // while the page fades (a shred ran its own exit)
       let onSealed = () => {}
       const sealed = new Promise<void>((res) => { onSealed = res })
-      const gone = (shred ? Promise.resolve() : Promise.resolve(exitRef.current?.(onSealed))).then(() => { onSealed(); setFile(null) })
-      if (MOTION && !shred) await sealed
+      const done = () => { onSealed(); setFile(null) }
+      const gone = Promise.resolve(shred ? undefined : exitRef.current?.(onSealed)).then(done, (err) => { console.warn('the page could not be sealed; closing without it', err); done() })
+      if (!shred) await sealed
       await archive.close(gone)
       runtimeRef.current?.stop(); runtimeRef.current = null; archive.interior = null; setCut(null)
       // leaving the briefing early still issues read access (nobody is left in a sealed archive)
@@ -366,7 +349,6 @@ export default function CasefileApp() {
       {archive && (
         <ArchiveContext.Provider value={ctx as Ctx}>
           <Hud statusLine={statusLine} hidden={gate || !sceneReady || transit} arriving={arriving} />
-          {verify && <Verify hash={verify.hash} restricted={verify.restricted} />}
           {file && <Suspense fallback={null}><FileView entry={file} key={file.id} /></Suspense>}
         </ArchiveContext.Provider>
       )}

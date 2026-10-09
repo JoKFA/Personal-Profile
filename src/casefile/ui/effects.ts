@@ -1,70 +1,8 @@
-// Text-level security effects.
-// redact / reveal: after RhineLabUI src/document-decryption.ts (MIT): each wrapped line gets an
-// ink bar that retracts in reading order, without replacing the text itself.
-// scramble: a short ciphertext flicker on headings (GSAP ScrambleTextPlugin, free since 2025).
+// Text-level security effects. (Opening a file decrypts it for real: see cipher.ts.)
 // wipe: DoD 5220.22-M style 3-pass overwrite (0x00 · 0xFF · random), then key zeroized.
 import gsap from 'gsap'
-import { ScrambleTextPlugin } from 'gsap/ScrambleTextPlugin'
-
-gsap.registerPlugin(ScrambleTextPlugin)
 
 const HEX = '0123456789abcdef'
-
-/** Cover every text line under `root` matching `selector` with an ink bar. Returns a reveal(). */
-export function redact(root: HTMLElement, selector = '[data-redact]') {
-  const bars: HTMLElement[] = []
-  root.querySelectorAll<HTMLElement>(selector).forEach((target) => {
-    const box = target.getBoundingClientRect()
-    if (!box.width) return
-    const lines: { x: number; y: number; r: number; b: number }[] = []
-    const walker = document.createTreeWalker(target, NodeFilter.SHOW_TEXT)
-    for (let n = walker.nextNode(); n; n = walker.nextNode()) {
-      if (!n.textContent?.trim()) continue
-      const range = document.createRange(); range.selectNodeContents(n)
-      for (const rc of range.getClientRects()) {
-        if (!rc.width) continue
-        const x = rc.left - box.left, y = rc.top - box.top, r = rc.right - box.left, b = rc.bottom - box.top
-        const line = lines.find((l) => Math.abs(l.y - y) < 6)
-        if (line) { line.x = Math.min(line.x, x); line.r = Math.max(line.r, r); line.b = Math.max(line.b, b) } else lines.push({ x, y, r, b })
-      }
-    }
-    if (getComputedStyle(target).position === 'static') target.style.position = 'relative'
-    for (const l of lines) {
-      const bar = document.createElement('span')
-      bar.className = 'cx-redact'; bar.setAttribute('aria-hidden', 'true')
-      bar.style.cssText = `left:${l.x - 1}px;top:${l.y - 1}px;width:${l.r - l.x + 2}px;height:${l.b - l.y + 2}px`
-      target.appendChild(bar); bars.push(bar)
-    }
-  })
-  return {
-    reveal(reduced: boolean, duration = 0.9) {
-      if (reduced) { bars.forEach((b) => b.remove()); return Promise.resolve() }
-      return new Promise<void>((res) => {
-        gsap.to(bars, {
-          scaleX: 0, transformOrigin: 'right center', duration: 0.42, ease: 'power3.inOut',
-          stagger: { each: duration / Math.max(bars.length, 1), from: 'start' },
-          onComplete: () => { bars.forEach((b) => b.remove()); res() },
-        })
-      })
-    },
-    /** The reverse: bars grow back over each line, top to bottom. */
-    conceal(reduced: boolean, duration = 0.45) {
-      if (reduced) return Promise.resolve()
-      return new Promise<void>((res) => {
-        gsap.fromTo(bars, { scaleX: 0 }, { scaleX: 1, transformOrigin: 'left center', duration: 0.18, ease: 'power3.inOut', stagger: { each: duration / Math.max(bars.length, 1) }, onComplete: () => res() })
-      })
-    },
-    dispose() { bars.forEach((b) => b.remove()) },
-  }
-}
-
-/** Scramble `el` into `text`. Pass the real text: under React StrictMode the element may already hold a scrambled frame. */
-export function scramble(el: HTMLElement | null, text: string, reduced: boolean, duration = 0.8) {
-  if (!el) return () => {}
-  if (reduced) { el.textContent = text; return () => {} }
-  const tw = gsap.to(el, { duration, scrambleText: { text, chars: HEX, revealDelay: 0.2, speed: 0.6 } })
-  return () => { tw.kill(); el.textContent = text }
-}
 
 /**
  * DoD-style 3-pass overwrite (0x00 · 0xFF · random), shown as a red scan line that runs down
