@@ -125,8 +125,8 @@ export class Archive {
   private briefCentre = new THREE.Vector3()
   private briefKeys = new Set<string>()
   /** each selected drive's place in the list (01 → 04), and where it stood this frame (render space, its base) */
-  private shelfIndex = new Map<string, number>()
-  private shelfAt: THREE.Vector3[] = [0, 1, 2, 3].map(() => new THREE.Vector3())
+  private briefOrder = new Map<string, number>()
+  private briefAt: THREE.Vector3[] = [0, 1, 2, 3].map(() => new THREE.Vector3())
   private lifts = new Map<string, Spring>()
   private hovers = new Map<string, number>()
   private pulses: Pulse[] = []
@@ -315,7 +315,7 @@ export class Archive {
       const cells = this.briefCells()
       this.briefCentre = cells.reduce((m, c) => m.add(cellPos(c)), new THREE.Vector3()).divideScalar(cells.length)
       this.briefKeys = new Set(cells.map(cellKey))
-      this.shelfIndex = new Map(cells.map((c, i) => [cellKey(c), i]))
+      this.briefOrder = new Map(cells.map((c, i) => [cellKey(c), i]))
     }
     this.setKindFocus(on ? 'selected' : null)
     this.publish()
@@ -334,7 +334,7 @@ export class Archive {
   private briefCells(): Cell[] { return briefCells(this.sel, SELECTED_ENTRIES) }
   /** Where each selected file's drive is on screen, in the brief's order (for the callouts). */
   selectedAnchors(): { id: string; x: number; y: number }[] {
-    if (this.wide.value > 0.02) return this.shelfAt.map((p, i) => { this.tmp.copy(p).add(NUMBER_AT).project(this.stage.camera); return { id: SELECTED[i].id, x: (this.tmp.x + 1) / 2 * innerWidth, y: (1 - this.tmp.y) / 2 * innerHeight } })
+    if (this.wide.value > 0.02) return this.briefAt.map((p, i) => { this.tmp.copy(p).add(NUMBER_AT).project(this.stage.camera); return { id: SELECTED[i].id, x: (this.tmp.x + 1) / 2 * innerWidth, y: (1 - this.tmp.y) / 2 * innerHeight } })
     return this.briefCells().map((c, i) => ({ id: SELECTED[i].id, ...this.project(c.lane, c.row, 0.6) }))
   }
   /** a lens or the legend is narrowing what is lit */
@@ -771,12 +771,12 @@ export class Archive {
       let tiltK = 1, clearI = 0
       // the drive whose list item is pointed at carries the key light: its circuit runs bright (no lantern)
       const pointed = k === this.pointKey ? this.pointAmt : 0
-      const si = this.shelfIndex.get(k)
+      const si = this.briefOrder.get(k)
       if (si !== undefined && this.wide.value > 0.0005) {
         // it stays in its slot (the lift is already in `y`): it stands straight and opens up
         const w = smooth(Math.min(1, this.wide.value))
         tiltK = 1 - w; clearI = w
-        this.shelfAt[si].set(px, y, pz)
+        this.briefAt[si].set(px, y, pz)
       }
       S.set(i, px, y, pz, slope(c.row, c.lane, fs) * calm * TILT * (1 - smooth(lifted / 0.4)) * tiltK,
         e && (isPlain(this.shown, e) || e.kind === 'restricted') ? RECORD_CELL0 + ENTRY_INDEX.get(e.id)! : cipherCell(c),
