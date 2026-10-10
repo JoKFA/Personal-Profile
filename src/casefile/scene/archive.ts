@@ -81,7 +81,9 @@ const HEX = '0123456789abcdef'
 const rhex = (n: number) => Array.from({ length: n }, () => HEX[Math.floor(Math.random() * 16)]).join('')
 export { sealedId } from '../model/archive'
 
-export interface ArchiveOptions { reduced: boolean; onAlert?: (a: Alert) => void }
+export interface ArchiveOptions { reduced: boolean; onAlert?: (a: Alert) => void
+  /** the entry is playing over the archive: it draws its first frame (the scene is proven) and then nothing until `unpark()` */
+  parked?: boolean }
 
 export class Archive {
   readonly entryAt = slotIndex(ENTRIES)
@@ -106,6 +108,9 @@ export class Archive {
   private prevRail = 0
   private last = performance.now()
   private raf = 0
+  /** parked: not drawn while the entry plays over it (its frames would take the entry's, and the frame budget would judge the machine by them) */
+  private parked = false
+  private proven = false
   private mode: Mode = 'entry'
   private sel: Cell = { lane: 1, row: 12 }
   private lens: Lens = 'all'
@@ -191,7 +196,7 @@ export class Archive {
     return new Archive(canvas, opts, quality, stage)
   }
   private constructor(canvas: HTMLCanvasElement, opts: ArchiveOptions, quality: Quality, stage: Stage) {
-    this.canvas = canvas; this.opts = opts
+    this.canvas = canvas; this.opts = opts; this.parked = !!opts.parked
     this.quality = quality
     this.stage = stage
     this.hero = createHero(this.quality.transmission)
@@ -361,6 +366,8 @@ export class Archive {
   private entranceHeld = false
   private entranceReleased = false
   /** Freeze the entrance at its first frame (the archive is seen, still, before the wave). */
+  /** the entry has left: the archive is drawn from now on */
+  unpark() { this.parked = false }
   holdEntrance() { this.entranceHeld = true; this.enteredAt = this.t - 0.001 }
   /** `skipped`: the visitor skipped the entry, so the entrance plays only its last stretch (camera settling, the selection lighting). */
   releaseEntrance(skipped = false) { if (!this.entranceHeld) return; this.entranceHeld = false; this.entranceReleased = true; this.enteredAt = this.t - (skipped ? ENTRANCE_END - SKIP_ENTRANCE : 0.001) }
@@ -653,7 +660,8 @@ export class Archive {
   private frame = (now: number) => {
     this.raf = requestAnimationFrame(this.frame)
     if (document.hidden) return
-    if (this.suspended) { this.last = now; return }
+    if (this.suspended || (this.parked && this.proven)) { this.last = now; return }
+    this.proven = true
     const rawDt = now - this.last
     const dt = Math.min(0.05, rawDt / 1000); this.last = now; this.t += dt
     if (this.door.on) this.door.t = Math.min(DOOR.end, Math.max(0, this.door.t + dt * this.door.dir * this.door.speed))

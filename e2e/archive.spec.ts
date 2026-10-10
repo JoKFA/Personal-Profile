@@ -485,6 +485,25 @@ test('entry: at every window size the four readings are on screen and clear of t
   expect(errors).toEqual([])
 })
 
+test('entry: the archive is built under the entry but not drawn until the entry leaves', async ({ page }, info) => {
+  test.skip(info.project.name !== 'desktop-1440', 'a render-path check; the window size does not matter')
+  type Host = Window & { __cf: { ready: Promise<void>; host: { renderer: { info: { render: { frame: number } } } } } }
+  await page.goto('/?intro')
+  await page.waitForFunction(() => !!(window as unknown as Host).__cf, null, { timeout: 30_000 })
+  await page.evaluate(() => (window as unknown as Host).__cf.ready)
+  // the scene is ready (built in steps from the entry's first frame) while the entry still plays over it
+  await expect(page.locator('.gate')).toHaveCount(1)
+  const frames = () => page.evaluate(() => (window as unknown as Host).__cf.host.renderer.info.render.frame)
+  const before = await frames()
+  await page.waitForTimeout(700)
+  expect(await frames(), 'not drawn while the entry plays').toBe(before)
+  // and drawn once the entry has handed over
+  await page.waitForFunction(() => !document.querySelector('.gate'), null, { timeout: 30_000 })
+  const after = await frames()
+  await page.waitForTimeout(500)
+  expect(await frames(), 'drawn again').toBeGreaterThan(after)
+})
+
 test('entry: skipping lands on the sealed print and leaves no gate behind', async ({ page }) => {
   const errors = watchErrors(page)
   await page.goto('/?intro')

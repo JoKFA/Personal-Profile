@@ -81,7 +81,7 @@ export default function CasefileApp() {
     try {
       // built a step at a time, so the entry's animation does not stop for it
       made = await Archive.create(canvas, {
-        reduced,
+        reduced, parked: firstVisit.current,
         onAlert: (al) => { status(`<span class="x">Anomaly · ${visitor.id} (you)</span> · ${al.what} · <b>${al.action}</b>`, 4200); audit(`UEBA ${visitor.id}: ${al.what} → ${al.action}`) },
       })
     } catch { if (!dead) setNoGL(true); return }
@@ -234,7 +234,7 @@ export default function CasefileApp() {
   useEffect(() => { archiveRef.current = archive }, [archive])
   // the entry hands over (spec §29): the archive appears under the white field, held at its first
   // frame, and slides in as the white lifts
-  const onReveal = useCallback(() => { archiveRef.current?.holdEntrance(); setGateLeaving(true); onEnteredRef.current() }, [])
+  const onReveal = useCallback(() => { archiveRef.current?.unpark(); archiveRef.current?.holdEntrance(); setGateLeaving(true); onEnteredRef.current() }, [])
   const onStrike = useCallback((skipped: boolean) => archiveRef.current?.releaseEntrance(skipped), [])
   const onGateDone = useCallback(() => setGateLeaving(false), [])
   // entry finished → archive

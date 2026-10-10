@@ -358,7 +358,8 @@ export async function createStage(canvas: HTMLCanvasElement, quality: Quality) {
         if ((src as THREE.InstancedMesh).isInstancedMesh) { const im = src as THREE.InstancedMesh, x = new THREE.InstancedMesh(im.geometry, m, 1); x.instanceColor = im.instanceColor; return x }
         return new THREE.Mesh(src.geometry, m)
       }
-      const overrides: THREE.Material[] = [new THREE.MeshDepthMaterial()]
+      // (a shadow is drawn from the back faces of what casts it: that is a depth variant of its own)
+      const overrides: THREE.Material[] = [new THREE.MeshDepthMaterial(), new THREE.MeshDepthMaterial({ side: THREE.BackSide })]
       for (const pass of composer.passes) for (const v of Object.values(pass)) {
         for (const m of (Array.isArray(v) ? v : [v]) as unknown[]) {
           if (!(m instanceof THREE.Material)) continue
@@ -384,8 +385,10 @@ export async function createStage(canvas: HTMLCanvasElement, quality: Quality) {
         out.material.defines = { SRGB_TRANSFER: '', ...(renderer.toneMapping === THREE.ACESFilmicToneMapping ? { ACES_FILMIC_TONE_MAPPING: '' } : {}) }
         out.material.needsUpdate = true
         out._outputColorSpace = renderer.outputColorSpace; out._toneMapping = renderer.toneMapping
-        const screen = new THREE.Scene(); screen.add(new THREE.Mesh(quad, out.material)); jobs.push(renderer.compileAsync(screen, camera))
+        // (it draws into a render target: the grade after it is the pass that draws to the screen)
+        const outScene = new THREE.Scene(); outScene.add(new THREE.Mesh(quad, out.material)); jobs.push(asTarget(() => renderer.compileAsync(outScene, camera)))
       }
+      const gradeScene = new THREE.Scene(); gradeScene.add(new THREE.Mesh(quad, grade.material)); jobs.push(renderer.compileAsync(gradeScene, camera))
       await Promise.all(jobs)
       // what the first frame would otherwise do inside itself: the programs' tables, and the textures' upload
       await warmPrograms(renderer)
