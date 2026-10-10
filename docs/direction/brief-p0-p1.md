@@ -178,6 +178,15 @@ git log -1 --format='%an <%ae>%n%(trailers)'      # 必须是 JoKFA，trailer �
 - `film.mjs` 加 `--gpu` 开关，改用 `--use-angle=d3d11 --enable-gpu --ignore-gpu-blocklist`；并把 CSS 动画同步到假时钟。参考 `.codex-runtime/direction/tools/film.cjs` 里的 `__filmAnim`：每一帧暂停所有 `document.getAnimations()`，再按步长推进，到终点时调 `finish()`。不这样做，DOM 部分的转场会被拍成"一帧切换"。
 - 验收：`node scripts/shots.mjs --quality high` 在本机出全部 13 张图。
 
+### P1.10a 修一个渲染 bug：电路线被电路板盖住（Opus 2026-10-06 在原型里发现）
+盘面电路的贴图平面（`scene/drive.ts` 的 `face`，位于 `BOARD_Z`）和精密模型（`drive-module.glb` 的 `Ceramic` 等组）的电路板正面完全共面，产生 z-fighting。镜头推近时（打开文件、主档案的门）深度精度变化，电路板盖住电路线，近景就成了一块灰板。
+
+修法：在 `etchMaterial()` 里给材质加 `polygonOffset = true`、`polygonOffsetFactor = -2`、`polygonOffsetUnits = -4`。参考 `.codex-runtime/direction/lookdev-r1.patch` 里 `drive.ts` 对应的一段。
+
+验收：
+- 用 `.codex-runtime/direction/tools/film.cjs door` 逐帧拍主档案的门，镜头推近的那段（约 1.5–3.4 s）每一帧都能看到电路线。
+- 对照修改前的同一帧，截图附上。
+
 ### P1.10 E2E 收尾
 - 修好两项首页失败。P1.1、P1.3、P1.4 会改到它们。
 - **最后跑一次全量** `npx playwright test`（四个 project）。失败的要修，不能跳过，不能加 `.skip`。
