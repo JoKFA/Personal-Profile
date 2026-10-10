@@ -77,14 +77,24 @@ export default function CasefileApp() {
     let a: Archive | null = null, dead = false
     void import('./scene/archive').then(async ({ Archive }) => {
     if (dead) return
-    let made: Archive
-    try {
-      // built a step at a time, so the entry's animation does not stop for it
-      made = await Archive.create(canvas, {
-        reduced, parked: firstVisit.current,
-        onAlert: (al) => { status(`<span class="x">Anomaly · ${visitor.id} (you)</span> · ${al.what} · <b>${al.action}</b>`, 4200); audit(`UEBA ${visitor.id}: ${al.what} → ${al.action}`) },
-      })
-    } catch { if (!dead) setNoGL(true); return }
+    let made: Archive | undefined
+    // Built a step at a time, so the entry's animation does not stop for it. It starts with the entry's first
+    // frame, when the GPU process may still be coming up and refuse a context once: that is tried again before
+    // the readable index replaces the whole page.
+    for (let attempt = 0; !made; attempt++) {
+      try {
+        made = await Archive.create(canvas, {
+          reduced, parked: firstVisit.current,
+          onAlert: (al) => { status(`<span class="x">Anomaly · ${visitor.id} (you)</span> · ${al.what} · <b>${al.action}</b>`, 4200); audit(`UEBA ${visitor.id}: ${al.what} → ${al.action}`) },
+        })
+      } catch (err) {
+        if (dead) return
+        if (attempt >= 1) { setNoGL(true); return }
+        console.warn('the archive could not be built; trying once more', err)
+        await new Promise((r) => setTimeout(r, 400))
+        if (dead) return
+      }
+    }
     if (dead) { made.dispose(); return }
     a = made
     a.veil = veilRef.current

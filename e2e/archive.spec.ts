@@ -504,6 +504,25 @@ test('entry: the archive is built under the entry but not drawn until the entry 
   expect(await frames(), 'drawn again').toBeGreaterThan(after)
 })
 
+test('entry: a WebGL context refused once is asked for again, and the entry carries on', async ({ page }, info) => {
+  test.skip(info.project.name !== 'desktop-1440', 'a render-path check; the window size does not matter')
+  const errors: string[] = []
+  page.on('pageerror', (e) => errors.push(e.message))
+  // the GPU process can still be coming up when the entry starts: refuse the archive's first webgl2 context
+  await page.addInitScript(() => {
+    const real = HTMLCanvasElement.prototype.getContext as (this: HTMLCanvasElement, t: string, ...a: unknown[]) => unknown
+    let refused = false
+    HTMLCanvasElement.prototype.getContext = function (this: HTMLCanvasElement, t: string, ...a: unknown[]) {
+      if (t === 'webgl2' && !refused) { refused = true; return null }
+      return real.call(this, t, ...a)
+    } as typeof HTMLCanvasElement.prototype.getContext
+  })
+  await enter(page)
+  expect(await page.evaluate(() => !!(window as unknown as Win).__cf), 'the archive was built on the second try').toBe(true)
+  expect(await page.locator('.nogl').count(), 'not the readable index').toBe(0)
+  expect(errors).toEqual([])
+})
+
 test('entry: skipping lands on the sealed print and leaves no gate behind', async ({ page }) => {
   const errors = watchErrors(page)
   await page.goto('/?intro')
