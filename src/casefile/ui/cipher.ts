@@ -59,7 +59,7 @@ function bitField(bytes: Uint8Array, w: number, h: number, cell: number, tone: '
   const dpr = Math.min(3, Math.max(1, devicePixelRatio || 1)), c = document.createElement('canvas')
   const step = cell + gap, cols = Math.max(1, Math.floor(w / step)), rows = rowsFixed || Math.max(1, Math.floor(h / step))
   c.width = Math.round(cols * step * dpr); c.height = Math.round(rows * step * dpr)
-  const g = c.getContext('2d')!, bits = bytes.length * 8
+  const g = c.getContext('2d', { willReadFrequently: true })!, bits = bytes.length * 8   // (memory-backed: toDataURL then does not wait on the GPU, which is busy drawing the scene)
   const on = tone === 'ink' ? 'rgba(22, 23, 26, .5)' : 'rgba(92, 107, 18, .95)'
   const off = tone === 'ink' ? `rgba(22, 23, 26, ${offAlpha})` : `rgba(92, 107, 18, ${offAlpha * 2})`
   for (let r = 0; r < rows; r++) for (let q = 0; q < cols; q++) {
@@ -83,6 +83,8 @@ interface Block { span: HTMLSpanElement; covers: HTMLElement[]; bytes: Uint8Arra
  */
 export async function cipherText(targets: HTMLElement[], start: 'cipher' | 'plain' = 'cipher') {
   const blocks: Block[] = [], restores: (() => void)[] = [], covers: HTMLElement[] = []
+  /** the olive version of a cover's bits is drawn when its block's turn comes, not for every block up front */
+  const olive = new Map<HTMLElement, () => string>()
   let text = ''
   for (const target of targets) {
     const nodes = wordNodes(target)
@@ -119,7 +121,7 @@ export async function cipherText(targets: HTMLElement[], start: 'cipher' | 'plai
       const h = rows * (cell + gap), f = bitField(b.bytes, r.width, h, cell, 'ink', gap, rows, 0.05)
       const c = document.createElement('span'); c.className = start === 'cipher' ? 'cb-cover' : 'cb-cover off'; c.setAttribute('aria-hidden', 'true')
       c.style.cssText = `left:${r.left - hb.left}px;top:${r.top - hb.top + (r.height - f.h) / 2}px;width:${f.w}px;height:${f.h}px;background-image:url(${f.url})`
-      c.dataset.acc = bitField(b.bytes, r.width, h, cell, 'acc', gap, rows, 0.05).url
+      olive.set(c, () => bitField(b.bytes, r.width, h, cell, 'acc', gap, rows, 0.05).url)
       host.appendChild(c); b.covers.push(c); covers.push(c)
     }
   }
@@ -127,7 +129,7 @@ export async function cipherText(targets: HTMLElement[], start: 'cipher' | 'plai
     b.span.classList.toggle('enc', on)
     for (const c of b.covers) c.classList.toggle('off', !on)
   }
-  const head = (b: Block) => { for (const c of b.covers) { c.style.backgroundImage = `url(${c.dataset.acc})`; c.classList.add('head') } }
+  const head = (b: Block) => { for (const c of b.covers) { if (!c.classList.contains('head')) c.style.backgroundImage = `url(${olive.get(c)!()})`; c.classList.add('head') } }
   let tween: gsap.core.Tween | null = null, pending: ((ok: boolean | null) => void) | null = null
   const halt = () => { tween?.kill(); tween = null; const p = pending; pending = null; p?.(null) }
   return {
@@ -172,14 +174,14 @@ export async function cipherFace(stage: HTMLElement, label: string, cols = 8, ro
   const sealed = await seal(label.padEnd(cols * rows * BLOCK, '·'))
   const grid = document.createElement('div'); grid.className = 'cg'; grid.setAttribute('aria-hidden', 'true')
   grid.style.gridTemplateColumns = `repeat(${cols}, 1fr)`
-  const cells: { el: HTMLElement; acc: string }[] = []
+  const cells: { el: HTMLElement; acc: () => string }[] = []
   for (let k = 0; k < cols * rows; k++) {
     const bytes = sealed.ct.subarray(k * BLOCK, k * BLOCK + BLOCK)
     // one AES block per cell: 128 bits as a 16 × 8 chip of 2-px cells
-    const ink = bitField(bytes, 16 * 4, 8 * 4, 2, 'ink', 2, 8, 0.08), acc = bitField(bytes, 16 * 4, 8 * 4, 2, 'acc', 2, 8, 0.08)
+    const ink = bitField(bytes, 16 * 4, 8 * 4, 2, 'ink', 2, 8, 0.08)
     const el = document.createElement('i'); el.style.backgroundImage = `url(${ink.url})`; el.style.backgroundSize = `${ink.w}px ${ink.h}px`
     if (start === 'plain') el.classList.add('off')
-    grid.appendChild(el); cells.push({ el, acc: acc.url })
+    grid.appendChild(el); cells.push({ el, acc: () => bitField(bytes, 16 * 4, 8 * 4, 2, 'acc', 2, 8, 0.08).url })
   }
   if (start === 'plain') grid.classList.add('clear')
   stage.appendChild(grid)
@@ -194,7 +196,7 @@ export async function cipherFace(stage: HTMLElement, label: string, cols = 8, ro
           k: cells.length, duration: ms / 1000, ease: 'none',
           onUpdate: () => {
             const upto = Math.floor(st.k)
-            if (upto < cells.length) { const c = cells[upto]; c.el.style.backgroundImage = `url(${c.acc})`; c.el.classList.add('head') }
+            if (upto < cells.length) { const c = cells[upto]; if (!c.el.classList.contains('head')) c.el.style.backgroundImage = `url(${c.acc()})`; c.el.classList.add('head') }
             if (upto > 0) grid.classList.add('clear')
             for (; done < upto; done++) cells[done].el.classList.add('off')
           },
