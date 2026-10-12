@@ -83,16 +83,19 @@ export function install() {
   }
   window.__ph = dir
 
-  // the page: drawn after the engine's frame (its rAF is registered after the archive's), from the same clock
-  const ov = createOverlay()
-  let lastPage = 0
-  const page = () => {
+  // the page: drawn after the engine's frame (its rAF is registered after the archive's), from the same clock.
+  // ?bake: scene pixels only (the baked assets carry no page layer), so the overlay is not even created.
+  if (!new URLSearchParams(location.search).has('bake')) {
+    const ov = createOverlay()
+    let lastPage = 0
+    const page = () => {
+      requestAnimationFrame(page)
+      const a = window.__cf; if (!a) return
+      const dt = Math.min(0.05, Math.max(0, now - lastPage)); lastPage = now
+      ov.update({ mode, k: now - t0, stop: stopId, ready: !!c0, near: dir.near, entry: a.entranceAge(), sel: a.selected ? `${a.selected.id} · ${a.selected.title}` : '', anchor: a.anchor(), quad: a.faceQuad(0), inner: a.faceQuad(0.5), dt })
+    }
     requestAnimationFrame(page)
-    const a = window.__cf; if (!a) return
-    const dt = Math.min(0.05, Math.max(0, now - lastPage)); lastPage = now
-    ov.update({ mode, k: now - t0, stop: stopId, ready: !!c0, near: dir.near, entry: a.entranceAge(), sel: a.selected ? `${a.selected.id} · ${a.selected.title}` : '', anchor: a.anchor(), quad: a.faceQuad(0), inner: a.faceQuad(0.5), dt })
   }
-  requestAnimationFrame(page)
 
   window.__phoneDirector = (t, dt, a) => {
     now = t; dir.t = t; dir.mode = mode; dir.stopId = stopId; dir.ready = !!c0; dir.k = t - t0; if (c0) dir.near = true
