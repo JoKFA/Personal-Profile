@@ -664,9 +664,12 @@ export class Archive {
     this.proven = true
     const rawDt = now - this.last
     const dt = Math.min(0.05, rawDt / 1000); this.last = now; this.t += dt
+    // lab (phone prototype): a director sets this frame's overrides before anything reads them
+    const director = (window as unknown as { __phoneDirector?: (t: number, dt: number, a: Archive) => void }).__phoneDirector
+    if (director) director(this.t, dt, this)
     if (this.door.on) this.door.t = Math.min(DOOR.end, Math.max(0, this.door.t + dt * this.door.dir * this.door.speed))
     const D = this.door.on ? doorAt(this.door.t) : null
-    if (this.budget.sample(rawDt, now) && this.quality.name !== 'low') this.degrade()
+    if (this.budget.sample(rawDt, now) && this.quality.name !== 'low' && !location.search.includes('quality=')) this.degrade()
     const t = this.t, R = this.reduced ? REDUCED_FACTOR : 1, S = this.stage
     if (this.entranceHeld) this.enteredAt = t - 0.001
     const chosen = cellPos(this.sel)
@@ -690,7 +693,8 @@ export class Archive {
       // the PV smears the first second and a half hard, then the image steadies as the camera slows
       const shutter = age < ENTRANCE_END ? 1 + 1.6 * (1 - smooth(age / 1.8)) : 1
       const k = this.reduced || dt <= 0 ? 0 : 0.5 * Math.min(1, 1 / 60 / dt) * 2.2 * shutter * LOOK.motionBlur
-      S.setMotion(THREE.MathUtils.clamp((this.tmp.x - ax) * k, -0.045, 0.045), THREE.MathUtils.clamp((this.tmp.y - ay) * k, -0.018, 0.018))
+      const kb = k * ((window as unknown as { __lab?: { blur?: number } }).__lab?.blur ?? 1)   // lab: the phone's pans smear less
+      S.setMotion(THREE.MathUtils.clamp((this.tmp.x - ax) * kb, -0.045, 0.045), THREE.MathUtils.clamp((this.tmp.y - ay) * kb, -0.018, 0.018))
     }
     this.pulses = this.pulses.filter((p) => t - p.time < PULSE_LIFE)
     // the field keeps breathing whenever the archive is showing, not only when idle
@@ -720,7 +724,8 @@ export class Archive {
 
     const up = this.opening || this.holdHigh
     const settling = this.mode === 'archive' && age < ENTRANCE.found
-    damp(this.lift, up ? LIFT.open : settling ? 0 : LIFT.rest, (this.opening ? RATES.eject : this.mode === 'closing' ? RATES.land : RATES.lift) * R, dt)
+    const lab = (window as unknown as { __lab?: { lift?: number; clear?: number; tilt?: number; face?: number; sharp?: boolean; slot?: number; quiet?: number; blur?: number; clearCells?: Map<string, number>; drop?: (dRow: number, dLane: number) => number; pose?: { c: number[]; yaw: number; tilt: number; roll: number }; fog?: number[]; light?: { reveal: number; glow: number; die: number } } }).__lab
+    damp(this.lift, lab?.lift ?? (up ? LIFT.open : settling ? 0 : LIFT.rest), (this.opening ? RATES.eject : this.mode === 'closing' ? RATES.land : RATES.lift) * R, dt)
     for (const [k, s] of this.lifts) { damp(s, 0, RATES.outgoing * R, dt); if (Math.abs(s.value) < 1e-4 && Math.abs(s.velocity) < 1e-3) this.lifts.delete(k) }
 
     const fs: FieldState = { shoulder: this.shoulder.value, laneFocus: this.laneFocus.value, idleGain: this.idleGain, pulseGain: this.pulseGain, pulses: this.pulses, time: t, entry: age === Infinity ? 0 : age }
@@ -738,7 +743,7 @@ export class Archive {
       const e = copy ? null : this.entryAt(c)
       // home: the selected files stand up out of the field while the lens is open
       const raised = this.briefLift(k) * Math.max(0, this.wide.value)
-      const y = BASE_Y + field(c.row, c.lane, fs) * calm + lifted + raised + (this.hovers.get(k) || 0)
+      const y = BASE_Y + field(c.row, c.lane, fs) * calm + lifted + raised + (this.hovers.get(k) || 0) - (lab?.drop && !isSel ? lab.drop(c.row - this.sel.row, c.lane - this.sel.lane) : 0)
       // tops of the drives the selected one could sweep when it turns (same lane, ±4 rows), and every
       // drive's box, for the clearance check
       this.tops[i] = !isSel && c.lane === this.sel.lane && Math.abs(c.row - this.sel.row) <= 4 ? y + CARD.H : -Infinity
@@ -774,6 +779,8 @@ export class Archive {
         if (this.briefKeys.has(k)) { lamp += (LOOK.briefLamp - lamp) * w; shade += (1 - shade) * w }
         else lamp *= 1 - SHELF_K.quiet * w
       }
+      // lab: one hero at a time: the other records' light steps back; a drive the reader has just let go of clears back slowly
+      if (lab?.quiet && !isSel) lamp *= 1 - lab.quiet
       const px = (c.lane - 2) * CS - trackX, pz = (c.row - 15.5) * RS + this.rail.value
       let tiltK = 1, clearI = 0
       // the drive whose list item is pointed at carries the key light: its circuit runs bright (no lantern)
@@ -785,6 +792,7 @@ export class Archive {
         tiltK = 1 - w; clearI = w
         this.briefAt[si].set(px, y, pz)
       }
+      { const lc = lab?.clearCells?.get(k); if (lc !== undefined && !isSel) clearI = Math.max(clearI, lc) }
       S.set(i, px, y, pz, slope(c.row, c.lane, fs) * calm * TILT * (1 - smooth(lifted / 0.4)) * tiltK,
         e && (isPlain(this.shown, e) || e.kind === 'restricted') ? RECORD_CELL0 + ENTRY_INDEX.get(e.id)! : cipherCell(c),
         this.ledOf(e), hidden, Math.max(this.fieldGlow(e, r), LOOK.briefEtch * clearI * (1 + 2.6 * pointed)), e?.kind === 'restricted', ledKind(e), shade, Math.max(this.fieldGlow(e, r), LOOK.briefEtch * clearI * (1 + 2.6 * pointed)), clearI, lamp, formOf(e))
@@ -794,10 +802,11 @@ export class Archive {
     const L = this.light
     L.glow = approach(L.glow, L.glowTarget, this.reduced ? 60 : 3, dt)
     // through the door the circuit stays lit and the die comes up as the camera arrives on it
-    this.hero.setLight(L.reveal, D ? Math.max(L.glow, 1.0) : L.glow, D ? Math.max(L.die, D.die * 0.85) : L.die, t)
+    if (lab?.light) this.hero.setLight(lab.light.reveal, lab.light.glow, lab.light.die, t)
+    else this.hero.setLight(L.reveal, D ? Math.max(L.glow, 1.0) : L.glow, D ? Math.max(L.die, D.die * 0.85) : L.die, t)
     this.hero.setLabel(this.detail < 0.5)
     // a selected drive under the selection opens up on home like the other three
-    this.hero.setClear(Math.max(smooth(Math.min(1, this.detail * 1.25)), this.briefKeys.has(cellKey(this.sel)) ? smooth(Math.min(1, Math.max(0, this.wide.value))) : 0))
+    if (lab?.clear !== undefined) this.hero.setClear(lab.clear); else this.hero.setClear(Math.max(smooth(Math.min(1, this.detail * 1.25)), this.briefKeys.has(cellKey(this.sel)) ? smooth(Math.min(1, Math.max(0, this.wide.value))) : 0))
     // through the door, the cover lifts away first (the enclosure opens to the secure element)
     this.hero.setCover(D ? smooth(Math.min(1, D.stand * 1.3)) : 0)
     this.shake *= Math.exp(-dt * 6)
@@ -812,7 +821,7 @@ export class Archive {
       const far = this.spotAt.distanceTo(this.tmp)
       this.slotFade = approach(this.slotFade, far > 0.8 ? 0 : 1, this.reduced ? 60 : far > 0.8 ? 9 : 3.5, dt)
       if (this.slotFade < 0.02 || far <= 0.8) this.spotAt.lerp(this.tmp, this.slotFade < 0.02 ? 1 : 1 - Math.exp(-dt * 12))
-      const s = this.spotAt, on = (1 - this.detail) * (this.mode === 'entry' || sweeping ? 0 : 1) * this.slotFade * (1 - Math.min(1, Math.max(0, this.wide.value)))
+      const s = this.spotAt, on = (1 - this.detail) * (this.mode === 'entry' || sweeping ? 0 : 1) * this.slotFade * (1 - Math.min(1, Math.max(0, this.wide.value))) * (lab?.slot ?? 1)
       // the black drive is lit by its own dark register, not by a warm slot that would mirror in its coat
       S.setSlotLight(s.x, s.y, s.z, RS * 0.5, (this.selected?.kind === 'restricted' ? 0 : 16 * LOOK.slot) * on, 4.6 * formOf(this.selected).sx)
     }
@@ -822,8 +831,16 @@ export class Archive {
     for (let i = 0; i < S.N; i++) if (this.tops[i] > top) top = this.tops[i]
     const gap = this.heroGroup.position.y - top
     const turn = Math.min(smooth(this.face), Math.max(0, Math.min(1, (gap - 0.12) / 0.5)))
-    this.heroGroup.rotation.set(slope(this.sel.row, this.sel.lane, fs) * TILT * (1 - this.detail) * (1 - smooth(this.lift.value / 0.4)), Math.sin(t * 38) * this.shake * 0.05 + FACE_YAW * 0.82 * turn * (1 - (D ? D.stand : 0)), 0)
+    this.heroGroup.rotation.set(slope(this.sel.row, this.sel.lane, fs) * TILT * (1 - this.detail) * (1 - smooth(this.lift.value / 0.4)) + (lab?.tilt ?? 0), Math.sin(t * 38) * this.shake * 0.05 + FACE_YAW * 0.82 * (lab?.face ?? turn) * (1 - (D ? D.stand : 0)), 0)
 
+    // lab: the director holds the drive itself: its centre and its turn (yaw, then the tilt, then the roll about its face)
+    if (lab?.pose) {
+      const P = lab.pose, g = this.heroGroup
+      g.rotation.order = 'YXZ'; g.rotation.set(P.tilt, P.yaw, P.roll)
+      g.updateMatrix()
+      const half = new THREE.Vector3(0, CARD.H / 2, 0).applyEuler(g.rotation)
+      g.position.set(P.c[0], P.c[1], P.c[2]).sub(half)
+    } else this.heroGroup.rotation.order = 'XYZ'
     if (this.mode === 'opening' || this.mode === 'closing') this.measureClearance()
     this.face = approach(this.face, this.faceTarget, this.reduced ? 60 : this.faceTarget ? 4.2 : 6.5, dt)
     this.focus.value = approach(this.focus.value, this.focus.target, this.reduced ? 60 : this.focus.target ? 3 : 4.5, dt)
@@ -865,6 +882,8 @@ export class Archive {
         }
       }
     }
+    // lab: phone keyframes are sharp everywhere (no depth of field on a phone, §9)
+    if (lab?.sharp) S.setFocus(0.5, 0.5, 9, 9, 0)
     S.setBloom(this.reduced ? 0 : 0.95 * this.bloom.value)
     // camera
     const detailTarget = this.opening || this.holdHigh ? smooth((this.lift.value - 0.8) / 2.4) : smooth((this.lift.value - 0.4) / 3.65)
@@ -908,11 +927,18 @@ export class Archive {
       aim.lerp(new THREE.Vector3(hp.x, hp.y + CARD.H / 2, hp.z), D.stand).lerp(new THREE.Vector3(hp.x + DIE_ON_FACE.x, hp.y + DIE_ON_FACE.y, hp.z + BOARD_Z), D.die)
       distanceD = doorDistance(distance, D.dolly); spanB = doorSpan(spanB, distance, distanceD, D.lens)
     }
+    // lab (phone keyframes): window.__camOv = { yaw, elev (deg), span, dist, aim: [x, y, z] | 'sel', dy } overrides the camera
+    const ov = (window as unknown as { __camOv?: { yaw: number; elev: number; span: number; dist?: number; aim?: number[] | 'sel'; dy?: number } }).__camOv
+    if (ov) {
+      yawB = THREE.MathUtils.degToRad(ov.yaw); elevB = THREE.MathUtils.degToRad(ov.elev); spanB = ov.span; distanceD = ov.dist ?? 140
+      if (ov.aim === 'sel') aim.copy(this.heroGroup.position).add(new THREE.Vector3(0, 1.85, 0)); else if (ov.aim) aim.set(ov.aim[0], ov.aim[1], ov.aim[2])
+      if (ov.dy) aim.y += ov.dy
+    }
     const dir = this.tmp2.set(-Math.sin(yawB) * Math.cos(elevB), Math.sin(elevB), Math.cos(yawB) * Math.cos(elevB))
-    const camPos = aim.clone().addScaledVector(d > 0.01 && !D ? viewDir : dir, distanceD)
+    const camPos = aim.clone().addScaledVector(d > 0.01 && !D && !ov ? viewDir : dir, distanceD)
     if (this.pointer.x > -2 && this.mode === 'archive') { camPos.x += this.pointer.x * 0.12; camPos.y -= this.pointer.y * 0.12 }
     // a cut jumps: no easing across it
-    const blend = this.reduced || sweeping || D ? 1 : 1 - Math.exp(-dt * RATES.camera)
+    const blend = this.reduced || sweeping || D || ov ? 1 : 1 - Math.exp(-dt * RATES.camera)
     S.camera.position.lerp(camPos, blend); this.camAim.lerp(aim, blend); S.camera.lookAt(this.camAim)
     S.camera.fov = THREE.MathUtils.lerp(S.camera.fov, THREE.MathUtils.radToDeg(2 * Math.atan(spanB / (2 * distanceD))), blend)
     {
@@ -924,6 +950,7 @@ export class Archive {
     const rd = S.camera.position.distanceTo(this.camAim), fog = S.scene.fog as THREE.Fog
     // (the look's fog offsets are for the archive view; close in on a drive they would swallow it)
     fog.near = rd + 8 - 9 * d + LOOK.fogNear * (1 - d); fog.far = rd + 46 - 34 * d + LOOK.fogFar * (1 - d)
+    if (lab?.fog) { fog.near = lab.fog[0]; fog.far = lab.fog[1] }
     S.camera.updateProjectionMatrix()
 
     // the cut: this is the exterior's last frame (drawn below); the interior takes the canvas from the next

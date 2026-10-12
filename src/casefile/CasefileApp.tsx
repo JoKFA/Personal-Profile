@@ -100,6 +100,8 @@ export default function CasefileApp() {
     a.veil = veilRef.current
     setArchive(a)
     ;(window as unknown as { __cf: Archive }).__cf = a
+    // lab: the phone prototype's director (?phone)
+    if (window.location.search.includes('phone')) void import('./phone/lab').then((m) => m.install())
     // if the scene cannot finish preparing (context loss, driver error) fall back to the readable
     // index instead of leaving the entry waiting on its title frame
     void a.ready.then(() => { if (!dead) setSceneReady(true) }, () => { if (!dead) { setNoGL(true); setSceneReady(true) } })

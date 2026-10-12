@@ -24,7 +24,8 @@ const apiOrigin = process.env.API_ORIGIN || 'https://yaotingw.com'
 export default defineConfig({
   plugins: [react()],
   // Honor PORT env var so launchers (Claude preview, Vercel-style) can pin the dev server.
-  server: process.env.PORT ? { port: Number(process.env.PORT), strictPort: true } : undefined,
+  // (a worktree's node_modules is a junction to the main checkout's: let the dev server read it)
+  server: { ...(process.env.PORT ? { port: Number(process.env.PORT), strictPort: true } : {}), fs: { allow: ['.', '../../node_modules'] } },
   preview: { headers: siteHeaders, proxy: { '/api': { target: apiOrigin, changeOrigin: true } } },
   define: {
     __BUILD_COMMIT__: JSON.stringify(buildCommit),

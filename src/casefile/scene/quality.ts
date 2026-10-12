@@ -10,7 +10,9 @@ export const TIERS: Record<Quality['name'], Quality> = {
 
 export function initialQuality(search = location.search, coarse = matchMedia('(pointer: coarse)').matches): Quality {
   const forced = new URLSearchParams(search).get('quality') as Quality['name'] | null
-  if (forced && TIERS[forced]) return TIERS[forced]
+  // lab: ?dpr=3 renders at that pixel ratio (phone keyframes)
+  const dpr = Number(new URLSearchParams(search).get('dpr'))
+  if (forced && TIERS[forced]) return dpr ? { ...TIERS[forced], dpr } : TIERS[forced]
   return coarse ? TIERS.medium : TIERS.high
 }
 
