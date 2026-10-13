@@ -1,20 +1,18 @@
 // An opened drive (spec D6). As in the reference, the drive itself is the exhibit: it turns to the
 // reader and the project's demo is projected onto its face; the right column holds the file.
 // The page arrives as its own ciphertext and is decrypted block by block (ui/cipher.ts); closing encrypts it again.
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
-import { CAPABILITIES } from '../data/capabilities'
-import { CERTIFICATIONS, CONTACT, ENTRIES, entryById, shortName } from '../data/entries'
-import { EDUCATION_ENTRIES } from '../data/education'
-import { CHAPTERS, HEADLINE, KEY_NUMBERS, PRINCIPLES, SELECTED, type Chapter } from '../data/story'
-import { DRAWERS, roleById } from '../data/roles'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { ENTRIES, entryById } from '../data/entries'
+import { SELECTED } from '../data/story'
 import { KIND_NAME, type Entry } from '../data/types'
 import { Demo } from './demos'
+import { DesktopDemoCtx } from './demos/DesktopDemoCtx'
 import { useCtx, useSnapshot } from './context'
 import { wipe, WIPE_PASSES } from './effects'
 import '../styles/subject.css'
 import { quadMatrix } from './project'
 import { SpaceExhibit } from './SpaceExhibit'
-import { PrivacyStat } from './PrivacyStat'
+import { FileBody, FileHead } from './file/FileBody'
 import gsap from 'gsap'
 import { checkText, cipherFace, cipherText, type FaceRun, type TextRun } from './cipher'
 
@@ -33,9 +31,6 @@ function nextFile(e: Entry): Entry | null {
   const i = list.findIndex((x) => x.id === e.id)
   return list.length > 1 && i >= 0 ? list[(i + 1) % list.length] : null
 }
-/** Facts carry what the numbers do not: a fact that repeats one of the file's numbers is left out. */
-const factsOf = (e: Entry) => e.facts.filter(([, v]) => !e.numbers?.some(([n]) => v.includes(n)))
-type Tab = { id: string; label: string; body: ReactNode }
 
 /** what the cipher covers: the column's text, and the drive's face (not on a phone, where the face stays still) */
 function sealParts(r: HTMLElement) {
@@ -52,7 +47,6 @@ export function FileView({ entry: e }: { entry: Entry }) {
   const narrow = typeof innerWidth !== 'undefined' && innerWidth < 900
   const heading = e.kind === 'service' ? e.org! : archive.isLocked(e) ? 'X-000 · Restricted' : e.title
   const goTo = (id: string) => { const r = entryById.get(id); void close({ to: r && r.kind !== 'subject' && r.kind !== 'visitor' ? `/projects/${r.slug}` : '/' }) }
-  const tabs = tabsFor(e, visitor.id, audit, goTo, snap.risk)
   const next = e.kind === 'visitor' || e.kind === 'subject' ? null : nextFile(e)
 
   // project the demo onto the drive's face every frame (desktop)
@@ -223,7 +217,6 @@ export function FileView({ entry: e }: { entry: Entry }) {
     await new Promise((res) => setTimeout(res, reduced ? 0 : 650))
     void close({ shred: true })
   }
-  const drawer = DRAWERS[e.slot.lane]
   void snap
 
   return (
@@ -238,7 +231,7 @@ export function FileView({ entry: e }: { entry: Entry }) {
       {e.demo && (
         <div className="file-stage-wrap">
           <div ref={stage} className="file-stage" style={{ width: STAGE.w, height: STAGE.h }}>
-            <Demo kind={e.demo} entry={e} jump={goTo} />
+            <DesktopDemoCtx><Demo kind={e.demo} entry={e} jump={goTo} /></DesktopDemoCtx>
           </div>
         </div>
       )}
@@ -256,136 +249,13 @@ export function FileView({ entry: e }: { entry: Entry }) {
             {shredStep === 3 && <code className="sb-key">key 0x{'00'.repeat(16)}</code>}
           </div>
         )}
-        <div className="file-eyebrow lbl"><span>File {e.id} · Drawer {String(e.slot.lane + 1).padStart(2, '0')} · {drawer.name}</span></div>
-        <h1>{heading}</h1>
-        <div className="file-verify lbl" aria-live="polite"><i /><span /></div>
-        <div className="file-kicker" data-redact>{e.kind === 'service' ? `${e.title} · ${e.dates} · ${e.place}` : e.kind === 'education' ? `${e.org} · ${e.dates} · ${e.place}` : e.kicker}</div>
-        {e.era && <div className="file-era lbl" data-redact>{e.era}</div>}
-        {e.kind === 'subject' && (
-          <ul className="file-creds" aria-label="Certifications">
-            {([['Cisco', 'CCNA'], ['CompTIA', 'Security+']] as const).map(([org, name]) => (
-              <li key={name}>
-                <svg viewBox="0 0 36 36" aria-hidden="true"><circle cx="18" cy="18" r="16" /><path d="M10.5 18.5l5 5 10-11" /><circle className="dot" cx="31" cy="7" r="2.2" /></svg>
-                <span><b data-redact>{name}</b><span className="lbl" data-redact>{org} · certified</span></span>
-              </li>
-            ))}
-          </ul>
-        )}
-        {e.kind === 'subject' && cut && <SpaceExhibit jump={goTo} />}
-        <p className="file-sum" data-redact>{e.kind === 'subject' ? HEADLINE : e.summary}</p>
-        {factsOf(e).length > 0 && (
-          <dl className="file-facts">{factsOf(e).map(([k, v]) => <div key={k}><dt className="lbl">{k}</dt><dd data-redact>{v}</dd></div>)}</dl>
-        )}
-        <div className="file-tabs" role="tablist">
-          {tabs.map((t, i) => <button key={t.id} role="tab" aria-selected={tab === i} onClick={(ev) => { setTab(i); if (narrow) ev.currentTarget.parentElement?.scrollIntoView({ behavior: reduced ? 'auto' : 'smooth', block: 'start' }) }}><small>{String(i + 1).padStart(2, '0')}</small>{t.label}</button>)}
-        </div>
-        <div className="file-tab" role="tabpanel" key={tab}>{tabs[tab].body}</div>
-        <div className="file-act">
-          {e.link && <a className="file-cta" href={e.link.href} target={e.link.href.startsWith('http') ? '_blank' : undefined} rel="noopener"><span>{e.link.label}</span><span aria-hidden="true">↗</span></a>}
-          {e.related?.map((id) => { const r = entryById.get(id)!; return <button key={id} className="file-rel" onClick={() => goTo(id)}><span className="lbl">{r.id}</span>{r.kind === 'service' ? r.org : r.title}</button> })}
-        </div>
-        {e.kind === 'subject' && cut && <SpaceExhibit jump={goTo} part="index" />}
+        <FileHead entry={e} heading={heading} verify />
+        <FileBody entry={e} layout="tabs" onJump={goTo} session={{ visitor: visitor.id, risk: snap.risk, audit }}
+          tab={tab} onTab={(i, ev) => { setTab(i); if (narrow) ev.currentTarget.parentElement?.scrollIntoView({ behavior: reduced ? 'auto' : 'smooth', block: 'start' }) }}
+          exhibit={e.kind === 'subject' && cut ? <SpaceExhibit jump={goTo} /> : null}
+          exhibitIndex={e.kind === 'subject' && cut ? <SpaceExhibit jump={goTo} part="index" /> : null} />
       </article>
 
     </div>
-  )
-}
-
-function Numbers({ list }: { list: [string, string][] }) {
-  return <div className="nums">{list.map(([n, l]) => <div key={l}><b data-redact>{n}</b><span className="lbl">{l}</span></div>)}</div>
-}
-function Sections({ e }: { e: Entry }) {
-  return <>{e.sections?.map((s) => (
-    <section key={s.title} className="chap">
-      <div className="lbl chap-e">{s.eyebrow}</div>
-      <h3 data-redact>{s.title}</h3>
-      <p data-redact>{s.body}</p>
-      {s.points && <ul>{s.points.map((p) => <li key={p} data-redact>{p}</li>)}</ul>}
-      {s.note && <p className="chap-note" data-redact>{s.note}</p>}
-    </section>
-  ))}</>
-}
-/** What this site does with the visitor, each line checkable. */
-function Session({ visitor, risk }: { visitor: string; risk: number }) {
-  return (
-    <dl className="session">
-      <div><dt className="lbl">Your number</dt><dd><b data-redact>{visitor}</b><span data-redact>A hash of what your browser told this page. Every file you open is watermarked with it; it never leaves your browser.</span></dd></div>
-      <div><dt className="lbl">Behaviour analytics</dt><dd><b data-redact>Risk {String(risk).padStart(2, '0')}</b><span data-redact>How suspicious this session looks (UEBA). Denied drives and rapid scanning raise it; it cools down on its own.</span></dd></div>
-      <div><dt className="lbl">Third parties</dt><dd><PrivacyStat /><span data-redact>Counted live in this page.</span></dd></div>
-      <div><dt className="lbl">Your file</dt><dd><span data-redact>Crypto-shred it (top right): three overwrite passes, then the key is zeroized. You can restore it from the archive.</span></dd></div>
-    </dl>
-  )
-}
-function Log({ id, visitor, audit }: { id: string; visitor: string; audit: [string, string][] }) {
-  // chain of custody: each entry commits to the previous one (FNV-1a, display only)
-  const fnv = (s: string) => { let h = 0x811c9dc5; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0 } return h.toString(16).padStart(8, '0') }
-  const rows: [string, string][] = [...audit.slice(-6), [new Date().toLocaleTimeString('en-GB'), `${visitor} reading ${id}`]]
-  let prev = '00000000'
-  return <div className="log"><div className="lbl">Chain of custody · each entry commits to the last</div>{rows.map(([t, s], i) => { const h = fnv(prev + t + s), line = <div key={i} className="log-row"><span>{t}</span><span data-redact>{s}</span><span className="h">{h} ← {prev}</span></div>; prev = h; return line })}</div>
-}
-
-function tabsFor(e: Entry, visitor: string, audit: [string, string][], jump: (id: string) => void, risk: number): Tab[] {
-  const log: Tab = { id: 'log', label: 'Access log', body: <Log id={e.id} visitor={visitor} audit={audit} /> }
-  if (e.kind === 'subject') return [
-    { id: 'story', label: 'Story', body: <div className="story-tab">
-      <div className="keynums">{KEY_NUMBERS.map(([n, l, why]) => <div key={l}><b data-redact>{n}</b><span className="lbl">{l}</span><p data-redact>{why}</p></div>)}</div>
-      {CHAPTERS.map((c) => <ChapterView key={c.title} c={c} jump={jump} />)}
-    </div> },
-
-    { id: 'how', label: 'How I work', body: <div className="principles">{PRINCIPLES.map((pr) => (
-      <section key={pr.title}><h3 data-redact>{pr.title}</h3><p data-redact>{pr.body}</p>
-        <div className="proof">{pr.proof.map((id) => { const r = entryById.get(id)!; return <button key={id} onClick={() => jump(id)}><span className="lbl">{id}</span>{r.kind === 'service' ? r.org : r.title}</button> })}</div></section>
-    ))}</div> },
-    { id: 'fit', label: 'Where I fit', body: <div className="caps">{CAPABILITIES.map((c) => (
-      <div key={c.role} className="cap"><div className="cap-h"><b data-redact>{roleById(c.role).name}</b><span className="lbl">{roleById(c.role).seats}</span></div>
-        <p data-redact>{roleById(c.role).fit}</p>
-        {c.skills.map(([sk, ev]) => <div key={sk} className="cap-row"><span data-redact>{sk}</span><span>{ev.map((id) => <button key={id} onClick={() => jump(id)} title={id}>{shortName(id)}</button>)}</span></div>)}
-      </div>))}
-      <div className="cap"><div className="cap-h"><b>Education & credentials</b></div>
-        {EDUCATION_ENTRIES.map((ed) => <div key={ed.id} className="cap-row"><span data-redact>{ed.title} · {ed.org}</span><span><button onClick={() => jump(ed.id)} title={ed.id}>{ed.dates}</button></span></div>)}
-        <p className="certs" data-redact>{CERTIFICATIONS.join(' · ')}</p></div>
-    </div> },
-    { id: 'contact', label: 'Contact', body: <nav className="chan">
-      <a href={`mailto:${CONTACT.email}`}><span className="lbl">Email</span><span>{CONTACT.email}</span><span aria-hidden="true">→</span></a>
-      <a href={CONTACT.linkedin} target="_blank" rel="noopener"><span className="lbl">LinkedIn</span><span>in/yaoting-wang</span><span aria-hidden="true">↗</span></a>
-      <a href={CONTACT.github} target="_blank" rel="noopener"><span className="lbl">GitHub</span><span>github.com/JoKFA</span><span aria-hidden="true">↗</span></a>
-      <a href={CONTACT.resume} target="_blank" rel="noopener"><span className="lbl">Résumé</span><span>PDF</span><span aria-hidden="true">↗</span></a>
-    </nav> },
-  ]
-  if (e.kind === 'service') return [
-    { id: 'ov', label: 'What I did', body: <>{e.numbers && <Numbers list={e.numbers} />}<Sections e={e} /></> },
-    { id: 'skills', label: 'Skills', body: <div className="stack">{e.stack?.map((s) => <span key={s}>{s}</span>)}</div> },
-  ]
-  if (e.kind === 'education') return [
-    { id: 'trains', label: 'What it trains', body: <Sections e={e} /> },
-    { id: 'courses', label: 'Courses', body: <div className="courses">{e.courses?.map((c) => (
-      <div key={c.code + c.title} className="course"><span className="lbl">{c.code}</span><b data-redact>{c.title}</b>
-        <span className="course-out"><span data-redact>{c.out}</span>{(c.ids?.length || c.href) && <span className="course-links">{c.ids?.map((id) => <button key={id} onClick={() => jump(id)}><em>{shortName(id)}</em></button>)}{c.href && <a href={c.href} target="_blank" rel="noopener noreferrer"><em>Source · GitHub ↗</em></a>}</span>}</span></div>
-    ))}</div> },
-  ]
-  // the visitor's own file: how this site treats them, in full; the access log lives only here
-  if (e.kind === 'visitor') return [{ id: 'session', label: 'This session', body: <Session visitor={visitor} risk={risk} /> }, log]
-  const out: Tab[] = [{ id: 'ov', label: 'Overview', body: <>{e.numbers && <Numbers list={e.numbers} />}{e.stack && <div className="stack">{e.stack.map((s) => <span key={s}>{s}</span>)}</div>}</> }]
-  if (e.sections?.length) out.push({ id: 'how', label: e.kind === 'restricted' ? 'Postmortem' : 'How it works', body: <Sections e={e} /> })
-  if (e.findings?.length) out.push({ id: 'ev', label: 'Evidence', body: <div className="fnd">{e.findings.map((f) => <div key={f.title} className={`f f-${f.severity}`}><span className="lbl">{f.severity} · {f.label}</span><h4 data-redact>{f.title}</h4><p data-redact>{f.detail}</p></div>)}</div> })
-  return out
-}
-
-/** A chapter: the key steps, the rest one click away. Each step names its file in words. */
-function ChapterView({ c, jump }: { c: Chapter; jump: (id: string) => void }) {
-  const [all, setAll] = useState(false)
-  const key = c.steps.filter((st) => st.key), rest = c.steps.filter((st) => !st.key)
-  const shown = all ? [...key, ...rest] : key
-  return (
-    <section className="chapter">
-      <div className="chapter-h"><span className="lbl">{c.years}</span><h3 data-redact>{c.title}</h3></div>
-      <p data-redact>{c.line}</p>
-      <ol>{shown.map((st) => { const r = entryById.get(st.id); return (
-        <li key={st.id}><button onClick={() => jump(st.id)} disabled={!r || r.kind === 'credential'}>
-          <span className="st-meta lbl">{st.year}<em>{shortName(st.id)}</em></span><span data-redact>{st.what}</span>
-        </button></li>
-      ) })}</ol>
-      {rest.length > 0 && <button className="chapter-more lbl" aria-expanded={all} onClick={() => setAll((v) => !v)}>{all ? 'Show less' : `+ ${rest.length} more`}</button>}
-    </section>
   )
 }

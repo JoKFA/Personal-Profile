@@ -1,9 +1,9 @@
 import { useEffect, useRef } from 'react'
-import { useCtx } from '../context'
+import { useDemo } from './ctx'
 
 /** Run an async script until unmount. `wait` resolves early (0 ms) under reduced motion. */
 export function useScript(script: (wait: (ms: number) => Promise<boolean>, reduced: boolean) => Promise<void>, deps: unknown[] = []) {
-  const { reduced } = useCtx()
+  const { reduced } = useDemo()
   const alive = useRef(true)
   useEffect(() => {
     alive.current = true

@@ -1,7 +1,7 @@
 // Timeline (projects without a bespoke demo) and the visitor print.
 import { useEffect, useRef, useState } from 'react'
 import type { DemoProps } from '.'
-import { useCtx } from '../context'
+import { useDemo } from './ctx'
 import { useScript } from './useLoop'
 
 export function Timeline({ entry }: DemoProps) {
@@ -18,7 +18,7 @@ export function Timeline({ entry }: DemoProps) {
 }
 
 export function VisitorPrint() {
-  const { visitor } = useCtx()
+  const { visitor } = useDemo()
   const cv = useRef<HTMLCanvasElement>(null)
   useEffect(() => {
     const c = cv.current!; const g = c.getContext('2d')!; c.width = 1200; c.height = 640
