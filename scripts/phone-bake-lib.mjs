@@ -65,7 +65,7 @@ export async function assertHardwareGpu(browser) {
  * One frame-exact page. `run(s)` gets: s.step() (one 40 ms frame), s.shot(file), s.settle(id), s.ph(fn, arg), s.sample() …
  * Every job gets its own page (and context), so an asset does not depend on what was rendered before it.
  */
-export async function session(browser, base, dpr, run, { warm = false, label = '' } = {}) {
+export async function session(browser, base, dpr, run, { warm = false, label = '', interior = false, exact = false } = {}) {
   const ctx = await browser.newContext({ viewport: { width: MASTER.w, height: MASTER.h }, deviceScaleFactor: dpr, bypassCSP: true })
   await ctx.addInitScript(() => { try { localStorage.setItem('yw.entry', '1'); localStorage.setItem('yw.hint', '1') } catch { /* */ } })
   await ctx.clock.install({ time: new Date('2026-10-10T14:02:00') })
@@ -85,6 +85,11 @@ export async function session(browser, base, dpr, run, { warm = false, label = '
   const until = async (cond, what, ms = 100) => { for (let t = 0; t < 120000; t += ms) { if (await p.evaluate(cond)) return; await p.clock.runFor(ms) } throw new Error('timed out: ' + what) }
   await until(() => !!window.__ph && !!window.__cf && window.__cf.getSnapshot().mode === 'archive', 'archive')
   await p.clock.runFor(1500)
+  // the interior is built on the archive's renderer before the frames are driven by hand (its build waits on real frames)
+  if (interior) await p.evaluate(() => window.__ph.spaceBoot())
+  // exact: the fake clock is PAUSED, so a frame is exactly 40 ms of the page's time. (Left running, Playwright's clock keeps flowing between calls:
+  // each "40 ms" step was 41-44 ms, and up to 50 ms when the machine was busy: the baked motion ran 3-25% fast and varied run to run.)
+  if (exact) await p.clock.pauseAt(new Date((await p.evaluate(() => Date.now())) + 2000))
   const api = {
     p, dpr,
     ph: (fn, arg) => p.evaluate(([f, a]) => window.__ph[f](a), [fn, arg]),
@@ -109,6 +114,8 @@ export async function session(browser, base, dpr, run, { warm = false, label = '
     },
     until,
     marks: () => p.evaluate(() => window.__ph.marks),
+    /** the interior's numbers for the frame just drawn (bake/interior.ts) */
+    ispace: () => p.evaluate(() => window.__ph.space.sample()),
     stops: () => p.evaluate(() => window.__ph.stops),
   }
   try {

@@ -2,6 +2,7 @@
 // clock says, hands the frame to whoever draws words over it (the HTML layer), and captures evidence
 // thumbnails from the live scene the moment a result exists. It also owns the way out: the intro
 // played backwards, so the archive resumes from exactly the frame the cut started on.
+import { LAB } from '../scene/lab'
 import type { Clock } from './clock'
 import type { Handoff, Space, SpaceFrame, SpaceLayout } from './scene'
 import { INTRO, introCompose } from './shots'
@@ -51,6 +52,8 @@ export function startRuntime(space: Space, clock: Clock, opts: { handoff: Handof
     if (document.hidden) { last = 0; return }
     const dt = last ? Math.min(0.05, (now - last) / 1000) : 0; last = now
     time += dt
+    // lab (the phone bake): the interior's own time is held at 0, like the archive's idle breathing, so a baked picture is still when nothing moves
+    const shownTime = LAB && window.__lab?.idle0 ? 0 : time
     if (layoutNext) { space.resize(layoutNext); layoutNext = null }
     if (out) {
       out.t += dt
@@ -59,11 +62,11 @@ export function startRuntime(space: Space, clock: Clock, opts: { handoff: Handof
       else if (out.phase === 'intro' && (out.t >= OUT_INTRO || opts.reduced)) { const done = out.done; out = null; dead = true; cancelAnimationFrame(raf); done(); return }
     } else clock.tick(dt)
     const f = frameOf()
-    space.update(f, dt, time); space.render()
+    space.update(f, dt, shownTime); space.render()
     // evidence: the thumbnail is the result's own framing of the live scene, drawn once, the frame after it exists
     if (pending.length && !out) {
       for (const a of pending.splice(0)) thumbs[a] = space.thumbnail(a)
-      space.update(f, 0, time); space.render()   // thumbnailing drew another view into the canvas: put this frame back
+      space.update(f, 0, shownTime); space.render()   // thumbnailing drew another view into the canvas: put this frame back
     }
     if (!firstShot) { firstShot = true; const w = window as unknown as { __cfCaptureCut?: boolean; __cutInterior?: string }; if (w.__cfCaptureCut) w.__cutInterior = space.canvas.toDataURL('image/png') }
     cbs.forEach((cb) => cb(f))

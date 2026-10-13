@@ -17,6 +17,8 @@ import { DOOR, doorAt } from '../../scene/door'
 import type { LabHooks } from '../../scene/lab'
 import { ENTRIES } from '../../data/entries'
 import type { ShotState } from '../overlay'
+import type { Interior } from './interior'
+import type { Handoff } from '../../space/scene'
 
 declare global {
   interface Window {
@@ -59,8 +61,18 @@ export interface Sample {
 export interface Director {
   mode: Mode; stopId: string; t: number; k: number; ready: boolean; near: boolean
   open(): void; close(): void; stop(id: string): void
-  /** the engine's own door (beginOpen → the key's light → beginDoor), the director keeping its hands off the camera */
-  door(): void
+  /** the engine's own door (beginOpen → the key's light → beginDoor), the director keeping its hands off the camera.
+   *  With `interior`, the interior's runtime starts on the cut exactly as CasefileApp starts it (clock restarted, the tour from the top);
+   *  `ff` first runs the clock (without drawing) to a state of the tour. */
+  door(o?: { interior?: boolean; ff?: { until: 'intro' | 'arrive' | 'flight' | 'result' | 'done'; area?: number } }): void
+  /** after the archive has closed the file again (archive.close()): the director takes the camera from where the engine left it, back to the cover's framing */
+  retake(): void
+  /** what the exterior handed over at the cut */
+  handoff: Handoff | null
+  /** the interior, once spaceBoot() has built it (bake only) */
+  space: Interior | null
+  /** build the interior on the archive's renderer (as the desktop does under the entry) */
+  spaceBoot(): Promise<void>
   /** the door has reached its cut: the exterior's last frame has been drawn */
   doorCut: boolean
   sample(): Sample
@@ -103,7 +115,7 @@ export function install(opts: InstallOptions = {}) {
   const pts = (q: { x: number; y: number }[]) => q.map((p) => [p.x, p.y] as [number, number])
 
   const dir: Director = {
-    mode, stopId, t: 0, k: 0, marks, ready: false, near: false, doorCut: false,
+    mode, stopId, t: 0, k: 0, marks, ready: false, near: false, doorCut: false, handoff: null, space: null,
     stops: ENTRIES.filter((e) => e.kind !== 'skill' && e.kind !== 'credential').map((e) => ({ id: e.id, kind: e.kind })),
     stop(id: string) {
       const a = window.__cf!
@@ -125,7 +137,12 @@ export function install(opts: InstallOptions = {}) {
     // a tap before the drive has come to rest is kept, and honoured the moment it has
     open() { if (mode !== 'stop') return; if (!c0) { pending = true; mark('open (queued)'); return } pending = false; mode = 'opening'; t0 = now; sweepAt = -1; mark('open') },
     close() { if (mode !== 'open' && mode !== 'opening') return; mode = 'closing'; t0 = now; mark('close') },
-    door() {
+    async spaceBoot() {
+      if (dir.space) return
+      const m = await import('./interior'); const it = m.createInterior(); await it.boot(); dir.space = it
+    },
+    retake() { framed = false; dir.stop('YW-000') },
+    door(o = {}) {
       const a = window.__cf!
       mode = 'door'; stopId = 'YW-000'; dir.doorCut = false; mark('door')
       void (async () => {
@@ -134,14 +151,19 @@ export function install(opts: InstallOptions = {}) {
         await a.beginOpen()
         const read = a.runSweep(700)
         await new Promise((r) => setTimeout(r, 300))
-        await a.beginDoor().then(() => { dir.doorCut = true; mark('door cut') })
+        await a.beginDoor().then((h) => {
+          dir.handoff = h; dir.doorCut = true; mark('door cut')
+          // the interior takes the canvas from the next frame, as CasefileApp.openEntry starts it
+          if (o.interior && dir.space) { dir.space.restart(true); if (o.ff) dir.space.fastForward(o.ff.until, o.ff.area); dir.space.start(h) }
+        })
         await read
       })()
     },
     sample() {
       const a = window.__cf!
       let cam = camK.value
-      if (mode === 'door') { const d = (a as unknown as { door: { on: boolean; t: number } }).door; cam = d.on ? doorAt(Math.min(d.t, DOOR.end)).stand : dir.doorCut ? 1 : 0 }
+      // the door's own progress: running (forwards or back) = its stand; cut and inside = 1; before the cut and after the way back = 0
+      if (mode === 'door') { const d = (a as unknown as { door: { on: boolean; open: boolean; t: number } }).door; cam = d.on ? doorAt(Math.min(d.t, DOOR.end)).stand : d.open ? 1 : 0 }
       return { quad0: pts(a.faceQuad(0)), inner: pts(a.faceQuad(0.3)), quad: pts(a.faceQuad(0.5)), cam }
     },
   }

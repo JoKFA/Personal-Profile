@@ -1,5 +1,5 @@
 // The bake's input hash: sha256 over everything the baked pictures depend on (plan §2.3):
-//   src/casefile/data/*.ts, src/casefile/phone/bake/**, src/casefile/scene/**, src/casefile/motion/**
+//   src/casefile/data/*.ts, src/casefile/phone/bake/**, src/casefile/scene/**, src/casefile/motion/**, src/casefile/space/** (the interior, since P3c)
 // (tests excluded: editing a test must not demand a re-bake; line endings normalised: a CRLF checkout hashes the same)
 import crypto from 'node:crypto'
 import fs from 'node:fs'
@@ -10,6 +10,7 @@ export const INPUTS = [
   { dir: 'src/casefile/phone/bake', deep: true },
   { dir: 'src/casefile/scene', deep: true },
   { dir: 'src/casefile/motion', deep: true },
+  { dir: 'src/casefile/space', deep: true },   // the interior (P3c): its stations, camera, clock and runtime
 ]
 const isTest = (f) => /\.test\.[cm]?[jt]sx?$/.test(f)
 
