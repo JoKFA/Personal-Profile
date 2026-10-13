@@ -32,9 +32,10 @@ export function py(script, ...args) {
 }
 
 /** H.264, yuv420p, BT.709 tagged, faststart: the clip every browser here decodes */
-export function encodeClip(dir, out, { crf = 23, fps = FPS } = {}) {
+export function encodeClip(dir, out, { crf = 23, fps = FPS, width = 0 } = {}) {
+  // width: scale the frames to this many pixels across (0 = as rendered)
   ffmpeg('-framerate', String(fps), '-i', path.join(dir, 'f-%04d.png'),
-    '-vf', 'scale=out_color_matrix=bt709:out_range=tv,format=yuv420p', '-c:v', 'libx264', '-preset', 'slow', '-crf', String(crf),
+    '-vf', `${width ? `scale=${width}:-2:flags=lanczos:` : 'scale='}out_color_matrix=bt709:out_range=tv,format=yuv420p`, '-c:v', 'libx264', '-preset', 'slow', '-crf', String(crf),
     '-profile:v', 'high', '-level', '4.1', '-r', String(fps), '-g', String(fps),
     '-colorspace', 'bt709', '-color_primaries', 'bt709', '-color_trc', 'bt709', '-color_range', 'tv', '-movflags', '+faststart', out)
 }

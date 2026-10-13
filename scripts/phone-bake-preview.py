@@ -1,9 +1,12 @@
-# PM preview: the phone (a 390 x 664 browser viewport) simulated offline from the baked master frames.
-#   entrance -> cover -> pan to X-001 -> pan to SR-01 -> pan back to X-001 -> open X-001 (-> window)
-# The stage fit rules (plan section 2.1):
-#   stop scale s = min(vw / (reticleW / 0.62), (vh - 64 - 252) / (reticleH / 0.9)); the reticle's centre sits in the band 64 .. vh-252
-#   window scale = vw / 480, top-aligned; during open the transform moves from the stop's to the window's by the frame's camK
-#   pans: the transform glides from the first stop's to the second's with a smoothstep over the clip (an assumption: the plan does not say)
+# PM preview: the phone (a vw x vh browser viewport) simulated offline from the baked frames.
+#   entrance -> cover -> pan to X-001 -> pan to SR-01 -> pan back to X-001 -> open X-001 (window) -> close X-001
+# The stage fit rule (PM, 10-12):
+#   cover = max(vw / master.w, vh / master.h)            the master always covers the viewport
+#   fit   = min(vw * 0.62 / reticleW, bandH * 0.9 / reticleH)        band = 64 .. vh - panel; panel 252 (cover stop 168), 150 when vh < 600
+#   s     = max(cover, min(fit, 1.1))
+#   the reticle is centred in the band; taller than the band: its top sits at band top + 8; then the translation is clamped so the
+#   master still covers the viewport (tx in [vw - master.w * s, 0], ty in [vh - master.h * s, 0])
+#   window: s = vw / master.w, top-aligned; open / close: the transform moves by the frame's camK; pans: smoothstep of the clip's progress
 # usage: python phone-bake-preview.py <public/phone dir> <out dir> [vw vh]
 import sys, os, json, glob, subprocess, shutil
 import numpy as np
@@ -24,10 +27,17 @@ def decode(name, file):
 
 def stop_T(id):
     r = M['stops'][id]['reticle']; rw, rh = r['x1'] - r['x0'], r['y1'] - r['y0']
-    s = min(vw / (rw / 0.62), (vh - 64 - 252) / (rh / 0.9))
+    panel = 150 if vh < 600 else (168 if id == 'YW-000' else 252)
+    b0, b1 = 64, vh - panel; bh = b1 - b0
+    cover = max(vw / MW, vh / MH)
+    fit = min(vw * 0.62 / rw, bh * 0.9 / rh)
+    s = max(cover, min(fit, 1.1))
     cx, cy = (r['x0'] + r['x1']) / 2, (r['y0'] + r['y1']) / 2
-    band = (64 + (vh - 252)) / 2
-    return (s, vw / 2 - s * cx, band - s * cy)   # screen = s * master + offset
+    tx = vw / 2 - s * cx
+    ty = (b0 + b1) / 2 - s * cy
+    if rh * s > bh: ty = b0 + 8 - s * r['y0']
+    tx = min(0.0, max(vw - MW * s, tx)); ty = min(0.0, max(vh - MH * s, ty))
+    return (s, tx, ty)   # screen = s * master + (tx, ty)
 WIN_T = (vw / MW, 0.0, 0.0)
 lerp = lambda a, b, t: tuple(x + (y - x) * t for x, y in zip(a, b))
 smooth = lambda t: t * t * (3 - 2 * t)
@@ -76,6 +86,9 @@ add_hold(M['stops']['X-001']['still']['file'], T_x1, 20, 'X-001')
 o = M['open']['X-001']
 add_clip('open', o, lambda i, n: lerp(T_x1, WIN_T, o['cam'][i]), 'open X-001')
 add_hold(o['window']['file'], WIN_T, 30, 'window')
+c = M['close']['X-001']
+add_clip('close', c, lambda i, n: lerp(T_x1, WIN_T, c['cam'][i]), 'close X-001')
+add_hold(M['stops']['X-001']['still']['file'], T_x1, 20, 'X-001')
 
 # render
 seq = os.path.join(out, '_seq'); shutil.rmtree(seq, ignore_errors=True); os.makedirs(seq)

@@ -9,7 +9,7 @@
 //      Every job is its own page, so an asset does not depend on what was rendered before it.
 //   4. budget checks, then the checks in phone-bake-checks.mjs (clip ends vs stills, hard-cut scan).
 //
-// node scripts/phone-bake.mjs [--only=a,b] [--out=dir] [--work=dir] [--jobs=4] [--keep-frames] [--dev=http://host:port] [--no-build] [--evidence=dir] [--crf=23]
+// node scripts/phone-bake.mjs [--only=a,b] [--out=dir] [--work=dir] [--jobs=4] [--keep-frames] [--dev=http://host:port] [--no-build] [--evidence=dir] [--reuse]
 //   --only: asset names or prefixes (stop-X-001, pan-, open-X-001, entrance …): a partial bake goes to --out and leaves public/phone alone
 //   --dev: render from a running dev server instead of the snapshot (experiments only; the inputHash then is not the snapshot's)
 import fs from 'node:fs'
@@ -31,11 +31,15 @@ const WORK = path.resolve(arg('work', path.join(ROOT, '..', 'p3-bake-work')))
 const OUT = path.resolve(arg('out', PARTIAL ? path.join(WORK, 'out-partial') : path.join(WORK, 'out')))
 const JOBS = Number(arg('jobs', 4))
 const KEEP = !!arg('keep-frames', false)
-// H.264 quality: the reel's stops (and the entrance, pans, door) at CRF; the other Index entries' opens and closes at CRF_REST
-// (plan §7: "crf 24–26" is the lever when the repository budget is tight)
-const CRF = Number(arg('crf', 23)), CRF_REST = Number(arg('crf-rest', 26))
+// H.264 per asset class (PM decision 10-12): width in px across (the frames are rendered 960 wide), crf
+const ENCODE = {
+  entrance: { width: 720, crf: 26 },
+  pan: { width: 720, crf: 24 },
+  reel: { width: 960, crf: 24 },     // open / close of the reel's five stops
+  rest: { width: 720, crf: 28 },     // open / close of every other Index entry
+  door: { width: 960, crf: 23 },
+}
 const REUSE = !!arg('reuse', false)        // re-encode from frames (and stills) already in --work instead of rendering them again
-const OVER_BUDGET = !!arg('over-budget', false)   // publish although a budget check failed (the failure is still reported, and the exit code stays 1)
 const EVIDENCE = arg('evidence', '')
 const SNAP = path.join(ROOT, '..', 'p3-bake')
 const PORT = 4196
@@ -45,12 +49,18 @@ const PAN_FRAMES = 60          // 2.4 s
 const OPEN_FRAMES = 50         // 2.0 s
 const CLOSE_FRAMES = 60        // 2.4 s: the closing timeline, then the stop's springs coming to rest
 const BLEND = 6                // last frames blended into the destination's canonical still
-const ENTRANCE_FRAMES = 160    // 6.4 s: the push onto the cover is at 3.9 s and the drive lands (≈0.6% = the dpr floor) by ≈6.2 s
+const ENTRANCE_FRAMES = 160    // rendered 6.4 s; the clip is cut where the drive has come to rest (see ENTRANCE_CUT)
+const ENTRANCE_CUT = { threshold: 1.5, blend: 8 }   // PM: cut at the first frame within 1.5% of the cover still, blend the last 8 into it
 const STOP_CUE = 3.9           // s into the entrance: the prototype's stop:YW-000 cue
 const DOOR_MAX = 400
 
 const log = (...a) => console.log(new Date().toISOString().slice(11, 19), ...a)
-const crfFor = (name) => { const m = name.match(/^(?:open|close)-(.+)$/); return m && !REEL.includes(m[1]) ? CRF_REST : CRF }
+const encodeOf = (name) => {
+  if (name === 'entrance') return ENCODE.entrance
+  if (name.startsWith('pan-')) return ENCODE.pan
+  if (name.startsWith('door-')) return ENCODE.door
+  return REEL.includes(name.replace(/^(?:open|close)-/, '')) ? ENCODE.reel : ENCODE.rest
+}
 const wanted = (name) => !ONLY || ONLY.some((t) => name === t || name.startsWith(t))
 
 // ── 1. the snapshot ──
@@ -148,9 +158,18 @@ async function renderClip(name, frames, s, { n, blendTo, quads = false, stopWhen
 function finishClip(name, { count, q, cam, marks }, quads) {
   const tmp = path.join(WORK, 'tmp'); fs.mkdirSync(tmp, { recursive: true })
   const mp4 = path.join(tmp, `${name}.mp4`)
-  encodeClip(framesDir(name), mp4, { crf: crfFor(name) })
+  const enc = encodeOf(name)
+  let dir = framesDir(name), cut = null
+  if (name === 'entrance') {
+    // the frames stay as rendered; the cut and its blend go to a directory of their own (so --reuse starts from the same frames)
+    dir = framesDir('entrance-cut')
+    cut = JSON.parse(py(path.join(HERE, 'phone-bake-cut.py'), png('stop-YW-000.png'), framesDir(name), dir, String(ENTRANCE_CUT.threshold), String(ENTRANCE_CUT.blend), String(Math.round(STOP_CUE * FPS))))
+    if (cut.cut >= count - 6) throw new Error(`the entrance reaches ${ENTRANCE_CUT.threshold}% only at frame ${cut.cut} of ${count}: render a longer one`)
+    count = cut.frames
+  }
+  encodeClip(dir, mp4, { crf: enc.crf, width: enc.width })
   const a = hashed(OUT, name, 'mp4', mp4)
-  R.clip[name] = { ...a, w: MASTER.w * DPR_CLIP, h: MASTER.h * DPR_CLIP, frames: count, fps: FPS, crf: crfFor(name), marks, ...(quads ? { quads: q, cam } : {}) }
+  R.clip[name] = { ...a, w: enc.width, h: enc.width * 2, frames: count, fps: FPS, crf: enc.crf, marks, ...(cut ? { cut: { frame: cut.cut, residual: cut.residual, blend: ENTRANCE_CUT.blend } } : {}), ...(quads ? { quads: q, cam } : {}) }
 }
 
 const clipJob = (name, body, quads = false) => async () => {
@@ -165,7 +184,7 @@ const clipJob = (name, body, quads = false) => async () => {
     finishClip(name, res, quads)
     if (!KEEP) fs.rmSync(framesDir(name), { recursive: true, force: true })
   }
-  log(`clip ${name} ${R.clip[name].frames} frames, crf ${R.clip[name].crf}, ${(R.clip[name].bytes / 1024).toFixed(0)} KB (${((Date.now() - t) / 1000).toFixed(0)} s)`)
+  log(`clip ${name} ${R.clip[name].frames} frames, ${R.clip[name].w}px crf ${R.clip[name].crf}, ${(R.clip[name].bytes / 1024).toFixed(0)} KB (${((Date.now() - t) / 1000).toFixed(0)} s)`)
 }
 
 const panJob = (a, b) => clipJob(`pan-${a}-${b}`, async (s) => {
@@ -188,7 +207,7 @@ const entranceJob = () => clipJob('entrance', async (s) => {
   const r = await renderClip('entrance', async (i) => {
     if (!cued && i / FPS >= STOP_CUE - 1e-6) { cued = true; await s.stopCue('YW-000') }
     if (i > 0) await s.step()
-  }, s, { n: ENTRANCE_FRAMES, blendTo: png('stop-YW-000.png') })
+  }, s, { n: ENTRANCE_FRAMES })
   return { ...r, marks: await s.marks() }
 })
 const doorJob = () => clipJob('door-YW-000', async (s) => {
@@ -205,7 +224,7 @@ const doorJob = () => clipJob('door-YW-000', async (s) => {
 // ── main ──
 const t0 = Date.now()
 let preview = null
-const keep = { ok: false }, budgetFailed = []
+const keep = { ok: false }
 try {
   let base, headSha = 'dev', hash
   if (arg('dev', '')) { base = String(arg('dev')); hash = inputHash(ROOT).hash; log(`DEV render from ${base}: inputHash is the working tree's`) }
@@ -306,7 +325,7 @@ try {
   const failures = []
   if (!PARTIAL && total > 45 * 1048576) failures.push(`public/phone is ${(total / 1048576).toFixed(2)} MB > 45 MB`)
   if (first != null && first > 3 * 1048576) failures.push(`entrance + cover still + first pan is ${(first / 1048576).toFixed(2)} MB > 3 MB`)
-  if (failures.length) { console.error(`BUDGET FAILED: ${failures.join('; ')}`); if (!OVER_BUDGET) throw new Error(`BUDGET FAILED (output kept in ${OUT}): ${failures.join('; ')}`); budgetFailed.push(...failures) }
+  if (failures.length) throw new Error(`BUDGET FAILED (output kept in ${OUT}): ${failures.join('; ')}`)
 
   // ── checks (clip ends vs stills, hard-cut scan) ──
   const report = await runChecks(manifest, OUT, { evidence: EVIDENCE, work: path.join(WORK, 'check') })
@@ -319,8 +338,7 @@ try {
     for (const f of fs.readdirSync(OUT)) fs.copyFileSync(path.join(OUT, f), path.join(pub, f))
     log(`published ${files.length + 1} files to public/phone`)
   } else log(`partial bake kept in ${OUT} (public/phone untouched)`)
-  keep.ok = budgetFailed.length === 0
-  if (budgetFailed.length) console.error(`published over budget (--over-budget): ${budgetFailed.join('; ')}`)
+  keep.ok = true
   log(`done in ${((Date.now() - t0) / 60000).toFixed(1)} min`)
 } finally {
   stopPreview(preview)
