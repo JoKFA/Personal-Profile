@@ -4,6 +4,7 @@
 // At the end the visitor can skip a step and watch the same evidence get thrown out.
 // The fingerprints are real SHA-256 of sample bytes, computed in the browser.
 import { useEffect, useState } from 'react'
+import { useCore } from './ctx'
 import { useScript } from './useLoop'
 
 const BYTES = 'EXHIBIT-A (sample) · laptop disk · last access 00'
@@ -75,6 +76,7 @@ function Scene({ k, fp, broken }: { k: number; fp: { a: string; b: string }; bro
 }
 
 export function Custody() {
+  const core = useCore()
   const [fp, setFp] = useState({ a: '', b: '' })
   const [n, setN] = useState(-1)          // last step done
   const [view, setView] = useState<number | null>(null)
@@ -92,7 +94,7 @@ export function Custody() {
     <div className={`dm-panel case ${broken ? 'is-broken' : ''}`}>
       <div className="dm-head"><span>Case file · sample</span><span>Detect → preserve → examine → court</span></div>
       <div className="cc-body">
-        <div className="cc-scene">
+        <div className="cc-scene" {...core}>
           <span className="cc-step"><b>{String(k + 1).padStart(2, '0')}</b>{s.verb}</span>
           <div className="cc-art-wrap" key={`${k}-${broken}`}><Scene k={k} fp={fp} broken={broken} /></div>
           <p className="cc-line">{k === 4 && broken ? 'Skip one step, and the same evidence is thrown out.' : s.line}</p>

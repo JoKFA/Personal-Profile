@@ -3,6 +3,7 @@
 // traffic keeps flowing. Spread is a breadth-first search over the drawn graph, so the count is
 // the hosts in this diagram, nothing more. A lab replay: zones and hosts are illustrative.
 import { useMemo, useState } from 'react'
+import { useCore } from './ctx'
 import { useScript } from './useLoop'
 import { Roll } from './Roll'
 
@@ -36,6 +37,7 @@ function graph(mode: Mode) {
 const HOSTS = SITES.flatMap((s) => ZONES.flatMap((z) => Array.from({ length: z.n }, (_, i) => `${s.id}${z.z}${i}`)))
 
 export function Network() {
+  const core = useCore()
   const [mode, setMode] = useState<Mode>('flat')
   const [lv, setLv] = useState(-1)
   const [touched, setTouched] = useState(false)
@@ -62,7 +64,7 @@ export function Network() {
       <div className="dm-head"><span>Four sites · MPLS L3VPN · lab replay</span>
         <span className="seg"><button aria-pressed={mode === 'flat'} onClick={() => pick('flat')}>Flat</button><button aria-pressed={mode === 'seg'} onClick={() => pick('seg')}>Segmented</button></span></div>
       <div className="br-body">
-        <svg className="br-map" viewBox="0 0 460 300" role="img" aria-label={`Four-site network, ${mode === 'flat' ? 'flat' : 'segmented'}: ${count} of ${HOSTS.length} hosts reached`}>
+        <svg {...core} className="br-map" viewBox="0 0 460 300" role="img" aria-label={`Four-site network, ${mode === 'flat' ? 'flat' : 'segmented'}: ${count} of ${HOSTS.length} hosts reached`}>
           <g className="br-up">{SITES.map((s) => <path key={s.id} className={hit(`${s.id}f`) && hit('m') ? 'hot' : ''} d={`M${bus(s)},${s.y + 70} L${CLOUD.x},${CLOUD.y}`} />)}</g>
           <g className="br-ok">{SITES.filter((s) => s.id !== 'A').map((s) => (
             <path key={s.id} d={`M${dotX(s, 0)},${s.y + 44} H${bus(s)} V${s.y + 70} L${CLOUD.x},${CLOUD.y} L${bus(SITES[0])},78 H${dotX(SITES[0], 0)}`} />

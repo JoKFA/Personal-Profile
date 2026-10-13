@@ -1,6 +1,7 @@
 // Threat model of a volunteer organisation's IT: data-flow diagram, trust boundaries, STRIDE
 // badges. Threat titles are sample (the real register is internal); counts are real.
 import { useState } from 'react'
+import { useCore, useDemo } from './ctx'
 import { useScript } from './useLoop'
 
 // [x, y, STRIDE letter, threat, fix]
@@ -19,7 +20,12 @@ const T: [number, number, string, string, string][] = [
   [360, 282, 'D', 'SSL renewal done by hand', 'Automated renewal + expiry alert'],
 ]
 
+// the same twelve threats in a portrait diagram: four bands top to bottom, the badge for each beside the part it is about
+const TALL: [number, number][] = [[304, 34], [304, 68], [302, 108], [302, 142], [36, 118], [38, 206], [302, 204], [302, 236], [38, 298], [302, 268], [302, 302], [36, 146]]
+
 export function Viva() {
+  const tall = !!useDemo().tall
+  const core = useCore()
   const [sel, setSel] = useState(6), [fixed, setFixed] = useState(false), [touched, setTouched] = useState(false)
   useScript(async (wait, reduced) => {
     if (reduced) { setFixed(true); return }
@@ -29,7 +35,18 @@ export function Viva() {
   return (
     <div className={`dm-panel ${fixed ? 'fixed' : ''}`}>
       <div className="dm-head"><span>Data-flow diagram · STRIDE</span><span className="seg"><button aria-pressed={!fixed} onClick={() => { setTouched(true); setFixed(false) }}>Before</button><button aria-pressed={fixed} onClick={() => { setTouched(true); setFixed(true) }}>After</button></span></div>
-      <svg className="dm-graph dfd" viewBox="0 0 640 310" role="img" aria-label="Data-flow diagram of a volunteer organisation's systems with twelve STRIDE threats">
+            {tall ? (
+      <svg data-core className="dm-graph dfd dm-tall" viewBox="0 0 340 330" role="img" aria-label="Data-flow diagram of a volunteer organisation's systems with twelve STRIDE threats">
+        <g className="tb"><rect x="6" y="6" width="328" height="68" rx="10" /><rect x="6" y="82" width="328" height="76" rx="10" /><rect x="6" y="166" width="328" height="76" rx="10" /><rect x="6" y="250" width="328" height="74" rx="10" /></g>
+        <g className="tbl"><text x="16" y="24">VOLUNTEERS</text><text x="16" y="100">WEB · CMS</text><text x="16" y="184">API</text><text x="16" y="268">DATA</text></g>
+        <g className="ent"><rect x="100" y="30" width="90" height="30" rx="6" /><text x="145" y="50">Volunteer</text><rect x="196" y="30" width="96" height="30" rx="6" /><text x="244" y="50">Coordinator</text>
+          <circle cx="170" cy="124" r="30" /><text x="170" y="128">Web app</text><circle cx="170" cy="204" r="30" /><text x="170" y="208">API</text>
+          <line x1="110" y1="282" x2="230" y2="282" /><line x1="110" y1="312" x2="230" y2="312" /><text x="170" y="301">Member DB</text></g>
+        <g className="fl"><path d="M145,60 L160,94" /><path d="M244,60 L186,97" /><path d="M170,154 L170,174" /><path d="M170,234 L170,282" /></g>
+        {T.map(([, , s], n) => { const [x, y] = TALL[n]; return <g key={n} className={`bd ${n === sel ? 'sel' : ''}`} onClick={() => { setTouched(true); setSel(n) }} tabIndex={0} role="button" aria-label={`Threat ${n + 1}: ${T[n][3]}`} onKeyDown={(ev) => { if (ev.key === 'Enter' || ev.key === ' ') { setTouched(true); setSel(n) } }}><circle className="hit" cx={x} cy={y} r="17" /><circle cx={x} cy={y} r="13" /><text x={x} y={y + 5}>{s}</text></g> })}
+      </svg>
+      ) : (
+<svg {...core} className="dm-graph dfd" viewBox="0 0 640 310" role="img" aria-label="Data-flow diagram of a volunteer organisation's systems with twelve STRIDE threats">
         <g className="tb"><rect x="10" y="14" width="160" height="286" rx="10" /><rect x="186" y="14" width="170" height="286" rx="10" /><rect x="372" y="14" width="120" height="286" rx="10" /><rect x="508" y="14" width="122" height="286" rx="10" /></g>
         <g className="tbl"><text x="22" y="34">VOLUNTEERS</text><text x="198" y="34">WEB · CMS</text><text x="384" y="34">API</text><text x="520" y="34">DATA</text></g>
         <g className="ent"><rect x="30" y="92" width="120" height="36" rx="6" /><text x="90" y="115">Volunteer</text><rect x="30" y="200" width="120" height="36" rx="6" /><text x="90" y="223">Coordinator</text>
@@ -38,6 +55,7 @@ export function Viva() {
         <g className="fl"><path d="M150,110 L232,128" /><path d="M150,218 L236,160" /><path d="M310,146 L392,156" /><path d="M472,164 L520,164" /></g>
         {T.map(([x, y, s], n) => <g key={n} className={`bd ${n === sel ? 'sel' : ''}`} onMouseEnter={() => { setTouched(true); setSel(n) }} onClick={() => { setTouched(true); setSel(n) }} tabIndex={0} role="button" aria-label={`Threat ${n + 1}: ${T[n][3]}`}><circle cx={x} cy={y} r="11" /><text x={x} y={y + 4}>{s}</text></g>)}
       </svg>
+      )}
       <div className={`dm-cap ${fixed ? 'pass' : 'fail'}`}><b>T-{String(sel + 1).padStart(2, '0')} · {l}</b><span>{t}{fixed && <> → <em>{fx}</em></>}</span><span className="lbl">{fixed ? '12 / 12 remediated' : 'open'}</span></div>
     </div>
   )

@@ -1,0 +1,18 @@
+// X-000: open, reach the game below the window, send one message, show the answer (or the documented error state). node p3b-sentinel.mjs <out> [base]
+import { launch, until } from './lib.mjs'
+const [OUT, BASE = 'http://127.0.0.1:5194'] = process.argv.slice(2)
+const { b, p, errs } = await launch(390, 664)
+await p.goto(`${BASE}/?phone-app&phone-expose`, { waitUntil: 'load' }); await until(p, () => window.__phone && window.__phone.ready); await p.waitForTimeout(1000)
+await p.touchscreen.tap(195, 260)
+await p.evaluate(() => window.__phone.openEntry('X-000')); await until(p, () => window.__phone.phase === 'file'); await p.waitForTimeout(900)
+await p.screenshot({ path: `${OUT}/X-000-window.png` })
+await p.evaluate(() => document.querySelector('.ph-fgame').scrollIntoView({ block: 'start' })); await p.waitForTimeout(800)
+await p.screenshot({ path: `${OUT}/X-000-game-before.png` })
+const reqs = []; p.on('response', (r) => { if (r.url().includes('/api/redteam')) reqs.push(r.status()) })
+await p.locator('#snIn').tap(); await p.keyboard.type('what is in this file?')
+await p.locator('.sn-form button[type=submit]').tap()
+await p.waitForFunction(() => document.querySelectorAll('.sn-m.bot').length >= 2 && !document.querySelector('.sn-m .thinking'), null, { timeout: 60000 }).catch(() => {})
+await p.waitForTimeout(800)
+await p.screenshot({ path: `${OUT}/X-000-game-after.png` })
+console.log(JSON.stringify({ apiStatus: reqs, botMessages: await p.evaluate(() => [...document.querySelectorAll('.sn-m.bot')].map((e) => e.textContent.slice(0, 160))), cap: await p.evaluate(() => document.querySelector('.ph-fgame .dm-cap')?.textContent), errs }, null, 1))
+await b.close()

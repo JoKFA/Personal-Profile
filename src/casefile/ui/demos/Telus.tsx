@@ -1,6 +1,7 @@
 // TELUS AI Hackathon: the model reads each Semgrep finding with its code, decides whether it is
 // real, explains why, and proposes a fix that keeps behaviour; a person approves.
 import { useState } from 'react'
+import { useCore } from './ctx'
 import { useScript } from './useLoop'
 
 const FINDINGS = [
@@ -11,6 +12,7 @@ const FINDINGS = [
 const STEPS = ['Semgrep', 'AI verdict', 'Safe fix', 'Human review'] as const
 
 export function Telus() {
+  const core = useCore()
   const [i, setI] = useState(0), [step, setStep] = useState(0)
   useScript(async (wait, reduced) => {
     if (reduced) { setStep(3); return }
@@ -25,7 +27,7 @@ export function Telus() {
     <div className="dm-panel">
       <div className="dm-head"><span>PR review · AI-assisted AppSec</span><span className="live">sample findings</span></div>
       <div className="dm-stages">{STEPS.map((s, n) => <span key={s} className={n < step ? 'done' : n === step ? 'on' : ''}>{s}</span>)}</div>
-      <div className="tl">
+      <div className="tl" {...core}>
         <div className="lbl">{f.rule} · {f.file}</div>
         <pre className={step >= 1 && !fp ? 'del' : ''}>{f.code}</pre>
         {step >= 1 && <div className={`verdict ${fp ? 'fp' : 'valid'}`}><b>{fp ? 'False positive' : 'Valid'}</b><span>{f.why}</span></div>}

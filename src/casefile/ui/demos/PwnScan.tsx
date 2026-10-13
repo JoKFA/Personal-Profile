@@ -1,6 +1,7 @@
 // PwnScan: three discovery methods fill one inventory; then the CVE list re-sorts from CVSS to
 // CVSS × EPSS × exposure, and the order flips. Lab targets, simulated devices.
 import { useState } from 'react'
+import { useCore } from './ctx'
 import { useScript } from './useLoop'
 
 const DEVICES = [
@@ -20,6 +21,7 @@ const CVES = [
 const risk = (c: (typeof CVES)[number]) => Math.min(10, (c.cvss * c.epss * (c.iot / 100) * Math.sqrt(c.ports + 1)) / 10 * 10)
 
 export function PwnScan() {
+  const core = useCore()
   const [found, setFound] = useState(0), [phase, setPhase] = useState<'discover' | 'cvss' | 'risk'>('discover')
   useScript(async (wait, reduced) => {
     if (reduced) { setFound(4); setPhase('risk'); return }
@@ -35,12 +37,12 @@ export function PwnScan() {
     <div className="dm-panel">
       <div className="dm-head"><span>PwnScan · lab subnet 10.0.0.0/24</span><span className="live">lab targets</span></div>
       {phase === 'discover' ? (
-        <div className="pw-inv">
+        <div className="pw-inv" {...core}>
           <div className="pw-methods">{['ARP', 'mDNS', 'SSDP'].map((m) => <span key={m} className="lbl">{m}</span>)}</div>
           {DEVICES.slice(0, found).map((d) => <div key={d.ip} className="pw-dev"><b>{d.ip}</b><span>{d.name}</span><span className="lbl">{d.by.join(' + ')}</span><span className="iot">IoT {d.iot}</span></div>)}
         </div>
       ) : (
-        <div className="pw-rank">
+        <div className="pw-rank" {...core}>
           <div className="pw-h lbl"><span>device · finding</span><span>CVSS</span><span>EPSS</span><span>risk</span></div>
           {rows.map((c, n) => <div key={c.cve} className={`pw-row ${phase === 'risk' && n === 0 ? 'top' : ''}`} style={{ order: n }}><span><b>{c.dev}</b> {c.cve}</span><span>{c.cvss.toFixed(1)}</span><span>{c.epss.toFixed(2)}</span><span className="r">{phase === 'risk' ? risk(c).toFixed(2) : '—'}</span></div>)}
         </div>

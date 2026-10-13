@@ -5,6 +5,7 @@
 // views agree on one line, and it hits the secret. The key and its shares are a random sample made
 // on load; recovery runs real 2-of-3 Shamir over GF(256). The plot is drawn over the reals.
 import { useMemo, useState } from 'react'
+import { useCore } from './ctx'
 import { useScript } from './useLoop'
 
 // GF(256), AES polynomial 0x11b, generator 3
@@ -34,6 +35,7 @@ const TRUE = (Math.atan(SLOPE) * 180) / Math.PI
 const FAN = [-52, -36, -22, -10, 0, 12, 26, 40, 56]
 
 export function Quorum() {
+  const core = useCore()
   const [sel, setSel] = useState<number[]>([])
   const [touched, setTouched] = useState(false)
   const [final, setFinal] = useState(false)
@@ -67,7 +69,7 @@ export function Quorum() {
       <div className="dm-head"><span>CryptoLab · recovery key · sample 2-of-3</span><span className={open ? 'ok' : ''}>{open ? 'unlocked' : 'locked'}</span></div>
       <p className="qm-say" key={String(final) + open + sel.length}>{say}</p>
       <div className="qm-body">
-        <svg className="qm-plot" viewBox="0 0 360 236" aria-hidden="true">
+        <svg {...core} className="qm-plot" viewBox="0 0 360 236" aria-hidden="true">
           <defs><clipPath id="qm-clip"><rect x={X0} y="8" width="310" height="200" /></clipPath></defs>
           <path className="ax" d={`M${X0},8 V208 H354`} />
           <text className="ax-t" x={X0 - 8} y="14" textAnchor="end">key</text>

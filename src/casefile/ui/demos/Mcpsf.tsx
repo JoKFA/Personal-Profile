@@ -1,10 +1,13 @@
 // MCP Security Framework: one assessment replayed as a packet trace.
 import { useRef, useState } from 'react'
+import { useCore, useDemo } from './ctx'
 import { useScript } from './useLoop'
 
 const STAGES = ['Discover', 'Sandbox', 'Bridge', 'Probe', 'Report'] as const
 
 export function Mcpsf() {
+  const tall = !!useDemo().tall
+  const core = useCore()
   const [stage, setStage] = useState(0)
   const [cap, setCap] = useState<[string, string]>(['discover', 'damn-vulnerable-mcp / challenge 1 · python · sse'])
   const [hot, setHot] = useState({ sandbox: false, safe: false, tool: false, report: false })
@@ -38,6 +41,24 @@ export function Mcpsf() {
     <div className="dm-panel">
       <div className="dm-head"><span>Assessment run · packet trace</span><span className="live">replay</span></div>
       <div className="dm-stages">{STAGES.map((s, i) => <span key={s} className={i < stage ? 'done' : i === stage ? 'on' : ''}>{s}</span>)}</div>
+      {tall ? (
+      <svg className="dm-graph dm-tall" viewBox="0 0 340 372" role="img" aria-label="A detector probe passes a SafeAdapter into a sandboxed MCP server, finds exposed credentials, and the redacted evidence becomes a report">
+        <g className={`sbx ${hot.sandbox ? 'up' : ''}`}><rect x="10" y="160" width="320" height="204" rx="10" /><text x="24" y="182">SANDBOX · ISOLATED</text></g>
+        <path id="p1" className="ln" d="M95,58 V118 H110" />
+        <path id="p2" className="ln" d="M170,144 V196" />
+        <path id="p3" className="ln" d="M110,222 H44 V267 H70" />
+        <path className="ln" d="M44,267 V339" /><path className="ln" d="M44,303 H70" /><path className="ln" d="M44,339 H70" />
+        <path id="p4" className="ln" d="M200,92 V75 H255 V58" />
+        <g className="nd"><rect x="16" y="10" width="158" height="48" rx="8" /><text x="28" y="31">detector</text><text className="s" x="28" y="48">CE-001 · credentials</text></g>
+        <g className={`nd ${hot.report ? 'good' : ''}`}><rect x="190" y="10" width="134" height="48" rx="8" /><text x="202" y="31">report</text><text className="s" x="202" y="48">{hot.report ? 'CE-001 · HIGH' : 'awaiting…'}</text></g>
+        <g data-core className={`nd ${hot.safe ? 'good' : ''}`}><rect x="110" y="92" width="120" height="52" rx="8" /><text x="124" y="115">Safe</text><text x="124" y="132">Adapter</text></g>
+        <g className="nd"><rect x="110" y="196" width="120" height="52" rx="8" /><text x="122" y="218">MCP server</text><text className="s" x="122" y="236">sse → bridge</text></g>
+        <g className={`nd ${hot.tool ? 'hot' : ''}`}><rect x="70" y="252" width="200" height="30" rx="7" /><text x="84" y="272">read_resource</text></g>
+        <g className="nd"><rect x="70" y="288" width="200" height="30" rx="7" /><text x="84" y="308">delete_range</text></g>
+        <g className="nd"><rect x="70" y="324" width="200" height="30" rx="7" /><text x="84" y="344">generate_code</text></g>
+        <circle ref={pkt} className="pkt" r="6" cx="-20" cy="-20" />
+      </svg>
+      ) : (
       <svg className="dm-graph" viewBox="0 0 640 300" role="img" aria-label="A detector probe passes a SafeAdapter into a sandboxed MCP server, finds exposed credentials, and the redacted evidence becomes a report">
         <g className={`sbx ${hot.sandbox ? 'up' : ''}`}><rect x="352" y="14" width="274" height="272" rx="10" /><text x="366" y="36">SANDBOX · ISOLATED</text></g>
         <path id="p1" className="ln" d="M174,62 C200,62 196,150 214,150" />
@@ -46,7 +67,7 @@ export function Mcpsf() {
         <path className="ln" d="M472,150 L500,150" /><path className="ln" d="M472,150 C488,150 484,226 500,226" />
         <path id="p4" className="ln" d="M214,160 C196,160 196,238 174,238" />
         <g className="nd"><rect x="24" y="36" width="150" height="52" rx="8" /><text x="38" y="58">detector</text><text className="s" x="38" y="76">CE-001 · credentials</text></g>
-        <g className={`nd ${hot.safe ? 'good' : ''}`}><rect x="214" y="120" width="110" height="60" rx="8" /><text x="232" y="146">Safe</text><text x="232" y="162">Adapter</text></g>
+        <g {...core} className={`nd ${hot.safe ? 'good' : ''}`}><rect x="214" y="120" width="110" height="60" rx="8" /><text x="232" y="146">Safe</text><text x="232" y="162">Adapter</text></g>
         <g className="nd"><rect x="372" y="120" width="100" height="60" rx="8" /><text x="384" y="146">MCP server</text><text className="s" x="384" y="164">sse → bridge</text></g>
         <g className={`nd ${hot.tool ? 'hot' : ''}`}><rect x="500" y="54" width="112" height="40" rx="8" /><text x="512" y="78">read_resource</text></g>
         <g className="nd"><rect x="500" y="130" width="112" height="40" rx="8" /><text x="512" y="154">delete_range</text></g>
@@ -54,6 +75,7 @@ export function Mcpsf() {
         <g className={`nd ${hot.report ? 'good' : ''}`}><rect x="24" y="212" width="150" height="52" rx="8" /><text x="38" y="234">report</text><text className="s" x="38" y="252">{hot.report ? 'CE-001 · HIGH · 0.95' : 'awaiting findings…'}</text></g>
         <circle ref={pkt} className="pkt" r="6" cx="-20" cy="-20" />
       </svg>
+      )}
       <div className="dm-cap"><b>{cap[0]}</b><span>{cap[1]}</span></div>
     </div>
   )

@@ -1,19 +1,29 @@
 // The phone shell's controller: wires the stage, the page layer, the native scroll reel, the open/close shell and the URL.
 // Plain DOM + one animation loop; React only hosts it (PhoneApp.tsx). No three.js, no scene code, no CSS transitions for anything synced.
+import { entryById } from '../../data/entries'
 import { smooth } from '../../motion/waves'
+import { reconVisitor, type Visitor } from '../../visitor'
+import { Line } from '../cipherLine'
 import type { OpenShot, Pt as MPt, Rect, Shot } from '../manifest'
 import { closeKey, loadManifest, openKey, panKey, readFlags, stillKey, windowKey } from './assets'
+import { sampleAt } from './clock'
 import { stopCopy } from './copy'
+import type { FileView } from './file/fileview'
+import type { Bridge } from './file/FileParts'
 import { BAR, COMPACT_BELOW, lerpFit, panelSpec, rectOn, stopFit, toScreen, visibleRect, windowFit, type Fit } from './fit'
-import { OPEN_END, CLOSE_SPEED, PageLayer, buildPage, prepareFile, type PageFrame, type Phase, type Pt } from './page'
+import { OPEN_END, CLOSE_SPEED, PageLayer, buildPage, makePanel, prepareFile, type PageFrame, type Panel, type Phase, type Pt } from './page'
 import { sectionWant } from './reel'
-import { idFromPath, pathOfId, pushFile, pushedByUs, toBrowse } from './route'
+import { PUSHED, idFromPath, pathOfId, pushFile, pushedByUs, toBrowse } from './route'
 import { Stage } from './stage/stage'
 
 /** the crossfade that stands in for a pan (no clip, or not buffered in time), seconds */
 export const FADE_PAN = 0.9
 /** the crossfade that stands in for an open or a close: [start, length] inside the clip's own duration */
 const FADE_SHOT: [number, number] = [0.45, 1.0]
+/** an entry's stop picture replacing another (a related-file jump, an entry opened from elsewhere): the 120 ms rule */
+const FADE_STOP = 0.12
+/** the close that hands over to another file runs this much faster (plan 2.6) */
+const JUMP_RATE = 1.5
 const RISE_S = 0.4
 /** a cold link to a file waits this long for its open clip before cross-fading instead */
 const COLD_WAIT_MS = 1500
@@ -22,6 +32,9 @@ export interface PhoneHandle { dispose(): void }
 
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v))
 const corners = (r: Rect): Pt[] => [{ x: r.x0, y: r.y0 }, { x: r.x1, y: r.y0 }, { x: r.x1, y: r.y1 }, { x: r.x0, y: r.y1 }]
+const lerpPt = (a: MPt, b: MPt, k: number): MPt => ({ x: a.x + (b.x - a.x) * k, y: a.y + (b.y - a.y) * k })
+/** the face's four corners at a fractional clip frame: linear between the two frames around it (the page layer leads the picture by half a frame) */
+const quadAt = (quads: MPt[][], pos: number): MPt[] => { const i = clamp(Math.floor(pos), 0, quads.length - 1), j = Math.min(quads.length - 1, i + 1), f = clamp(pos - i, 0, 1); return quads[i].map((p, n) => lerpPt(p, quads[j][n], f)) }
 const lerpRect = (a: Rect, b: Rect, k: number): Rect => ({ x0: a.x0 + (b.x0 - a.x0) * k, y0: a.y0 + (b.y0 - a.y0) * k, x1: a.x1 + (b.x1 - a.x1) * k, y1: a.y1 + (b.y1 - a.y1) * k })
 
 /** `cancelled`: asked once the manifest is in; a start that was cancelled meanwhile (React StrictMode's first effect in dev) builds nothing */
@@ -64,9 +77,21 @@ export async function startPhone(host: HTMLElement, cancelled: () => boolean = (
   let progTo: number | null = null
   let buttonClose = false
   let flow = 0
+  const views = new Map<string, Promise<FileView>>()
+  /** the entry whose file is opening, open or closing (any of the 19 stops, on the reel or not) */
+  let openId: string | null = null
+  /** where a file was opened from: the page's scroll position and the element to hand the focus back to */
+  let origin: { y: number; opener: HTMLElement | null } = { y: 0, opener: null }
+  /** a close was asked for while the file was still opening */
+  let closeAfterOpen: boolean | null = null
+  const fitCache = new Map<string, Fit>()
 
   const stopOf = (i: number) => m.stops[reel[i]]
   const rest = (i: number) => visibleRect(rectOn(fits[i], stopOf(i).reticle), view, tops[i], panels[i])
+  /** the stop being shown: the file's entry while one is open, else the reel's */
+  const stopId = () => openId ?? reel[at]
+  const fitOf = (id: string): Fit => { const i = reel.indexOf(id); if (i >= 0) return fits[i]; let f = fitCache.get(id); if (!f) { f = stopFit(view, m.master, m.stops[id].reticle, L.barH, L.panelS); fitCache.set(id, f) } return f }
+  const restOf = (id: string): Rect => { const i = reel.indexOf(id); return i >= 0 ? rest(i) : visibleRect(rectOn(fitOf(id), m.stops[id].reticle), view, L.barH, L.panelS) }
 
   // ── layout: the fit for every stop on this screen (plan §2.1) ──
   function layout() {
@@ -91,6 +116,8 @@ export async function startPhone(host: HTMLElement, cancelled: () => boolean = (
     tops = reel.map((_, i) => (i === 0 ? L.coverTop : L.barH)); panels = reel.map((_, i) => (i === 0 ? L.panelC : L.panelS))
     fits = reel.map((id, i) => stopFit(view, m.master, m.stops[id].reticle, tops[i], panels[i]))
     winFit = windowFit(view, m.master)
+    fitCache.clear()
+    for (const v of views.values()) void v.then((x) => x.relayout(view, winFit, heightsOf(x.id)))
     syncDom()
   }
 
@@ -98,17 +125,17 @@ export async function startPhone(host: HTMLElement, cancelled: () => boolean = (
   function currentFit(): Fit {
     if (phase === 'panning') return lerpFit(fits[at], fits[to], smooth(panK))
     if (phase === 'file') return winFit
-    if ((phase === 'opening' || phase === 'closing') && shot) return lerpFit(fits[at], winFit, shot.cam[clamp(shotIndex, 0, shot.cam.length - 1)])
-    return fits[at]
+    if ((phase === 'opening' || phase === 'closing') && shot) return lerpFit(fitOf(stopId()), winFit, sampleAt(shot.cam, shotIndex))
+    return openId ? fitOf(openId) : fits[at]
   }
   function marksTarget(): { pts: Pt[]; anchor: Rect } {
     if (phase === 'panning') { const r = lerpRect(rest(at), rest(to), smooth(panK)); return { pts: corners(r), anchor: r } }
-    const r = rest(at)
+    const r = openId ? restOf(openId) : rest(at)
     if ((phase === 'opening' || phase === 'file' || phase === 'closing') && shot) {
       // the reticle's corners lock onto the face's corners (0.16 s), each taking the nearest free one, then ride them (overlay.ts)
       const i = phase === 'file' ? shot.quads.length - 1 : clamp(shotIndex, 0, shot.quads.length - 1)
       const f = currentFit(), lock = phase === 'file' ? 1 : smooth(Math.min(1, tau / 0.16))
-      const q = shot.quads[i].map((p: MPt) => toScreen(f, p)), used = new Set<number>()
+      const q = quadAt(shot.quads, i).map((p: MPt) => toScreen(f, p)), used = new Set<number>()
       const pts = corners(r).map((c) => {
         let best = 0, bd = Infinity
         q.forEach((p, j) => { if (used.has(j)) return; const d = (p.x - c.x) ** 2 + (p.y - c.y) ** 2; if (d < bd) { bd = d; best = j } })
@@ -135,7 +162,7 @@ export async function startPhone(host: HTMLElement, cancelled: () => boolean = (
     if (disposed) return
     const dt = clamp(last ? (now - last) / 1000 : 0, 0, 0.05); last = now
     if (riseOn && rise < 1) rise = Math.min(1, rise + dt / RISE_S)
-    const f: PageFrame = { phase, stop: reel[at], settled: phase === 'settled' || phase === 'file', tau, dt, rise }
+    const f: PageFrame = { phase, stop: stopId(), settled: phase === 'settled' || phase === 'file', tau, dt, rise }
     // while panning the stop being left seals; once a pan has landed `at` is the new stop and it decrypts
     const moving = page.update(f)
     syncDom()
@@ -154,7 +181,8 @@ export async function startPhone(host: HTMLElement, cancelled: () => boolean = (
     for (const k of keep) void stage.loadStill(k)
     if (stage.mode !== 'clips') return
     for (const i of near) if (i !== at && m.pans[`${reel[at]}>${reel[i]}`]) stage.loadClip(panKey(reel[at], reel[i]))
-    if (m.open[id] && at > 0) { stage.loadClip(openKey(id)); void prepareFile(dom, id) }   // the cover's door is P3's   // the file's own lines are sealed and checked before the tap
+    if (m.open[id] && at > 0) { stage.loadClip(openKey(id)); void warm(id) }   // the file's view (its body, its sealed text, the demo's core) is ready before the tap
+    dropViews(openId ? [openId, reel[at]] : [reel[at]])
   }
 
   // ── the reel: the next stop, one hop at a time ──
@@ -225,55 +253,150 @@ export async function startPhone(host: HTMLElement, cancelled: () => boolean = (
   const stopMove = (e: TouchEvent) => { if (e.cancelable) e.preventDefault() }
   const goPanelFocus = (el: HTMLElement | null) => el?.focus({ preventScroll: true })
 
-  async function openFile(ix: number, o: { push: boolean; inputAt?: number }) {
-    const id = reel[ix], sh = m.open[id]
-    if (!sh || phase !== 'settled' || busy) return
-    busy = true; phase = 'opening'; tau = 0; shotIndex = 0; shot = sh
+  // ── the file page (P3b): any of the 19 stops opens; the view is built (and its text sealed) before the tap ──
+  let fileMods: Promise<{ fv: typeof import('./file/fileview'); mount: typeof import('./file/mount') }> | null = null
+  const loadFile = () => (fileMods ??= Promise.all([import('./file/fileview'), import('./file/mount')]).then(([fv, mount]) => ({ fv, mount })))
+  let visitor: Visitor | null = null
+  const audit: [string, string][] = []
+  const record = (line: string) => { audit.push([new Date().toLocaleTimeString('en-GB'), line]); if (audit.length > 40) audit.shift() }
+  let curView: FileView | null = null
+  const bridge: Bridge = {
+    get visitor() { return (visitor ??= reconVisitor()) },
+    get reduced() { return matchMedia('(prefers-reduced-motion: reduce)').matches },
+    status: (html, ms) => curView?.say(html, ms), record, audit,
+    onCapture: () => record(`${(visitor ??= reconVisitor()).id} breached SENTINEL-1`),
+    jump: (id) => void jumpTo(id),
+  }
+  const heightsOf = (id: string) => ({ stop: id === reel[0] ? L.panelC : L.panelS, file: L.panelS })
+  /** a panel for any entry: the reel's own, or (for an entry that is not on the reel) one made for the occasion and never put in the reel */
+  function panelOf(id: string): Panel {
+    let p = dom.panels.get(id)
+    if (p) return p
+    const copy = stopCopy(id, -1)
+    const mk = (parent: HTMLElement, cls: string, text: string, tag: keyof HTMLElementTagNameMap = 'div') => { const l = new Line(parent, cls, text, tag); dom.lines.push(l); return l }
+    p = makePanel(document.createElement('section'), copy, -1, (x) => !!m.open[x], mk)
+    dom.panels.set(id, p); page.ensure(copy)
+    return p
+  }
+  function warm(id: string): Promise<FileView> {
+    let v = views.get(id)
+    if (!v) {
+      v = (async () => {
+        const mods = await loadFile()
+        const panel = panelOf(id)
+        await prepareFile(dom, id)
+        return mods.fv.FileView.create({ dom, stage, entry: entryById.get(id)!, panel, shot: m.open[id], url, winFit, view, heights: heightsOf(id), bridge, mod: mods.mount })
+      })()
+      views.set(id, v)
+    }
+    return v
+  }
+  /** take down every view but these */
+  function dropViews(keep: string[]) { for (const [k, v] of [...views]) if (!keep.includes(k)) { views.delete(k); void v.then((x) => x.dispose()) } }
+
+  /** one crossfade between two stop pictures (an entry opened from somewhere else, a jump between files) */
+  async function crossTo(key: string) {
+    stage.pin([key, stillKey(reel[at])])
+    await stage.loadStill(key)
+    const from = stage.current
+    if (!from || from === key) { stage.show(key); return }
+    await stage.run({ clipKey: null, clip: null, from, to: key, duration: FADE_STOP, fade: [0, FADE_STOP], onTick: () => {} })
+  }
+
+  async function openCore(id: string, o: { push: boolean; inputAt?: number; replace?: boolean }) {
+    const sh = m.open[id]
+    if (!sh) return
     const my = ++flow
+    openId = id; busy = true; phase = 'opening'; tau = 0; shotIndex = 0; shot = sh
     lockScroll(true)
-    if (o.push) pushFile(id)
-    stage.pin([stillKey(id), windowKey(id)]); void stage.loadStill(windowKey(id)); stage.loadClip(closeKey(id))
+    if (o.push) pushFile(id); else if (o.replace) history.replaceState({ ph: PUSHED }, '', pathOfId(id))
+    stage.pin([stillKey(id), windowKey(id), stillKey(reel[at])]); void stage.loadStill(windowKey(id)); stage.loadClip(closeKey(id))
     kick()
-    await prepareFile(dom, id)
+    const v = await warm(id)
     if (my !== flow || disposed) return
+    curView = v; v.show()
+    record(`${bridge.visitor.id} opened ${id}`)
     await stage.run({
       clipKey: openKey(id), clip: sh,
       from: stillKey(id), to: windowKey(id), duration: sh.frames / sh.fps, fade: FADE_SHOT, inputAt: o.inputAt,
-      onTick: (t, i) => { tau = t; shotIndex = i; syncDom() },
+      onTick: (t, i) => { tau = t; shotIndex = i; syncDom(); v.update(t, 'opening') },
     })
     if (my !== flow || disposed) return
     phase = 'file'; tau = Math.max(tau, OPEN_END); shotIndex = sh.quads.length - 1; busy = false
-    syncDom(); kick()
-    goPanelFocus(dom.back)
+    v.update(OPEN_END, 'file'); v.settle(); syncDom(); kick()
+    v.focusHeading()
+    if (closeAfterOpen !== null) { const play = closeAfterOpen; closeAfterOpen = null; void closeFile(play) }
   }
 
-  async function closeFile(play: boolean) {
-    if (phase !== 'file' && phase !== 'opening') return
-    const id = reel[at], sh = m.close[id]
+  /** open an entry from where the visitor is (the reel's stop, the Index, a link): its stop picture first when it is not already on screen */
+  async function enterFile(id: string, o: { push: boolean; inputAt?: number }) {
+    if (!m.open[id] || phase !== 'settled' || busy) return
+    busy = true
+    origin = { y: scrollY, opener: document.activeElement instanceof HTMLElement && document.activeElement !== document.body ? document.activeElement : null }
+    lockScroll(true)
+    if (stage.current !== stillKey(id)) {
+      page.setPlain(id, 1)   // the stop is skipped: its panel is already there when the open begins
+      void warm(id)
+      await crossTo(stillKey(id))
+      if (disposed) return
+    }
+    await openCore(id, o)
+  }
+
+  async function closeCore(id: string, o: { play: boolean; rate?: number }): Promise<boolean> {
+    const sh = m.close[id], v = curView
     const my = ++flow
-    if (!play || !sh) {
+    await v?.beginClose(bridge.reduced)
+    if (my !== flow || disposed) return false
+    if (!o.play || !sh) {
       // a back gesture (iOS already animated it) or no close clip: land on the end state at once
-      stage.finish()
-      stage.show(stillKey(id))
-      finishClose(id)
-      return
+      stage.finish(); stage.show(stillKey(id)); phase = 'closing'; tau = 0
+      v?.update(0, 'closing')
+      return true
     }
     busy = true; phase = 'closing'; tau = OPEN_END; shot = sh; shotIndex = 0
     kick()
     await stage.run({
       clipKey: closeKey(id), clip: sh,
-      from: windowKey(id), to: stillKey(id), duration: sh.frames / sh.fps, fade: FADE_SHOT,
-      onTick: (t, i) => { tau = Math.max(0, OPEN_END - t * CLOSE_SPEED); shotIndex = i; syncDom() },
+      from: windowKey(id), to: stillKey(id), duration: sh.frames / sh.fps, fade: FADE_SHOT, rate: o.rate,
+      onTick: (t, i) => { tau = Math.max(0, OPEN_END - t * CLOSE_SPEED); shotIndex = i; syncDom(); v?.update(tau, 'closing') },
     })
-    if (my !== flow || disposed) return
-    finishClose(id)
+    v?.update(0, 'closing')
+    return my === flow && !disposed
   }
-  function finishClose(id: string) {
-    phase = 'settled'; busy = false; tau = 0; shotIndex = 0; shot = null; panK = 0
+  async function closeFile(play: boolean) {
+    if (phase === 'opening') { closeAfterOpen = play; return }
+    if (phase !== 'file' || !openId) return
+    const id = openId
+    if (!(await closeCore(id, { play }))) return
+    await finishFile(id)
+  }
+  /** back on the reel: the stop the visitor came from is under the page again, the focus is where it was */
+  async function finishFile(id: string) {
+    const home = stillKey(reel[at])
+    if (stillKey(id) !== home) await crossTo(home)
+    if (disposed) return
+    const opener = origin.opener
+    const v = curView; views.delete(id); v?.dispose()
+    phase = 'settled'; busy = false; tau = 0; shotIndex = 0; shot = null; panK = 0; openId = null; curView = null
+    dropViews([])
     lockScroll(false)
     syncDom(); preload(); kick()
-    goPanelFocus(dom.panels.get(id)?.open ?? null)
+    const back = opener && document.contains(opener) ? opener : dom.panels.get(reel[at])?.open ?? null
+    goPanelFocus(back)
     pump()
+  }
+  /** a related file: close this one at 1.5x, show the other's stop (120 ms), open it (plan 2.6) */
+  async function jumpTo(id: string) {
+    if (phase !== 'file' || !openId || !m.open[id] || id === openId || busy) return
+    const a = openId
+    void warm(id)
+    if (!(await closeCore(a, { play: true, rate: JUMP_RATE }))) return
+    const va = curView; views.delete(a); va?.dispose()
+    openId = id; page.setPlain(id, 1); curView = null
+    await crossTo(stillKey(id))
+    if (disposed) return
+    await openCore(id, { push: false, replace: true })
   }
   /** the in-page "← All files": through history when this shell pushed the entry (so Back and the button agree), plain otherwise */
   function backButton() {
@@ -286,14 +409,14 @@ export async function startPhone(host: HTMLElement, cancelled: () => boolean = (
   }
   function onPop() {
     const id = idFromPath(location.pathname)
-    if (!id) {
+    if (!id || !m.open[id]) {
       if (phase === 'file' || phase === 'opening') { const play = buttonClose; buttonClose = false; void closeFile(play) }
       return
     }
+    if (phase === 'file' || phase === 'opening' || busy) return
     const ix = reel.indexOf(id)
-    if (ix < 0 || phase === 'file' || phase === 'opening' || busy) return
-    if (ix !== at) { stage.show(stillKey(id)); at = ix; to = ix; want = ix; scrollTo({ top: ix * view.h, behavior: 'auto' }); syncDom(); preload() }
-    void openFile(ix, { push: false })
+    if (ix >= 0 && ix !== at) { stage.show(stillKey(id)); at = ix; to = ix; want = ix; scrollTo({ top: ix * view.h, behavior: 'auto' }); syncDom(); preload() }
+    void enterFile(id, { push: false })
   }
 
   // ── listeners ──
@@ -306,7 +429,7 @@ export async function startPhone(host: HTMLElement, cancelled: () => boolean = (
   const onOrient = () => { if (mq.matches) root.setAttribute('data-land', ''); else root.removeAttribute('data-land'); layout() }
   const onClick = (e: MouseEvent) => {
     const t = (e.target as HTMLElement).closest('button'); if (!t) return
-    if (t.classList.contains('ph-go')) { const ix = reel.indexOf(t.dataset.id!); void openFile(ix, { push: true, inputAt: e.timeStamp }) }
+    if (t.classList.contains('ph-go')) { void enterFile(t.dataset.id!, { push: true, inputAt: e.timeStamp }) }
     else if (t.classList.contains('ph-tick')) goTo(Number(t.dataset.stop))
     else if (t.dataset.go === 'index' || t.dataset.go === 'contact') goTo(dom.sections.length - 1)
     else if (t.classList.contains('ph-back')) backButton()
@@ -322,32 +445,35 @@ export async function startPhone(host: HTMLElement, cancelled: () => boolean = (
 
   // ── start ──
   const route = idFromPath(location.pathname)
-  const coldIx = route ? reel.indexOf(route) : -1
-  if (route && coldIx < 0) toBrowse()   // a file the reel has no stop for yet (P3 gives every Index entry one): back to the cover
-  at = to = want = Math.max(0, coldIx)
+  /** a cold link to a file: every entry that has an open clip opens (on the reel, or from the Index when it is not on the reel) */
+  const coldId = route && m.open[route] ? route : null
+  const coldIx = coldId ? reel.indexOf(coldId) : -1
+  if (route && !coldId) toBrowse()
+  at = to = want = coldIx >= 0 ? coldIx : coldId ? N - 1 : 0
   onOrient()
   layout()
   void document.fonts?.ready.then(() => { if (!disposed) { layout(); kick() } })
-  const first = reel[at]
+  const first = coldId ?? reel[at]
   stage.pin([stillKey(first)])
   await stage.loadStill(stillKey(first))
   await Promise.all(dom.lines.map((l) => l.ready))
   if (disposed) return { dispose() {} }
-  if (at > 0) scrollTo({ top: at * view.h, behavior: 'auto' })
+  if (coldId && coldIx < 0) scrollTo({ top: N * view.h, behavior: 'auto' })   // an entry that is not on the reel belongs to the Index
+  else if (at > 0) scrollTo({ top: at * view.h, behavior: 'auto' })
   scrollP = scrollY / view.h; prevY = scrollY
   stage.show(stillKey(first))
   // a return visit: the paper rises over 0.4 s; a cold link to a file: its panel is already there
-  if (coldIx >= 0) { page.setPlain(first, 1); rise = 1 } else { rise = 0; riseOn = true }
+  if (coldId) { page.setPlain(first, 1); rise = 1 } else { rise = 0; riseOn = true }
   syncDom()
   root.setAttribute('data-ready', '')
-  preload(); kick()
+  preload();   kick()
 
-  if (coldIx >= 0 && m.open[first]) {
+  if (coldId) {
     // the stop's picture, then its open clip (buffered if it can be, else a crossfade), then the file
-    void stage.loadStill(windowKey(first))
-    await Promise.all([stage.buffered(openKey(first), COLD_WAIT_MS), stage.stills.ready(windowKey(first))])
-    if (!disposed) void openFile(coldIx, { push: false })
-  } else if (coldIx >= 0) toBrowse()
+    void stage.loadStill(windowKey(first)); stage.loadClip(openKey(first)); void warm(first)
+    await Promise.all([stage.buffered(openKey(first), COLD_WAIT_MS), stage.stills.ready(windowKey(first)), warm(first)])
+    if (!disposed) void enterFile(coldId, { push: false })
+  }
 
   const api = {
     get phase() { return phase }, get at() { return at }, get want() { return want }, get busy() { return busy },
@@ -355,7 +481,8 @@ export async function startPhone(host: HTMLElement, cancelled: () => boolean = (
     stage, page, dom, manifest: m, csp, layout: L, get fits() { return fits }, get winFit() { return winFit }, get view() { return view },
     get tau() { return tau }, get panK() { return panK }, get shotIndex() { return shotIndex },
     marks: () => dom.marks.map((e) => { const r = e.getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 } }),
-    openFile: (i: number) => openFile(i, { push: true }), closeFile: (play = true) => backOrClose(play), goTo,
+    openFile: (i: number) => enterFile(reel[i], { push: true }), openEntry: (id: string) => enterFile(id, { push: true }), jumpTo,
+    get openId() { return openId }, get file() { return curView }, closeFile: (play = true) => backOrClose(play), goTo,
     pathOf: pathOfId,
   }
   function backOrClose(play: boolean) { if (play) backButton(); else { toBrowse(); void closeFile(false) } }

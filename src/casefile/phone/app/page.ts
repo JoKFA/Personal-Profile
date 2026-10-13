@@ -24,10 +24,16 @@ export interface Panel {
   ey: Line; ti: Line; su: Line | null; sm: Line | null
   row: HTMLElement; open: HTMLButtonElement | null; ticks: HTMLButtonElement[]
   file: FileParts | null
+  /** how much taller the title is than one line (a long name wraps): the verify line and the summary make room for it in the file's head */
+  extra?: number
 }
 
 export interface PageDom {
   root: HTMLElement
+  /** <html>, for the classes the file view sets */
+  html: HTMLElement
+  /** the bar's "<ID> title" that appears when the window has scrolled out */
+  fileLabel: HTMLElement
   bar: HTMLElement; brand: HTMLElement; nav: HTMLElement; back: HTMLButtonElement; indexBtn: HTMLButtonElement; contactBtn: HTMLButtonElement
   main: HTMLElement
   sections: HTMLElement[]
@@ -38,6 +44,28 @@ export interface PageDom {
   lines: Line[]
   /** the cover sheet's three lines */
   sheetLines: Line[]
+}
+
+
+/** One stop's panel: the eyebrow, the title, the summary, the small line, and the Open row. `i` is its place in the reel (-1: a stop that is not on the reel, opened from the Index: no ticks). */
+export function makePanel(sec: HTMLElement, s: StopCopy, i: number, canOpen: (id: string) => boolean, line: (parent: HTMLElement, cls: string, text: string, tag?: keyof HTMLElementTagNameMap) => Line): Panel {
+  const p = el(sec, 'div', 'ph-panel' + (i === 0 ? ' ph-pc' : ' ph-ps'))
+  const ey = line(p, 'ph-lbl', s.eyebrow, 'p'), ti = line(p, 'ph-title', s.title, 'h2')
+  if (i >= 0) { ti.el.id = `ph-t${i}`; sec.setAttribute('aria-labelledby', ti.el.id) }
+  const su = s.sum ? line(p, 'ph-sum', s.sum, 'p') : null, sm = s.small ? line(p, 'ph-small', s.small, 'p') : null
+  const row = el(p, 'div', 'ph-row')
+  const open = i !== 0 && canOpen(s.id) ? el(row, 'button', 'ph-go', COPY.open) : null
+  if (open) { open.type = 'button'; open.setAttribute('aria-label', `Open ${s.title}`); open.dataset.id = s.id }
+  const tk = el(row, 'span', 'ph-ticks')
+  // the five ticks repeat in every file panel (they are the prototype's; the cover's one-line panel has none); assistive tech and the Tab key get one group, the first stop's
+  if (i === 1) { tk.setAttribute('role', 'group'); tk.setAttribute('aria-label', 'Jump to a stop') } else tk.setAttribute('aria-hidden', 'true')
+  const ticks = i < 0 ? [] : [0, 1, 2, 3, 4].map((n) => {
+    const b = el(tk, 'button', 'ph-tick' + (n === s.n ? ' on' : ''), String(n).padStart(2, '0')); b.type = 'button'; b.dataset.stop = String(n)
+    if (i !== 1) b.tabIndex = -1
+    b.setAttribute('aria-label', n === 0 ? 'Go to the profile' : `Go to stop ${n}`); if (n === s.n) b.setAttribute('aria-current', 'true')
+    return b
+  })
+  return { id: s.id, section: sec, el: p, ey, ti, su, sm, row, open, ticks, file: null }
 }
 
 /** Build the whole page. `canOpen(id)`: does this stop have an open clip (otherwise its Open button is hidden). */
@@ -58,6 +86,7 @@ export function buildPage(host: HTMLElement, stops: StopCopy[], canOpen: (id: st
   const indexBtn = el(nav, 'button', 'ph-navb', COPY.index); indexBtn.type = 'button'; indexBtn.dataset.go = 'index'
   const contactBtn = el(nav, 'button', 'ph-navb', COPY.contact); contactBtn.type = 'button'; contactBtn.dataset.go = 'contact'
   const back = el(bar, 'button', 'ph-back', COPY.back); back.type = 'button'
+  const fileLabel = el(bar, 'div', 'ph-barfile'); fileLabel.setAttribute('aria-hidden', 'true')
 
 
   // the reel: a normal document, each section about a screen tall, snapping
@@ -72,23 +101,7 @@ export function buildPage(host: HTMLElement, stops: StopCopy[], canOpen: (id: st
       sheet = el(sec, 'div', 'ph-sheet')
       sheetLines.push(line(sheet, 'ph-thesis', COPY.thesisLead, 'p'), line(sheet, 'ph-thesis ph-r', COPY.thesisRest, 'p'), line(sheet, 'ph-facts', COPY.availability, 'p'))
     }
-    const p = el(sec, 'div', 'ph-panel' + (i === 0 ? ' ph-pc' : ' ph-ps'))
-    const ey = line(p, 'ph-lbl', s.eyebrow, 'p'), ti = line(p, 'ph-title', s.title, 'h2')
-    ti.el.id = `ph-t${i}`; sec.setAttribute('aria-labelledby', ti.el.id)
-    const su = s.sum ? line(p, 'ph-sum', s.sum, 'p') : null, sm = s.small ? line(p, 'ph-small', s.small, 'p') : null
-    const row = el(p, 'div', 'ph-row')
-    const open = i > 0 && canOpen(s.id) ? el(row, 'button', 'ph-go', COPY.open) : null
-    if (open) { open.type = 'button'; open.setAttribute('aria-label', `Open ${s.title}`); open.dataset.id = s.id }
-    const tk = el(row, 'span', 'ph-ticks')
-    // the five ticks repeat in every file panel (they are the prototype's; the cover's one-line panel has none); assistive tech and the Tab key get one group, the first stop's
-    if (i === 1) { tk.setAttribute('role', 'group'); tk.setAttribute('aria-label', 'Jump to a stop') } else tk.setAttribute('aria-hidden', 'true')
-    const ticks = [0, 1, 2, 3, 4].map((n) => {
-      const b = el(tk, 'button', 'ph-tick' + (n === s.n ? ' on' : ''), String(n).padStart(2, '0')); b.type = 'button'; b.dataset.stop = String(n)
-      if (i !== 1) b.tabIndex = -1
-      b.setAttribute('aria-label', n === 0 ? 'Go to the profile' : `Go to stop ${n}`); if (n === s.n) b.setAttribute('aria-current', 'true')
-      return b
-    })
-    panels.set(s.id, { id: s.id, section: sec, el: p, ey, ti, su, sm, row, open, ticks, file: null })
+    panels.set(s.id, makePanel(sec, s, i, canOpen, line))
   })
   // Index and Contact: a placeholder section (P5 fills it)
   const idx = el(main, 'section', 'ph-sec ph-index'); idx.id = `ph-s${stops.length}`; sections.push(idx)
@@ -96,7 +109,7 @@ export function buildPage(host: HTMLElement, stops: StopCopy[], canOpen: (id: st
   el(idx, 'h2', 'ph-h', COPY.contact)
 
   const land = el(root, 'div', 'ph-land'); land.setAttribute('role', 'status'); el(land, 'p', '', COPY.landscape)
-  return { root, bar, brand, nav, back, indexBtn, contactBtn, main, sections, sheet, panels, reticle, marks, tag, rule, land, lines, sheetLines }
+  return { root, html: document.documentElement, fileLabel, bar, brand, nav, back, indexBtn, contactBtn, main, sections, sheet, panels, reticle, marks, tag, rule, land, lines, sheetLines }
 }
 
 /** The file's own lines for a stop (built once, when it is first asked for): the file eyebrow, the verify line, the numbers. */
@@ -160,6 +173,13 @@ export class PageLayer {
     this.tagKey = new Line(this.dom.tag, '', COPY.keyIssued(id)); this.dom.lines.push(this.tagKey)
   }
 
+  /** a stop that is not on the reel (opened from the Index or a link) joins the layer: its text state and its tag line */
+  ensure(s: StopCopy) {
+    if (this.ids.includes(s.id)) return
+    this.ids.push(s.id); this.plain[s.id] ??= 0
+    const l = new Line(this.dom.tag, '', s.tag); this.dom.lines.push(l); this.tags.set(s.id, l)
+  }
+
   /** is a stop's text fully readable (used by tests) */
   plainOf(id: string) { return this.plain[id] ?? 0 }
   /** make a stop readable at once (a cold open: its panel is already there when the page appears) */
@@ -209,7 +229,7 @@ export class PageLayer {
       tg.set(p * (1 - I(0, 0.18)), p > 0.001 ? 1 : 0)
       g.ey.set(p * (1 - I(0, 0.2)), 1 - I(0.25, 0.1))
       g.ti.set(p)
-      if (g.su) { g.su.set(p); g.su.el.style.transform = mine ? `translateY(${22 * I(1.0, 0.3)}px)` : '' }
+      if (g.su) { g.su.set(p); g.su.el.style.transform = mine ? `translateY(${(22 + (g.extra ?? 0)) * I(1.0, 0.3)}px)` : '' }
       g.sm?.set(p * (1 - I(0, 0.22)), 1 - I(0.3, 0.12))
       g.row.style.opacity = String(Math.min(1, p * 1.5) * (1 - I(0, 0.22)))
       const file = g.file
@@ -230,6 +250,9 @@ export class PageLayer {
     // the cover's sheet reads while the cover is the stop (its three lines decrypt with the cover's panel)
     const cov = this.plain[this.ids[0]]
     for (const l of d.sheetLines) l.set(cov, smooth(Math.min(1, cov * 3)))
+    // the cover's sheet folds away when the profile file is asked for
+    if (f.rise >= 1 && (opening || closing)) d.sheet.style.opacity = String(1 - (f.stop === this.ids[0] ? into(0, 0.25) : 0))
+    else if (f.rise >= 1 && d.sheet.style.opacity) d.sheet.style.opacity = ''
     // the bar's name and links make room for the file's own bar
     const barK = 1 - into(0.02, 0.3)
     d.brand.style.opacity = d.nav.style.opacity = String(barK)

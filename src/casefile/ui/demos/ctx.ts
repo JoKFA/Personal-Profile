@@ -13,8 +13,12 @@ export interface DemoCtx {
   record: (s: string) => void
   /** the restricted file's guard has been talked past (SENTINEL-1). A shell re-renders its provider when this changes. */
   captured: boolean
+  /** a portrait window (the phone): the diagrams that are drawn wide have a tall layout too. Absent on the desktop. */
+  tall?: boolean
   /** the guard was breached: declassify the restricted file */
   capture: () => void
 }
 export const DemoContext = createContext<DemoCtx | null>(null)
 export const useDemo = (): DemoCtx => { const c = useContext(DemoContext); if (!c) throw new Error('no demo context'); return c }
+/** the marker for the element a shell may draw the key's trace to (the phone's window); nothing on the desktop, whose markup is unchanged */
+export const useCore = (): { 'data-core'?: '' } => (useDemo().tall ? { 'data-core': '' } : {})

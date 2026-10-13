@@ -1,5 +1,6 @@
 // SecureInsight, EDR + AI (2024): raw Wazuh alerts on the left, the model's triage on the right.
 import { useState } from 'react'
+import { useCore } from './ctx'
 import { useScript } from './useLoop'
 
 const ALERTS = [
@@ -10,6 +11,7 @@ const ALERTS = [
 ] as const
 
 export function Edr() {
+  const core = useCore()
   const [rows, setRows] = useState<{ a: (typeof ALERTS)[number]; done: boolean; cached: boolean; k: number }[]>([])
   useScript(async (wait, reduced) => {
     if (reduced) { setRows(ALERTS.map((a, k) => ({ a, done: true, cached: false, k }))); return }
@@ -26,7 +28,7 @@ export function Edr() {
   return (
     <div className="dm-panel">
       <div className="dm-head"><span>Wazuh → LLM triage · analyst view</span><span className="live">simulated · 2024</span></div>
-      <div className="edr">
+      <div className="edr" {...core}>
         {rows.map(({ a, done, cached, k }) => (
           <div key={k} className="edr-row">
             <div className="raw"><b>rule {a.rid}</b> · level {a.lvl}<br />{a.raw}</div>

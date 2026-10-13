@@ -4,6 +4,7 @@
 // layer has to guard: a wrong VLAN is also a wrong trust boundary. Layers are the program's own
 // subjects (BCIT program page); the ticket is a sample.
 import { useState } from 'react'
+import { useCore } from './ctx'
 import { useScript } from './useLoop'
 
 const LAYERS = [
@@ -21,6 +22,7 @@ const VERBS = ['Install', 'Configure', 'Maintain', 'Monitor', 'Troubleshoot'] as
 type Phase = 'idle' | 'walk' | 'fault' | 'fixed' | 'reread'
 
 export function Stack() {
+  const core = useCore()
   const [phase, setPhase] = useState<Phase>('idle')
   const [at, setAt] = useState(-1)
   const [verb, setVerb] = useState(-1)
@@ -54,7 +56,7 @@ export function Stack() {
           <span className={`bu-stamp ${resolved ? 'on' : ''}`}>{resolved ? 'Resolved' : phase === 'fault' ? 'Fault found' : phase === 'idle' ? 'Open' : 'Checking'}</span>
           <p className={`bu-moral ${reread ? 'on' : ''}`}>A wrong VLAN is also a wrong <b>trust boundary</b>.<span>Security, learned from the network up.</span></p>
         </div>
-        <ol className="bu-stack" aria-label="The program as a stack, cable at the bottom">
+        <ol {...core} className="bu-stack" aria-label="The program as a stack, cable at the bottom">
           {LAYERS.map((l, i) => {
             const c = check(i)
             return (

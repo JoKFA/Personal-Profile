@@ -25,6 +25,8 @@ export interface StepSpec {
   duration: number
   /** the crossfade's window inside `duration`: [start, length] seconds */
   fade: [number, number]
+  /** playback speed of the clip (a close that hands over to another file runs 1.5x); the page layer follows the clip's own media time, so it needs nothing else */
+  rate?: number
   /** when the input that caused the step arrived (performance.now), for the latency record */
   inputAt?: number
   /** time (s), clip-frame index and progress 0..1 the page layer should show; called for every presented frame (clip) or animation frame (fade) */
@@ -150,8 +152,8 @@ export class Stage {
       this.abortStep = () => { spec.onTick(spec.duration, last, 1); finish() }
       const frame = (now: number) => {
         if (done) return
-        const t = Math.min(spec.duration, (now - t0) / 1000)
-        spec.onTick(t, Math.min(last, Math.floor(t * fps)), t / spec.duration)
+        const t = Math.min(spec.duration, (now - t0) / 1000 * (spec.rate ?? 1))
+        spec.onTick(t, Math.min(last, t * fps), t / spec.duration)
         if (to && to !== from) { to.style.zIndex = '4'; to.style.opacity = String(smooth((t - at) / Math.max(0.001, len))) }
         if (t >= spec.duration) finish(); else requestAnimationFrame(frame)
       }
@@ -171,7 +173,7 @@ export class Stage {
       /** could not start: nothing was shown of the clip, the start still is untouched */
       const bail = () => {
         if (ended) return; ended = true; clear(); this.abortStep = null; this.playing = null
-        v.pause(); try { v.currentTime = 0 } catch { /* */ }
+        v.pause(); v.playbackRate = 1; try { v.currentTime = 0 } catch { /* */ }
         resolve(false)
       }
       const end = () => {
@@ -183,7 +185,7 @@ export class Stage {
         let done = false
         const fin = () => {
           if (done) return; done = true
-          v.classList.remove('fade', 'on'); v.style.opacity = ''; v.pause(); this.playing = null
+          v.classList.remove('fade', 'on'); v.style.opacity = ''; v.pause(); v.playbackRate = 1; this.playing = null
           try { v.currentTime = 0 } catch { /* */ }
           if (this.record) this.handoffs.push(rec)
           resolve(true)
@@ -217,6 +219,7 @@ export class Stage {
       }
       this.abortStep = () => { if (started) { spec.onTick(dur, last, 1); end() } else bail() }
       this.playing = v
+      v.playbackRate = spec.rate ?? 1
       v.addEventListener('ended', onEnded, { once: true })
       next()
       rec.playAt = performance.now()

@@ -35,9 +35,17 @@ export class Line {
   /** resolves with the sealed text once it is encrypted (or null when this context cannot) */
   readonly ready: Promise<Sealed | null>
 
-  constructor(parent: HTMLElement, cls: string, text: string, tag: keyof HTMLElementTagNameMap = 'div') {
+  /** Make an element that already holds only text (React's, say) into a line: its text node becomes the blocks. Nothing else may change that element afterwards. */
+  static adopt(el: HTMLElement): Line {
+    const text = el.textContent ?? ''
+    el.textContent = ''
+    return new Line(null, '', text, 'div', el)
+  }
+
+  constructor(parent: HTMLElement | null, cls: string, text: string, tag: keyof HTMLElementTagNameMap = 'div', existing?: HTMLElement) {
     this.text = text
-    this.el = document.createElement(tag); this.el.className = cls; parent.appendChild(this.el)
+    if (existing) this.el = existing
+    else { this.el = document.createElement(tag); this.el.className = cls; parent!.appendChild(this.el) }
     for (let i = 0; i < text.length; i += BLOCK) {
       const s = document.createElement('span'); s.className = 'ph-cbx'; s.textContent = text.slice(i, i + BLOCK)
       const c = document.createElement('i'); c.setAttribute('aria-hidden', 'true'); s.appendChild(c)

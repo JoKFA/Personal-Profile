@@ -1,23 +1,25 @@
 // Timeline (projects without a bespoke demo) and the visitor print.
 import { useEffect, useRef, useState } from 'react'
 import type { DemoProps } from '.'
-import { useDemo } from './ctx'
+import { useCore, useDemo } from './ctx'
 import { useScript } from './useLoop'
 
 export function Timeline({ entry }: DemoProps) {
+  const core = useCore()
   const steps = [...(entry.sections ?? []).map((s) => [s.eyebrow, s.title] as const), ...(entry.numbers ?? []).slice(0, 2).map(([n, l]) => ['result', `${n} ${l}`] as const)]
   const [n, setN] = useState(0)
   useScript(async (wait, reduced) => { if (reduced) { setN(steps.length); return } for (;;) { for (let k = 0; k <= steps.length; k++) { setN(k); if (!(await wait(1100))) return } if (!(await wait(2200))) return } })
   return (
     <div className="dm-panel">
       <div className="dm-head"><span>{entry.title} · evidence trail</span><span className="live">{entry.year}</span></div>
-      <div className="tlx">{steps.map(([e, t], k) => <div key={k} className={k < n ? 'on' : ''}><span className="lbl">{e}</span><b>{t}</b></div>)}</div>
+      <div className="tlx" {...core}>{steps.map(([e, t], k) => <div key={k} className={k < n ? 'on' : ''}><span className="lbl">{e}</span><b>{t}</b></div>)}</div>
       <div className="dm-cap"><b>stack</b><span>{entry.stack?.join(' · ')}</span></div>
     </div>
   )
 }
 
 export function VisitorPrint() {
+  const core = useCore()
   const { visitor } = useDemo()
   const cv = useRef<HTMLCanvasElement>(null)
   useEffect(() => {
@@ -33,7 +35,7 @@ export function VisitorPrint() {
   return (
     <div className="dm-panel">
       <div className="dm-head"><span>Fingerprint · from your signals</span><span className="live">local only</span></div>
-      <div className="vp"><canvas ref={cv} aria-hidden="true" /><dl>{visitor.rows.map(([k, v]) => <div key={k}><dt className="lbl">{k}</dt><dd>{v}</dd></div>)}</dl></div>
+      <div className="vp"><canvas ref={cv} aria-hidden="true" {...core} /><dl>{visitor.rows.map(([k, v]) => <div key={k}><dt className="lbl">{k}</dt><dd>{v}</dd></div>)}</dl></div>
       <div className="dm-cap"><b>{visitor.id}</b><span>collected in {visitor.ms} ms · 0 bytes sent · harmless alone, a fingerprint together</span></div>
     </div>
   )
