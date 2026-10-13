@@ -49,7 +49,7 @@ const INTERIOR_MAX = 12 * 1048576
 const REUSE = !!arg('reuse', false)        // re-encode from frames (and stills) already in --work instead of rendering them again
 const EVIDENCE = arg('evidence', '')
 const SNAP = path.join(ROOT, '..', 'p3-bake')
-const PORT = 4196
+const PORT = Number(arg('port', 4196))   // (another agent may hold 4196: pass --port)
 
 // ── what a clip is ──
 const PAN_FRAMES = 60          // 2.4 s
