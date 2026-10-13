@@ -1,0 +1,83 @@
+/* The phone shell. Everything is classes in this file; the code only sets properties through element.style (CSSOM), because the
+   production CSP is style-src 'self' (no inline <style>, no inline style attributes). No CSS transition drives anything that must stay
+   in step with the picture: the only transition here is the 120 ms clip -> still fade, which is the handoff rule itself. */
+html.ph { scroll-snap-type: y mandatory; overscroll-behavior-y: none; -webkit-text-size-adjust: 100%; }
+html.ph-locked { overflow: hidden; }
+html.ph, body.ph-body { margin: 0; background: var(--bg); }
+body.ph-body { color: var(--ink); font-family: var(--sans); -webkit-font-smoothing: antialiased; overflow: visible; height: auto; }
+.ph-host { position: relative; }
+.ph-root { --ph-h: 100dvh; --ph-pc: 80px; --ph-ps: 252px; position: relative; color: var(--ink); font-family: var(--sans); }
+.ph-root *, .ph-root *::before, .ph-root *::after { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+.ph-root button { font: inherit; color: inherit; background: none; border: 0; padding: 0; margin: 0; cursor: pointer; text-align: inherit; touch-action: manipulation; }
+.ph-root button:focus-visible { outline: 1.5px solid var(--acc); outline-offset: 3px; }
+:where(.ph-root) :where(p, h1, h2) { margin: 0; }
+
+/* the stage: fixed behind everything; the master picture inside it is moved and scaled by the fit */
+.ph-stagebox { position: fixed; inset: 0; z-index: 0; overflow: hidden; background: var(--bg); pointer-events: none; }
+.ph-stage { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
+.ph-img, .ph-vid { position: absolute; left: 0; top: 0; width: 100%; height: 100%; display: block; object-fit: fill; -webkit-user-drag: none; user-select: none; }
+.ph-vid { z-index: 1; background: transparent; }
+.ph-vid.on { z-index: 3; }
+.ph-vid.fade { transition: opacity 120ms linear; }
+.ph-img { z-index: 2; opacity: 0; }
+.ph-img.fadeout { transition: opacity 100ms linear; }   /* the still leaving a clip's first frame: the clips are encoded smaller than the stills, the fade hides the change in sharpness */
+
+/* the reticle (overlay.ts): four ink marks, a tag, a hairline */
+.ph-reticle { position: fixed; inset: 0; z-index: 2; pointer-events: none; overflow: hidden; }
+.ph-mk { position: absolute; left: 0; top: 0; width: 5px; height: 5px; margin: -2.5px 0 0 -2.5px; background: var(--ink); }
+.ph-tag { position: absolute; left: 0; top: 0; width: 190px; height: 21px; font: 700 11px/1 var(--mono); letter-spacing: .12em; white-space: nowrap; background: color-mix(in srgb, var(--bg) 92%, transparent); visibility: hidden; }
+.ph-tag > div { position: absolute; left: 7px; top: 5px; }
+.ph-rule { position: absolute; left: 0; top: 0; height: 1px; width: 400px; background: var(--ink); opacity: .5; }
+
+/* the reel: a normal document of sections, snapping */
+.ph-reel { position: relative; overflow-x: clip; }   /* nothing may widen the document (a wide absolute child would widen the layout viewport on a phone) */   /* no z-index: the sheet (1), the reticle (2) and the panels (3) stack against each other, as in the prototype */
+.ph-sec { height: var(--ph-h); display: flex; flex-direction: column; justify-content: flex-end; scroll-snap-align: start; scroll-snap-stop: always; position: relative; }
+.ph-cover { justify-content: space-between; }
+.ph-sheet { position: relative; z-index: 1; background: var(--bg); padding: calc(env(safe-area-inset-top) + 84px) 20px 12px; }
+.ph-sheet::after { content: ""; position: absolute; left: 0; right: 0; bottom: -26px; height: 26px; background: linear-gradient(var(--bg), color-mix(in srgb, var(--bg) 0%, transparent)); pointer-events: none; }
+.ph-thesis { font: 800 23px/1.2 var(--sans); letter-spacing: -.02em; }
+.ph-thesis.ph-r { font-weight: 300; margin-top: 1px; }
+.ph-facts { font: 500 13px/1.45 var(--sans); color: var(--ink2); margin-top: 6px; }
+
+.ph-panel { position: relative; z-index: 3; background: var(--bg); border-top: 1px solid var(--hair2); padding: 16px 20px env(safe-area-inset-bottom); display: flex; flex-direction: column; }
+.ph-pc { min-height: var(--ph-pc); padding-top: 14px; }
+.ph-pc .ph-title { font-size: 20px; margin-top: 4px; }   /* the cover's panel is one line of action: eyebrow, then the title and its arrow */
+.ph-pc .ph-row { display: none; }
+.ph-ps { min-height: var(--ph-ps); }
+.ph-lbl { font: 500 11px/1.35 var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--label); }
+.ph-title { font: 780 26px/1.15 var(--sans); letter-spacing: -.015em; margin-top: 8px; }
+.ph-sum { font: 400 15px/1.45 var(--sans); color: var(--ink2); margin-top: 8px; }
+.ph-small { font: 500 12.5px/1.4 var(--sans); color: var(--label); margin-top: auto; padding-top: 10px; }
+.ph-row { display: flex; justify-content: space-between; align-items: center; min-height: 44px; margin-top: 4px; }
+.ph-pc .ph-row { margin-top: auto; }
+.ph-go { font: 600 14px/1 var(--sans); letter-spacing: .14em; text-transform: uppercase; min-height: 44px; padding-right: 14px; }
+.ph-ticks { display: flex; margin-left: auto; font: 500 11px/1 var(--mono); color: var(--label); }
+.ph-tick { min-width: 36px; min-height: 44px; text-align: center; font: inherit; }
+.ph-tick.on { color: var(--acc-text); font-weight: 700; }
+/* the open file's own lines sit in the same panel, over the places the stop's lines left */
+.ph-fileey { position: absolute; left: 20px; right: 20px; top: 16px; opacity: 0; }
+.ph-verify { position: absolute; left: 20px; right: 20px; top: 79px; font: 700 11px/1.3 var(--mono); letter-spacing: .12em; color: var(--acc-text); opacity: 0; }
+.ph-nums { position: absolute; left: 20px; right: 20px; bottom: calc(22px + env(safe-area-inset-bottom)); display: flex; flex-wrap: wrap; gap: 8px 24px; opacity: 0; pointer-events: none; }
+.ph-nums div { font: 300 30px/1 var(--sans); white-space: nowrap; }
+.ph-nums small { display: block; margin-top: 6px; font: 500 11px/1.2 var(--mono); letter-spacing: .1em; color: var(--label); text-transform: uppercase; }
+/* a short viewport: the panel is eyebrow + title + the Open row; the summary and the small line wait for the file */
+.ph-root[data-compact] .ph-sum, .ph-root[data-compact] .ph-small { display: none; }
+.ph-cbx { position: relative; }
+.ph-cbx > i { position: absolute; inset: 1px 0; background-size: 100% 100%; image-rendering: pixelated; }
+
+.ph-index { z-index: 3; justify-content: flex-start; background: var(--bg); padding: calc(env(safe-area-inset-top) + 84px) 20px 20px; gap: 28px; }
+.ph-h { font: 780 26px/1.15 var(--sans); letter-spacing: -.015em; }
+
+/* the top bar: the name, Index, Contact (and "← All files" while a file is open) */
+.ph-bar { position: fixed; left: 0; right: 0; top: 0; z-index: 4; height: calc(64px + env(safe-area-inset-top)); padding: env(safe-area-inset-top) 20px 0; background: var(--bg); display: flex; align-items: center; justify-content: space-between; }
+.ph-bar::after { content: ""; position: absolute; left: 0; right: 0; bottom: -26px; height: 26px; background: linear-gradient(var(--bg), color-mix(in srgb, var(--bg) 0%, transparent)); pointer-events: none; }
+.ph-brand { display: block; }
+.ph-a { display: block; font: 800 17px/1 var(--sans); letter-spacing: -.01em; text-transform: uppercase; }
+.ph-b { display: block; margin-top: 6px; font: 700 11px/1 var(--sans); letter-spacing: .16em; text-transform: uppercase; }
+.ph-nav { display: flex; gap: 12px; }
+.ph-navb { min-height: 44px; min-width: 44px; padding: 0 6px; font: 600 11.5px/1 var(--sans); letter-spacing: .12em; text-transform: uppercase; }
+.ph-back { position: absolute; left: 14px; top: calc(env(safe-area-inset-top) + 10px); min-height: 44px; padding: 0 6px; font: 600 11.5px/1 var(--sans); letter-spacing: .12em; text-transform: uppercase; opacity: 0; visibility: hidden; }
+
+.ph-land { position: fixed; inset: 0; z-index: 20; background: var(--bg); display: none; align-items: center; justify-content: center; padding: 24px; text-align: center; font: 600 16px/1.4 var(--sans); }
+.ph-root[data-land] .ph-land { display: flex; }
+.ph-fail { padding: 84px 20px; font: 500 15px/1.5 var(--sans); color: var(--ink2); }
