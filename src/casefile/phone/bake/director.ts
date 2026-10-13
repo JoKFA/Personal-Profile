@@ -34,6 +34,8 @@ const FACE_YAW = Math.atan2(-Math.sin(VIEW.yaw * D2R), Math.cos(VIEW.yaw * D2R))
 export const PROTO_H = 844
 /** a stop: the drive stands 1.8 out of its slot, its shell clear, in the reader. The cover sits lower (the thesis is above it). */
 const FRAME: Record<string, { span: number; dy: number; lift: number }> = { cover: { span: 10.6, dy: 1.1, lift: 2.5 }, stop: { span: 10, dy: -1.2, lift: 1.8 } }
+/** the master's aim: the reticle's centre sits at master y 575 on the cover and 395 on every file stop (PM, 10-13), x unchanged; the span is the prototype's */
+const MASTER_DY = { cover: 1.2031, stop: -1.123 }
 const frameOf = (id: string) => (id === 'YW-000' ? FRAME.cover : FRAME.stop)
 /** the face inside its frame, once stood upright: 3.1 wide, 4.4 tall (CARD less the 0.3 frame) */
 const INNER = { w: CARD.H - 0.6, h: CARD.W - 0.6 }
@@ -77,7 +79,7 @@ export function install(opts: InstallOptions = {}) {
   const master = !!opts.master
   /** world units per prototype world unit: keeps the drive the same size in CSS px when the viewport is taller */
   const sc = () => (master ? innerHeight / PROTO_H : 1)
-  const dyOf = (f: { dy: number }) => (master ? 0 : f.dy)
+  const dyOf = (f: { dy: number }) => (master ? (f === FRAME.cover ? MASTER_DY.cover : MASTER_DY.stop) : f.dy)
   // (the page's HUD, grain and file view are not part of the bake's pixels / the prototype's film)
   const st = document.createElement('style')
   st.textContent = '.hud, .cf-grain, .file, .door-skip { visibility: hidden !important; }'
