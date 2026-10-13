@@ -80,7 +80,7 @@ export function install(opts: InstallOptions = {}) {
   const dyOf = (f: { dy: number }) => (master ? 0 : f.dy)
   // (the page's HUD, grain and file view are not part of the bake's pixels / the prototype's film)
   const st = document.createElement('style')
-  st.textContent = '.hud, .cf-grain, .file { visibility: hidden !important; }'
+  st.textContent = '.hud, .cf-grain, .file, .door-skip { visibility: hidden !important; }'
   document.head.appendChild(st)
 
   let mode: Mode = 'stop', stopId = ''

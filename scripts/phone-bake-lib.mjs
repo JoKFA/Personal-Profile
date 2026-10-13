@@ -101,6 +101,11 @@ export async function session(browser, base, dpr, run, { warm = false, label = '
       for (let i = 0; i < 600 && !(await api.ready()); i++) await api.step()
       for (let i = 0; i < SETTLE_STEPS; i++) await api.step()
     },
+    /** the bake's pixels are the scene's: nothing but the canvases may be visible on the page */
+    assertSceneOnly: async () => {
+      const extra = await p.evaluate(() => [...document.querySelectorAll('body *')].filter((e) => { const r = e.getBoundingClientRect(), cs = getComputedStyle(e); return r.width > 0 && r.height > 0 && cs.visibility !== 'hidden' && cs.display !== 'none' && !['SCRIPT', 'CANVAS'].includes(e.tagName) && !e.closest('svg') && !e.querySelector('canvas') }).map((e) => `${e.tagName}.${e.className}`))
+      if (extra.length) throw new Error(`DOM is visible over the scene: ${extra.join(', ')}`)
+    },
     until,
     marks: () => p.evaluate(() => window.__ph.marks),
     stops: () => p.evaluate(() => window.__ph.stops),

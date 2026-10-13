@@ -31,7 +31,11 @@ const WORK = path.resolve(arg('work', path.join(ROOT, '..', 'p3-bake-work')))
 const OUT = path.resolve(arg('out', PARTIAL ? path.join(WORK, 'out-partial') : path.join(WORK, 'out')))
 const JOBS = Number(arg('jobs', 4))
 const KEEP = !!arg('keep-frames', false)
-const CRF = Number(arg('crf', 23))
+// H.264 quality: the reel's stops (and the entrance, pans, door) at CRF; the other Index entries' opens and closes at CRF_REST
+// (plan §7: "crf 24–26" is the lever when the repository budget is tight)
+const CRF = Number(arg('crf', 23)), CRF_REST = Number(arg('crf-rest', 26))
+const REUSE = !!arg('reuse', false)        // re-encode from frames (and stills) already in --work instead of rendering them again
+const OVER_BUDGET = !!arg('over-budget', false)   // publish although a budget check failed (the failure is still reported, and the exit code stays 1)
 const EVIDENCE = arg('evidence', '')
 const SNAP = path.join(ROOT, '..', 'p3-bake')
 const PORT = 4196
@@ -46,6 +50,7 @@ const STOP_CUE = 3.9           // s into the entrance: the prototype's stop:YW-0
 const DOOR_MAX = 400
 
 const log = (...a) => console.log(new Date().toISOString().slice(11, 19), ...a)
+const crfFor = (name) => { const m = name.match(/^(?:open|close)-(.+)$/); return m && !REEL.includes(m[1]) ? CRF_REST : CRF }
 const wanted = (name) => !ONLY || ONLY.some((t) => name === t || name.startsWith(t))
 
 // ── 1. the snapshot ──
@@ -102,25 +107,30 @@ const sess = (dpr, run, opts) => session(BROWSER, BASE, dpr, run, opts)
 
 function stillJob(id) {
   return async () => {
-    const t = Date.now()
+    const t = Date.now(), meta = png(`meta-${id}.json`)
+    if (REUSE && fs.existsSync(meta)) { const m = JSON.parse(fs.readFileSync(meta, 'utf8')); R.stop[id] = m.stop; R.win[id] = m.win; return }
     await sess(DPR_STILL, async (s) => {
       fs.mkdirSync(png(), { recursive: true })
       await s.settle(id)
+      await s.assertSceneOnly()
       await s.shot(png(`stop-${id}.png`))
       const stopS = await s.sample()
       await s.ph('open'); for (let i = 0; i < 125; i++) await s.step()
+      await s.assertSceneOnly()
       await s.shot(png(`window-${id}.png`))
       const winS = await s.sample()
       R.stop[id] = { quad0: stopS.quad0 }
       R.win[id] = { inner: winS.inner, quad: winS.quad }
+      fs.writeFileSync(meta, JSON.stringify({ stop: R.stop[id], win: R.win[id] }))
     }, { label: `still ${id}` })
     log(`still ${id} (${((Date.now() - t) / 1000).toFixed(0)} s)`)
   }
 }
 
-/** a clip: `frames(s, i, shot)` yields the cues; the frame dir is encoded, the last BLEND frames first blended into `blendTo` */
+/** a clip: `frames(i)` yields the cues; the frames are written, the last BLEND blended into `blendTo`, then encoded */
+const framesDir = (name) => path.join(WORK, 'frames', name)
 async function renderClip(name, frames, s, { n, blendTo, quads = false, stopWhen }) {
-  const dir = path.join(WORK, 'frames', name)
+  const dir = framesDir(name)
   fs.rmSync(dir, { recursive: true, force: true }); fs.mkdirSync(dir, { recursive: true })
   const q = [], cam = []
   let count = 0
@@ -128,63 +138,74 @@ async function renderClip(name, frames, s, { n, blendTo, quads = false, stopWhen
     await frames(i)
     if (quads) { const sm = await s.sample(); q.push(roundPts(sm.quad)); cam.push(round(sm.cam, 4)) }
     await s.shot(path.join(dir, `f-${pad(i)}.png`)); count++
+    if (i === 0 || i === n - 1 || i % 10 === 0) await s.assertSceneOnly()
     if (stopWhen && (await stopWhen(i))) break
   }
   if (blendTo) py(path.join(HERE, 'phone-bake-blend.py'), blendTo, dir, String(BLEND))
+  return { count, q, cam }
+}
+/** encode a frames dir into the output (content-hashed) and record it */
+function finishClip(name, { count, q, cam, marks }, quads) {
   const tmp = path.join(WORK, 'tmp'); fs.mkdirSync(tmp, { recursive: true })
   const mp4 = path.join(tmp, `${name}.mp4`)
-  encodeClip(dir, mp4, { crf: CRF })
+  encodeClip(framesDir(name), mp4, { crf: crfFor(name) })
   const a = hashed(OUT, name, 'mp4', mp4)
-  if (!KEEP) fs.rmSync(dir, { recursive: true, force: true })
-  R.clip[name] = { ...a, w: MASTER.w * DPR_CLIP, h: MASTER.h * DPR_CLIP, frames: count, fps: FPS, ...(quads ? { quads: q, cam } : {}) }
+  R.clip[name] = { ...a, w: MASTER.w * DPR_CLIP, h: MASTER.h * DPR_CLIP, frames: count, fps: FPS, crf: crfFor(name), marks, ...(quads ? { quads: q, cam } : {}) }
 }
 
-const clipJob = (name, body) => async () => {
-  const t = Date.now()
-  for (let attempt = 1; ; attempt++) {
-    try { await sess(DPR_CLIP, (s) => body(s), { label: name }); break } catch (e) { if (attempt >= 2) throw e; log(`${name}: ${e.message} (retrying once)`) }
+const clipJob = (name, body, quads = false) => async () => {
+  const t = Date.now(), meta = path.join(framesDir(name), 'meta.json')
+  if (REUSE && fs.existsSync(meta)) finishClip(name, JSON.parse(fs.readFileSync(meta, 'utf8')), quads)
+  else {
+    let res
+    for (let attempt = 1; ; attempt++) {
+      try { res = await sess(DPR_CLIP, (s) => body(s), { label: name }); break } catch (e) { if (attempt >= 2) throw e; log(`${name}: ${e.message} (retrying once)`) }
+    }
+    fs.writeFileSync(meta, JSON.stringify(res))
+    finishClip(name, res, quads)
+    if (!KEEP) fs.rmSync(framesDir(name), { recursive: true, force: true })
   }
-  log(`clip ${name} ${R.clip[name].frames} frames, ${(R.clip[name].bytes / 1024).toFixed(0)} KB (${((Date.now() - t) / 1000).toFixed(0)} s)`)
+  log(`clip ${name} ${R.clip[name].frames} frames, crf ${R.clip[name].crf}, ${(R.clip[name].bytes / 1024).toFixed(0)} KB (${((Date.now() - t) / 1000).toFixed(0)} s)`)
 }
 
 const panJob = (a, b) => clipJob(`pan-${a}-${b}`, async (s) => {
   await s.settle(a)
-  await renderClip(`pan-${a}-${b}`, async (i) => { if (i === 0) await s.stopCue(b); else await s.step() }, s, { n: PAN_FRAMES, blendTo: png(`stop-${b}.png`) })
+  return renderClip(`pan-${a}-${b}`, async (i) => { if (i === 0) await s.stopCue(b); else await s.step() }, s, { n: PAN_FRAMES, blendTo: png(`stop-${b}.png`) })
 })
 const openJob = (id) => clipJob(`open-${id}`, async (s) => {
   await s.settle(id)
-  await renderClip(`open-${id}`, async (i) => { if (i === 0) await s.ph('open'); else await s.step() }, s, { n: OPEN_FRAMES, quads: true })
-})
+  return renderClip(`open-${id}`, async (i) => { if (i === 0) await s.ph('open'); else await s.step() }, s, { n: OPEN_FRAMES, quads: true })
+}, true)
 const closeJob = (id) => clipJob(`close-${id}`, async (s) => {
   await s.settle(id)
   await s.ph('open'); for (let i = 0; i < 125; i++) await s.step()
-  await renderClip(`close-${id}`, async (i) => { if (i === 0) await s.ph('close'); else await s.step() }, s, { n: CLOSE_FRAMES, quads: true, blendTo: png(`stop-${id}.png`) })
-})
+  return renderClip(`close-${id}`, async (i) => { if (i === 0) await s.ph('close'); else await s.step() }, s, { n: CLOSE_FRAMES, quads: true, blendTo: png(`stop-${id}.png`) })
+}, true)
 const entranceJob = () => clipJob('entrance', async (s) => {
   // the engine's own entrance, replayed without the home's brief; the push onto the cover is the prototype's cue
   await s.p.evaluate(() => { const a = window.__cf; a.setBrief(false); a.holdEntrance(); a.releaseEntrance() })
   let cued = false
-  await renderClip('entrance', async (i) => {
+  const r = await renderClip('entrance', async (i) => {
     if (!cued && i / FPS >= STOP_CUE - 1e-6) { cued = true; await s.stopCue('YW-000') }
     if (i > 0) await s.step()
   }, s, { n: ENTRANCE_FRAMES, blendTo: png('stop-YW-000.png') })
-  R.clip.entrance.marks = await s.marks()
+  return { ...r, marks: await s.marks() }
 })
 const doorJob = () => clipJob('door-YW-000', async (s) => {
   // the engine's own door (beginOpen → the key's light → beginDoor) on the master viewport, to its cut
   await s.settle('YW-000')
   let cut = false
-  await renderClip('door-YW-000', async (i) => { if (i === 0) await s.ph('door'); else await s.step() }, s, {
+  const r = await renderClip('door-YW-000', async (i) => { if (i === 0) await s.ph('door'); else await s.step() }, s, {
     n: DOOR_MAX, quads: true, stopWhen: async () => { cut = await s.p.evaluate(() => window.__ph.doorCut); return cut },
   })
   if (!cut) throw new Error('the door never reached its cut')
-  R.clip['door-YW-000'].marks = await s.marks()
-})
+  return { ...r, marks: await s.marks() }
+}, true)
 
 // ── main ──
 const t0 = Date.now()
 let preview = null
-const keep = { ok: false }
+const keep = { ok: false }, budgetFailed = []
 try {
   let base, headSha = 'dev', hash
   if (arg('dev', '')) { base = String(arg('dev')); hash = inputHash(ROOT).hash; log(`DEV render from ${base}: inputHash is the working tree's`) }
@@ -196,7 +217,7 @@ try {
     preview = await startPreview(); base = `http://127.0.0.1:${PORT}`; log(`preview on ${base} (pid ${preview.pid})`)
   }
   fs.mkdirSync(WORK, { recursive: true }); fs.rmSync(OUT, { recursive: true, force: true }); fs.mkdirSync(OUT, { recursive: true })
-  fs.rmSync(path.join(WORK, 'png'), { recursive: true, force: true })
+  if (!REUSE) { fs.rmSync(path.join(WORK, 'png'), { recursive: true, force: true }); fs.rmSync(path.join(WORK, 'frames'), { recursive: true, force: true }) }
 
   BROWSER = await launch(); BASE = base
   const gpu = await assertHardwareGpu(BROWSER)
@@ -225,11 +246,31 @@ try {
     toWebp(png(`stop-${id}.png`), path.join(WORK, 'tmp-stop.webp')); s.still = hashed(OUT, `stop-${id}`, 'webp', path.join(WORK, 'tmp-stop.webp'))
     toWebp(png(`window-${id}.png`), path.join(WORK, 'tmp-win.webp')); w.still = hashed(OUT, `window-${id}`, 'webp', path.join(WORK, 'tmp-win.webp'))
     const face = bbox(w.inner)
-    const die = JSON.parse(py(path.join(HERE, 'phone-bake-die.py'), path.join(OUT, w.still.file), String(MASTER.w), String(face.x0), String(face.y0), String(face.x1), String(face.y1)))
-    w.die = { x: round(die.die[0], 1), y: round(die.die[1], 1) }; w.dieBox = die.bbox
     w.face = { x0: round(face.x0), y0: round(face.y0), x1: round(face.x1), y1: round(face.y1) }
+    try {
+      const die = JSON.parse(py(path.join(HERE, 'phone-bake-die.py'), path.join(OUT, w.still.file), String(MASTER.w), String(face.x0), String(face.y0), String(face.x1), String(face.y1)))
+      w.die = { x: round(die.die[0], 1), y: round(die.die[1], 1) }; w.dieBox = die.bbox; w.dieHow = 'measured'
+    } catch (e) { w.dieError = String(e.message).trim().split(/\r?\n/).pop() }
     s.reticle = reticle(s.quad0)
   }
+  // The secure element is measured on the pixels. A drive whose circuit is not drawn (the sealed black one, X-000) has no die to
+  // see: its centre is the others' position inside the face (the etched die sits at one place of every drive's face).
+  {
+    const rel = (w) => ({ x: (w.die.x - w.face.x0) / (w.face.x1 - w.face.x0), y: (w.die.y - w.face.y0) / (w.face.y1 - w.face.y0) })
+    const ok = [...needStill].map((id) => R.win[id]).filter((w) => w.die)
+    const med = (a) => [...a].sort((p, q) => p - q)[a.length >> 1]
+    if (!ok.length) throw new Error('no die could be measured in any window still')
+    const rx = ok.map((w) => rel(w).x), ry = ok.map((w) => rel(w).y), mx = med(rx), my = med(ry)
+    const spread = Math.max(Math.max(...rx) - Math.min(...rx), Math.max(...ry) - Math.min(...ry))
+    log(`die: ${ok.length}/${needStill.size} measured; position in the face x ${mx.toFixed(4)} y ${my.toFixed(4)}, spread ${(spread * 100).toFixed(2)}% of the face`)
+    if (spread > 0.012) throw new Error(`the measured die positions disagree by ${(spread * 100).toFixed(2)}% of the face (> 1.2%)`)
+    for (const id of needStill) {
+      const w = R.win[id]
+      if (!w.die) { w.die = { x: round(w.face.x0 + mx * (w.face.x1 - w.face.x0), 1), y: round(w.face.y0 + my * (w.face.y1 - w.face.y0), 1) }; w.dieHow = `derived (${w.dieError})`; log(`die ${id}: ${w.dieHow}`) }
+    }
+  }
+
+  fs.writeFileSync(path.join(WORK, 'die.json'), JSON.stringify(Object.fromEntries([...needStill].map((id) => [id, { die: R.win[id].die, how: R.win[id].dieHow, box: R.win[id].dieBox, face: R.win[id].face, reticle: R.stop[id].reticle }])), null, 1))
 
   // ── clips ──
   await pool([
@@ -265,7 +306,7 @@ try {
   const failures = []
   if (!PARTIAL && total > 45 * 1048576) failures.push(`public/phone is ${(total / 1048576).toFixed(2)} MB > 45 MB`)
   if (first != null && first > 3 * 1048576) failures.push(`entrance + cover still + first pan is ${(first / 1048576).toFixed(2)} MB > 3 MB`)
-  if (failures.length) { keep.ok = false; throw new Error(`BUDGET FAILED (output kept in ${OUT}): ${failures.join('; ')}`) }
+  if (failures.length) { console.error(`BUDGET FAILED: ${failures.join('; ')}`); if (!OVER_BUDGET) throw new Error(`BUDGET FAILED (output kept in ${OUT}): ${failures.join('; ')}`); budgetFailed.push(...failures) }
 
   // ── checks (clip ends vs stills, hard-cut scan) ──
   const report = await runChecks(manifest, OUT, { evidence: EVIDENCE, work: path.join(WORK, 'check') })
@@ -278,7 +319,8 @@ try {
     for (const f of fs.readdirSync(OUT)) fs.copyFileSync(path.join(OUT, f), path.join(pub, f))
     log(`published ${files.length + 1} files to public/phone`)
   } else log(`partial bake kept in ${OUT} (public/phone untouched)`)
-  keep.ok = true
+  keep.ok = budgetFailed.length === 0
+  if (budgetFailed.length) console.error(`published over budget (--over-budget): ${budgetFailed.join('; ')}`)
   log(`done in ${((Date.now() - t0) / 60000).toFixed(1)} min`)
 } finally {
   stopPreview(preview)
