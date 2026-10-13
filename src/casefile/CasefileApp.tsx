@@ -100,8 +100,14 @@ export default function CasefileApp() {
     a.veil = veilRef.current
     setArchive(a)
     ;(window as unknown as { __cf: Archive }).__cf = a
-    // lab: the phone prototype's director (?phone)
-    if (window.location.search.includes('phone')) void import('./phone/lab').then((m) => m.install())
+    // lab (dev, and `--mode bake`; compiled out of a production build): ?bake = the phone bake's director, scene pixels only;
+    // ?phone = the same director with the prototype's page over it
+    // (the condition is spelled out, not imported: the bundler must see the constant to leave the lab's chunks out of a production build)
+    if (import.meta.env.DEV || import.meta.env.MODE === 'bake') {
+      const q = new URLSearchParams(window.location.search)
+      if (q.has('bake')) void import('./phone/bake/director').then((m) => m.install({ master: true }))
+      else if (q.has('phone')) void import('./phone/lab').then((m) => m.install())
+    }
     // if the scene cannot finish preparing (context loss, driver error) fall back to the readable
     // index instead of leaving the entry waiting on its title frame
     void a.ready.then(() => { if (!dead) setSceneReady(true) }, () => { if (!dead) { setNoGL(true); setSceneReady(true) } })

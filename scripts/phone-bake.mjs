@@ -1,0 +1,286 @@
+// `npm run phone:bake`: renders the phone's pictures with the real engine, frame-exact, scene pixels only, and writes
+// public/phone/ (content-hashed files + manifest.json, the contract in src/casefile/phone/manifest.ts).
+//
+//   1. a clean snapshot: a detached git worktree at the current HEAD (E:\...\.codex-runtime\p3-bake), `vite build --mode bake`
+//      there, `vite preview` on :4196. Source edits in this worktree cannot reach a bake in progress (commit first: the
+//      bake renders what HEAD holds, and refuses to run when the bake's inputs are uncommitted).
+//   2. WebGL must report a hardware GPU, or the bake aborts.
+//   3. stills (dpr 2.5, WebP), then clips (dpr 2, 25 fps, H.264): entrance, pans, opens, closes, the profile's door.
+//      Every job is its own page, so an asset does not depend on what was rendered before it.
+//   4. budget checks, then the checks in phone-bake-checks.mjs (clip ends vs stills, hard-cut scan).
+//
+// node scripts/phone-bake.mjs [--only=a,b] [--out=dir] [--work=dir] [--jobs=4] [--keep-frames] [--dev=http://host:port] [--no-build] [--evidence=dir] [--crf=23]
+//   --only: asset names or prefixes (stop-X-001, pan-, open-X-001, entrance …): a partial bake goes to --out and leaves public/phone alone
+//   --dev: render from a running dev server instead of the snapshot (experiments only; the inputHash then is not the snapshot's)
+import fs from 'node:fs'
+import http from 'node:http'
+import path from 'node:path'
+import { execFileSync, spawn, spawnSync } from 'node:child_process'
+import { fileURLToPath, pathToFileURL } from 'node:url'
+import { MASTER, REEL } from '../src/casefile/phone/manifest.ts'
+import { inputHash } from './phone-bake-hash.mjs'
+import { DPR_CLIP, DPR_STILL, FPS, assertHardwareGpu, encodeClip, launch, pad, pool, py, session, sha, sizeOf, toWebp } from './phone-bake-lib.mjs'
+import { runChecks } from './phone-bake-checks.mjs'
+
+const HERE = path.dirname(fileURLToPath(import.meta.url))
+const ROOT = path.resolve(HERE, '..')
+const arg = (k, d) => { const a = process.argv.find((x) => x === `--${k}` || x.startsWith(`--${k}=`)); return a === undefined ? d : a.includes('=') ? a.slice(k.length + 3) : true }
+const ONLY = arg('only', '') ? String(arg('only')).split(',').filter(Boolean) : null
+const PARTIAL = !!ONLY
+const WORK = path.resolve(arg('work', path.join(ROOT, '..', 'p3-bake-work')))
+const OUT = path.resolve(arg('out', PARTIAL ? path.join(WORK, 'out-partial') : path.join(WORK, 'out')))
+const JOBS = Number(arg('jobs', 4))
+const KEEP = !!arg('keep-frames', false)
+const CRF = Number(arg('crf', 23))
+const EVIDENCE = arg('evidence', '')
+const SNAP = path.join(ROOT, '..', 'p3-bake')
+const PORT = 4196
+
+// ── what a clip is ──
+const PAN_FRAMES = 60          // 2.4 s
+const OPEN_FRAMES = 50         // 2.0 s
+const CLOSE_FRAMES = 60        // 2.4 s: the closing timeline, then the stop's springs coming to rest
+const BLEND = 6                // last frames blended into the destination's canonical still
+const ENTRANCE_FRAMES = 160    // 6.4 s: the push onto the cover is at 3.9 s and the drive lands (≈0.6% = the dpr floor) by ≈6.2 s
+const STOP_CUE = 3.9           // s into the entrance: the prototype's stop:YW-000 cue
+const DOOR_MAX = 400
+
+const log = (...a) => console.log(new Date().toISOString().slice(11, 19), ...a)
+const wanted = (name) => !ONLY || ONLY.some((t) => name === t || name.startsWith(t))
+
+// ── 1. the snapshot ──
+const sh = (cmd, args, opts = {}) => { const r = spawnSync(cmd, args, { encoding: 'utf8', ...opts }); if (r.status !== 0) throw new Error(`${cmd} ${args.join(' ')} failed:\n${r.stdout}${r.stderr}`); return r.stdout.trim() }
+
+function prepareSnapshot() {
+  const head = sh('git', ['rev-parse', 'HEAD'], { cwd: ROOT })
+  const dirty = sh('git', ['status', '--porcelain', '--', 'src/casefile/data', 'src/casefile/phone/bake', 'src/casefile/scene', 'src/casefile/motion', 'src/casefile/CasefileApp.tsx', 'vite.config.ts', 'package.json'], { cwd: ROOT })
+  if (dirty) throw new Error(`the bake renders the committed snapshot, but its inputs have uncommitted changes (commit them first):\n${dirty}`)
+  if (!fs.existsSync(path.join(SNAP, '.git'))) { fs.rmSync(SNAP, { recursive: true, force: true }); sh('git', ['worktree', 'add', '--detach', SNAP, head], { cwd: ROOT }) }
+  else { sh('git', ['reset', '--hard', '-q'], { cwd: SNAP }); sh('git', ['clean', '-fdq'], { cwd: SNAP }); sh('git', ['checkout', '--detach', '-q', head], { cwd: SNAP }) }
+  const nm = path.join(SNAP, 'node_modules')
+  if (!fs.existsSync(nm)) fs.symlinkSync(fs.realpathSync(path.join(ROOT, 'node_modules')), nm, 'junction')
+  // (the snapshot's own pictures are not part of a bake build)
+  for (const d of ['public/phone', 'public/phone-spike', 'public/phone-dev']) fs.rmSync(path.join(SNAP, d), { recursive: true, force: true })
+  return head
+}
+const vite = (...a) => execFileSync(process.execPath, [path.join(SNAP, 'node_modules/vite/bin/vite.js'), ...a], { cwd: SNAP, stdio: 'inherit' })
+
+const get = (url) => new Promise((res) => { http.get(url, (r) => { r.resume(); res(r.statusCode) }).on('error', () => res(0)) })
+
+async function startPreview() {
+  if ((await get(`http://127.0.0.1:${PORT}/`)) !== 0) throw new Error(`port ${PORT} is already in use (not killing what I did not start)`)
+  const child = spawn(process.execPath, [path.join(SNAP, 'node_modules/vite/bin/vite.js'), 'preview', '--outDir', 'dist-bake', '--host', '127.0.0.1', '--port', String(PORT), '--strictPort'], { cwd: SNAP, stdio: ['ignore', 'pipe', 'pipe'] })
+  child.stdout.on('data', () => {}); child.stderr.on('data', (d) => process.stderr.write(d))
+  for (let i = 0; i < 100; i++) { if ((await get(`http://127.0.0.1:${PORT}/`)) === 200) return child; await new Promise((r) => setTimeout(r, 200)) }
+  child.kill(); throw new Error('vite preview did not come up')
+}
+// kill the one process this script started (and only it)
+const stopPreview = (child) => { if (child?.pid) spawnSync('taskkill', ['/PID', String(child.pid), '/T', '/F'], { stdio: 'ignore' }) }
+
+// ── helpers on a job's results ──
+const R = { stop: {}, win: {}, clip: {} }
+const png = (...p) => path.join(WORK, 'png', ...p)
+const round = (v, n = 2) => +v.toFixed(n)
+const roundPts = (q) => q.map(([x, y]) => [round(x), round(y)])
+const bbox = (q) => ({ x0: Math.min(...q.map((p) => p[0])), y0: Math.min(...q.map((p) => p[1])), x1: Math.max(...q.map((p) => p[0])), y1: Math.max(...q.map((p) => p[1])) })
+
+/** the reader's box around a resting drive, exactly as overlay.ts places it (master px, not clamped: the runtime clamps) */
+function reticle(quad) {
+  const b = bbox(quad), cx = (b.x0 + b.x1) / 2, cy = (b.y0 + b.y1) / 2
+  const hw = (b.x1 - b.x0) / 2 * 1.1 + 12, hh = (b.y1 - b.y0) / 2 * 1.1 + 12
+  return { x0: round(cx - hw), y0: round(cy - hh), x1: round(cx + hw), y1: round(cy + hh) }
+}
+const hashed = (dir, name, ext, srcFile) => {
+  const buf = fs.readFileSync(srcFile), file = `${name}.${sha(buf).slice(0, 10)}.${ext}`
+  fs.mkdirSync(dir, { recursive: true }); fs.writeFileSync(path.join(dir, file), buf)
+  return { file, bytes: buf.length }
+}
+
+// ── jobs (each opens its own page on the one browser, against the one base URL) ──
+let BROWSER = null, BASE = ''
+const sess = (dpr, run, opts) => session(BROWSER, BASE, dpr, run, opts)
+
+function stillJob(id) {
+  return async () => {
+    const t = Date.now()
+    await sess(DPR_STILL, async (s) => {
+      fs.mkdirSync(png(), { recursive: true })
+      await s.settle(id)
+      await s.shot(png(`stop-${id}.png`))
+      const stopS = await s.sample()
+      await s.ph('open'); for (let i = 0; i < 125; i++) await s.step()
+      await s.shot(png(`window-${id}.png`))
+      const winS = await s.sample()
+      R.stop[id] = { quad0: stopS.quad0 }
+      R.win[id] = { inner: winS.inner, quad: winS.quad }
+    }, { label: `still ${id}` })
+    log(`still ${id} (${((Date.now() - t) / 1000).toFixed(0)} s)`)
+  }
+}
+
+/** a clip: `frames(s, i, shot)` yields the cues; the frame dir is encoded, the last BLEND frames first blended into `blendTo` */
+async function renderClip(name, frames, s, { n, blendTo, quads = false, stopWhen }) {
+  const dir = path.join(WORK, 'frames', name)
+  fs.rmSync(dir, { recursive: true, force: true }); fs.mkdirSync(dir, { recursive: true })
+  const q = [], cam = []
+  let count = 0
+  for (let i = 0; i < n; i++) {
+    await frames(i)
+    if (quads) { const sm = await s.sample(); q.push(roundPts(sm.quad)); cam.push(round(sm.cam, 4)) }
+    await s.shot(path.join(dir, `f-${pad(i)}.png`)); count++
+    if (stopWhen && (await stopWhen(i))) break
+  }
+  if (blendTo) py(path.join(HERE, 'phone-bake-blend.py'), blendTo, dir, String(BLEND))
+  const tmp = path.join(WORK, 'tmp'); fs.mkdirSync(tmp, { recursive: true })
+  const mp4 = path.join(tmp, `${name}.mp4`)
+  encodeClip(dir, mp4, { crf: CRF })
+  const a = hashed(OUT, name, 'mp4', mp4)
+  if (!KEEP) fs.rmSync(dir, { recursive: true, force: true })
+  R.clip[name] = { ...a, w: MASTER.w * DPR_CLIP, h: MASTER.h * DPR_CLIP, frames: count, fps: FPS, ...(quads ? { quads: q, cam } : {}) }
+}
+
+const clipJob = (name, body) => async () => {
+  const t = Date.now()
+  for (let attempt = 1; ; attempt++) {
+    try { await sess(DPR_CLIP, (s) => body(s), { label: name }); break } catch (e) { if (attempt >= 2) throw e; log(`${name}: ${e.message} (retrying once)`) }
+  }
+  log(`clip ${name} ${R.clip[name].frames} frames, ${(R.clip[name].bytes / 1024).toFixed(0)} KB (${((Date.now() - t) / 1000).toFixed(0)} s)`)
+}
+
+const panJob = (a, b) => clipJob(`pan-${a}-${b}`, async (s) => {
+  await s.settle(a)
+  await renderClip(`pan-${a}-${b}`, async (i) => { if (i === 0) await s.stopCue(b); else await s.step() }, s, { n: PAN_FRAMES, blendTo: png(`stop-${b}.png`) })
+})
+const openJob = (id) => clipJob(`open-${id}`, async (s) => {
+  await s.settle(id)
+  await renderClip(`open-${id}`, async (i) => { if (i === 0) await s.ph('open'); else await s.step() }, s, { n: OPEN_FRAMES, quads: true })
+})
+const closeJob = (id) => clipJob(`close-${id}`, async (s) => {
+  await s.settle(id)
+  await s.ph('open'); for (let i = 0; i < 125; i++) await s.step()
+  await renderClip(`close-${id}`, async (i) => { if (i === 0) await s.ph('close'); else await s.step() }, s, { n: CLOSE_FRAMES, quads: true, blendTo: png(`stop-${id}.png`) })
+})
+const entranceJob = () => clipJob('entrance', async (s) => {
+  // the engine's own entrance, replayed without the home's brief; the push onto the cover is the prototype's cue
+  await s.p.evaluate(() => { const a = window.__cf; a.setBrief(false); a.holdEntrance(); a.releaseEntrance() })
+  let cued = false
+  await renderClip('entrance', async (i) => {
+    if (!cued && i / FPS >= STOP_CUE - 1e-6) { cued = true; await s.stopCue('YW-000') }
+    if (i > 0) await s.step()
+  }, s, { n: ENTRANCE_FRAMES, blendTo: png('stop-YW-000.png') })
+  R.clip.entrance.marks = await s.marks()
+})
+const doorJob = () => clipJob('door-YW-000', async (s) => {
+  // the engine's own door (beginOpen → the key's light → beginDoor) on the master viewport, to its cut
+  await s.settle('YW-000')
+  let cut = false
+  await renderClip('door-YW-000', async (i) => { if (i === 0) await s.ph('door'); else await s.step() }, s, {
+    n: DOOR_MAX, quads: true, stopWhen: async () => { cut = await s.p.evaluate(() => window.__ph.doorCut); return cut },
+  })
+  if (!cut) throw new Error('the door never reached its cut')
+  R.clip['door-YW-000'].marks = await s.marks()
+})
+
+// ── main ──
+const t0 = Date.now()
+let preview = null
+const keep = { ok: false }
+try {
+  let base, headSha = 'dev', hash
+  if (arg('dev', '')) { base = String(arg('dev')); hash = inputHash(ROOT).hash; log(`DEV render from ${base}: inputHash is the working tree's`) }
+  else {
+    headSha = prepareSnapshot(); log(`snapshot ${SNAP} at ${headSha.slice(0, 8)}`)
+    hash = inputHash(SNAP).hash
+    if (hash !== inputHash(ROOT).hash) throw new Error('inputHash of the snapshot differs from the working tree (uncommitted or unrelated changes in the bake inputs)')
+    if (!arg('no-build', false)) { log('vite build --mode bake'); vite('build', '--mode', 'bake', '--outDir', 'dist-bake', '--emptyOutDir') }
+    preview = await startPreview(); base = `http://127.0.0.1:${PORT}`; log(`preview on ${base} (pid ${preview.pid})`)
+  }
+  fs.mkdirSync(WORK, { recursive: true }); fs.rmSync(OUT, { recursive: true, force: true }); fs.mkdirSync(OUT, { recursive: true })
+  fs.rmSync(path.join(WORK, 'png'), { recursive: true, force: true })
+
+  BROWSER = await launch(); BASE = base
+  const gpu = await assertHardwareGpu(BROWSER)
+  log(`GPU: ${gpu}`)
+
+  // which entries the phone Index lists: asked of the page's director (everything but skills and credentials)
+  const stops = await sess(DPR_CLIP, (s) => s.stops(), { label: 'probe' })
+  const ids = stops.map((x) => x.id)
+  log(`stops (${ids.length}): ${ids.join(' ')}`)
+  const pairs = REEL.flatMap((a, i) => (i < REEL.length - 1 ? [[a, REEL[i + 1]], [REEL[i + 1], a]] : []))
+
+  // which clips this run makes, and so which stills it needs (a pan blends into its destination's still, a close into its own)
+  const panWanted = pairs.filter(([a, b]) => wanted(`pan-${a}-${b}`))
+  const openIds = ids.filter((id) => wanted(`open-${id}`)), closeIds = ids.filter((id) => wanted(`close-${id}`))
+  const doWindow = (id) => wanted(`window-${id}`)
+  const needStill = new Set([
+    ...ids.filter((id) => wanted(`stop-${id}`) || doWindow(id) || openIds.includes(id) || closeIds.includes(id)),
+    ...panWanted.flatMap(([a, b]) => [a, b]), ...(wanted('entrance') ? ['YW-000'] : []),
+  ])
+
+  // ── stills ──
+  log(`stills: ${[...needStill].join(' ')}`)
+  await pool([...needStill].map((id) => stillJob(id)), JOBS)
+  for (const id of needStill) {
+    const s = R.stop[id], w = R.win[id]
+    toWebp(png(`stop-${id}.png`), path.join(WORK, 'tmp-stop.webp')); s.still = hashed(OUT, `stop-${id}`, 'webp', path.join(WORK, 'tmp-stop.webp'))
+    toWebp(png(`window-${id}.png`), path.join(WORK, 'tmp-win.webp')); w.still = hashed(OUT, `window-${id}`, 'webp', path.join(WORK, 'tmp-win.webp'))
+    const face = bbox(w.inner)
+    const die = JSON.parse(py(path.join(HERE, 'phone-bake-die.py'), path.join(OUT, w.still.file), String(MASTER.w), String(face.x0), String(face.y0), String(face.x1), String(face.y1)))
+    w.die = { x: round(die.die[0], 1), y: round(die.die[1], 1) }; w.dieBox = die.bbox
+    w.face = { x0: round(face.x0), y0: round(face.y0), x1: round(face.x1), y1: round(face.y1) }
+    s.reticle = reticle(s.quad0)
+  }
+
+  // ── clips ──
+  await pool([
+    ...(wanted('entrance') ? [entranceJob()] : []),
+    ...panWanted.map(([a, b]) => panJob(a, b)),
+    ...openIds.map((id) => openJob(id)),
+    ...closeIds.map((id) => closeJob(id)),
+    ...(wanted('door-YW-000') ? [doorJob()] : []),
+  ], JOBS)
+  await BROWSER.close()
+
+  // ── manifest ──
+  const still = (a, dpr = DPR_STILL) => ({ file: a.file, bytes: a.bytes, w: MASTER.w * dpr, h: MASTER.h * dpr, dpr })
+  const clip = (n) => { const c = R.clip[n]; return { file: c.file, bytes: c.bytes, w: c.w, h: c.h, frames: c.frames, fps: c.fps } }
+  const manifest = { version: 1, inputHash: hash, master: { ...MASTER }, reel: [...REEL], stops: {}, pans: {}, open: {}, close: {} }
+  for (const id of needStill) if (wanted(`stop-${id}`)) manifest.stops[id] = { id, still: still(R.stop[id].still), reticle: R.stop[id].reticle, quad: roundPts(R.stop[id].quad0).map(([x, y]) => ({ x, y })) }
+  for (const [a, b] of pairs) if (R.clip[`pan-${a}-${b}`]) manifest.pans[`${a}>${b}`] = clip(`pan-${a}-${b}`)
+  for (const id of ids) {
+    const o = R.clip[`open-${id}`], c = R.clip[`close-${id}`]
+    if (o) { const w = R.win[id]; manifest.open[id] = { ...clip(`open-${id}`), quads: o.quads.map((q) => q.map(([x, y]) => ({ x, y }))), cam: o.cam, window: still(w.still), die: w.die, face: w.face } }
+    if (c) manifest.close[id] = { ...clip(`close-${id}`), quads: c.quads.map((q) => q.map(([x, y]) => ({ x, y }))), cam: c.cam }
+  }
+  if (R.clip.entrance) manifest.entrance = { ...clip('entrance'), endsOn: 'YW-000' }
+  if (R.clip['door-YW-000']) { const c = R.clip['door-YW-000']; manifest.door = { 'YW-000': { ...clip('door-YW-000'), quads: c.quads.map((q) => q.map(([x, y]) => ({ x, y }))), cam: c.cam } } }
+  fs.writeFileSync(path.join(OUT, 'manifest.json'), JSON.stringify(manifest))
+
+  // ── budgets ──
+  const files = fs.readdirSync(OUT).filter((f) => f !== 'manifest.json')
+  const total = files.reduce((n, f) => n + sizeOf(path.join(OUT, f)), 0) + sizeOf(path.join(OUT, 'manifest.json'))
+  const first = manifest.entrance && manifest.stops['YW-000'] && manifest.pans['YW-000>X-001']
+    ? manifest.entrance.bytes + manifest.stops['YW-000'].still.bytes + manifest.pans['YW-000>X-001'].bytes : null
+  log(`total ${(total / 1048576).toFixed(2)} MB in ${files.length + 1} files; first screen (entrance + cover still + first pan) ${first == null ? 'n/a' : (first / 1048576).toFixed(2) + ' MB'}`)
+  const failures = []
+  if (!PARTIAL && total > 45 * 1048576) failures.push(`public/phone is ${(total / 1048576).toFixed(2)} MB > 45 MB`)
+  if (first != null && first > 3 * 1048576) failures.push(`entrance + cover still + first pan is ${(first / 1048576).toFixed(2)} MB > 3 MB`)
+  if (failures.length) { keep.ok = false; throw new Error(`BUDGET FAILED (output kept in ${OUT}): ${failures.join('; ')}`) }
+
+  // ── checks (clip ends vs stills, hard-cut scan) ──
+  const report = await runChecks(manifest, OUT, { evidence: EVIDENCE, work: path.join(WORK, 'check') })
+  if (!report.ok) throw new Error(`CHECKS FAILED (output kept in ${OUT}): ${report.failures.join('; ')}`)
+
+  // ── publish ──
+  if (!PARTIAL) {
+    const pub = path.join(ROOT, 'public/phone')
+    fs.rmSync(pub, { recursive: true, force: true }); fs.mkdirSync(pub, { recursive: true })
+    for (const f of fs.readdirSync(OUT)) fs.copyFileSync(path.join(OUT, f), path.join(pub, f))
+    log(`published ${files.length + 1} files to public/phone`)
+  } else log(`partial bake kept in ${OUT} (public/phone untouched)`)
+  keep.ok = true
+  log(`done in ${((Date.now() - t0) / 60000).toFixed(1)} min`)
+} finally {
+  stopPreview(preview)
+}
+process.exit(keep.ok ? 0 : 1)

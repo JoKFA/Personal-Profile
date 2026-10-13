@@ -12,7 +12,9 @@
     "test:watch": "vitest",
     "test:e2e": "playwright test",
     "test:e2e:install": "playwright install chromium",
-    "typecheck": "tsc -b"
+    "typecheck": "tsc -b",
+    "phone:bake": "node ./scripts/phone-bake.mjs",
+    "phone:check": "node ./scripts/phone-check.mjs"
   },
   "dependencies": {
     "@fontsource-variable/manrope": "^5.3.0",

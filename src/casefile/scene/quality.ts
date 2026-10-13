@@ -1,5 +1,7 @@
 // Quality tiers (spec §8). Start high on desktop, medium on touch devices; step down once if the
 // frame time stays high. `?quality=high|medium|low` forces a tier.
+import { LAB } from './lab'
+
 export interface Quality { name: 'high' | 'medium' | 'low'; dpr: number; shadows: number; ao: boolean; transmission: boolean }
 
 export const TIERS: Record<Quality['name'], Quality> = {
@@ -10,8 +12,8 @@ export const TIERS: Record<Quality['name'], Quality> = {
 
 export function initialQuality(search = location.search, coarse = matchMedia('(pointer: coarse)').matches): Quality {
   const forced = new URLSearchParams(search).get('quality') as Quality['name'] | null
-  // lab: ?dpr=3 renders at that pixel ratio (phone keyframes)
-  const dpr = Number(new URLSearchParams(search).get('dpr'))
+  // lab: ?dpr=2.5 renders at that pixel ratio (the phone bake; not in a production build)
+  const dpr = LAB ? Number(new URLSearchParams(search).get('dpr')) : 0
   if (forced && TIERS[forced]) return dpr ? { ...TIERS[forced], dpr } : TIERS[forced]
   return coarse ? TIERS.medium : TIERS.high
 }

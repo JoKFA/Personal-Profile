@@ -16,6 +16,7 @@ import { ENTRANCE, ENTRANCE_END, SKIP_ENTRANCE, entranceCamera, entranceSlide, f
 import { BOARD_Z, CARD, LED } from './drive'
 import { DIE_ON_FACE, DOOR, doorAt, doorDistance, doorSpan } from './door'
 import { createHero, type Hero } from './hero'
+import { LAB, type LabHooks } from './lab'
 import { loadDriveModel } from './model'
 import { FrameBudget, initialQuality, lower, type Quality } from './quality'
 import { CIPHER_CELLS, COLS, createStage, DROWS, PLAIN, RECORD_CELL0, type Form, type Stage } from './stage'
@@ -664,12 +665,11 @@ export class Archive {
     this.proven = true
     const rawDt = now - this.last
     const dt = Math.min(0.05, rawDt / 1000); this.last = now; this.t += dt
-    // lab (phone prototype): a director sets this frame's overrides before anything reads them
-    const director = (window as unknown as { __phoneDirector?: (t: number, dt: number, a: Archive) => void }).__phoneDirector
-    if (director) director(this.t, dt, this)
+    // lab (the phone bake's director): sets this frame's overrides before anything reads them (not in a production build)
+    if (LAB) window.__phoneDirector?.(this.t, dt, this)
     if (this.door.on) this.door.t = Math.min(DOOR.end, Math.max(0, this.door.t + dt * this.door.dir * this.door.speed))
     const D = this.door.on ? doorAt(this.door.t) : null
-    if (this.budget.sample(rawDt, now) && this.quality.name !== 'low' && !location.search.includes('quality=')) this.degrade()
+    if (this.budget.sample(rawDt, now) && this.quality.name !== 'low' && !(LAB && new URLSearchParams(location.search).has('quality'))) this.degrade()
     const t = this.t, R = this.reduced ? REDUCED_FACTOR : 1, S = this.stage
     if (this.entranceHeld) this.enteredAt = t - 0.001
     const chosen = cellPos(this.sel)
@@ -693,14 +693,14 @@ export class Archive {
       // the PV smears the first second and a half hard, then the image steadies as the camera slows
       const shutter = age < ENTRANCE_END ? 1 + 1.6 * (1 - smooth(age / 1.8)) : 1
       const k = this.reduced || dt <= 0 ? 0 : 0.5 * Math.min(1, 1 / 60 / dt) * 2.2 * shutter * LOOK.motionBlur
-      const kb = k * ((window as unknown as { __lab?: { blur?: number } }).__lab?.blur ?? 1)   // lab: the phone's pans smear less
+      const kb = k * (LAB ? window.__lab?.blur ?? 1 : 1)   // lab: the phone's pans smear less
       S.setMotion(THREE.MathUtils.clamp((this.tmp.x - ax) * kb, -0.045, 0.045), THREE.MathUtils.clamp((this.tmp.y - ay) * kb, -0.018, 0.018))
     }
     this.pulses = this.pulses.filter((p) => t - p.time < PULSE_LIFE)
     // the field keeps breathing whenever the archive is showing, not only when idle
     const idle = this.mode === 'archive' && !this.reduced
     const still = t - this.lastInteraction > 2.5
-    this.idleGain = approach(this.idleGain, idle ? (still ? 1 : 0.55) : 0, idle ? 0.8 : 4, dt)
+    this.idleGain = LAB && window.__lab?.idle0 ? 0 : approach(this.idleGain, idle ? (still ? 1 : 0.55) : 0, idle ? 0.8 : 4, dt)   // (lab: baked pixels hold the field still)
     this.pulseGain = approach(this.pulseGain, this.opening || this.mode === 'closing' ? 0 : 1, RATES.pulseGain, dt)
 
     // flips landing this frame
@@ -724,7 +724,7 @@ export class Archive {
 
     const up = this.opening || this.holdHigh
     const settling = this.mode === 'archive' && age < ENTRANCE.found
-    const lab = (window as unknown as { __lab?: { lift?: number; clear?: number; tilt?: number; face?: number; sharp?: boolean; slot?: number; quiet?: number; blur?: number; clearCells?: Map<string, number>; drop?: (dRow: number, dLane: number) => number; pose?: { c: number[]; yaw: number; tilt: number; roll: number }; fog?: number[]; light?: { reveal: number; glow: number; die: number } } }).__lab
+    const lab: LabHooks | undefined = LAB ? window.__lab : undefined
     damp(this.lift, lab?.lift ?? (up ? LIFT.open : settling ? 0 : LIFT.rest), (this.opening ? RATES.eject : this.mode === 'closing' ? RATES.land : RATES.lift) * R, dt)
     for (const [k, s] of this.lifts) { damp(s, 0, RATES.outgoing * R, dt); if (Math.abs(s.value) < 1e-4 && Math.abs(s.velocity) < 1e-3) this.lifts.delete(k) }
 
@@ -928,7 +928,7 @@ export class Archive {
       distanceD = doorDistance(distance, D.dolly); spanB = doorSpan(spanB, distance, distanceD, D.lens)
     }
     // lab (phone keyframes): window.__camOv = { yaw, elev (deg), span, dist, aim: [x, y, z] | 'sel', dy } overrides the camera
-    const ov = (window as unknown as { __camOv?: { yaw: number; elev: number; span: number; dist?: number; aim?: number[] | 'sel'; dy?: number } }).__camOv
+    const ov = LAB ? window.__camOv : undefined
     if (ov) {
       yawB = THREE.MathUtils.degToRad(ov.yaw); elevB = THREE.MathUtils.degToRad(ov.elev); spanB = ov.span; distanceD = ov.dist ?? 140
       if (ov.aim === 'sel') aim.copy(this.heroGroup.position).add(new THREE.Vector3(0, 1.85, 0)); else if (ov.aim) aim.set(ov.aim[0], ov.aim[1], ov.aim[2])
