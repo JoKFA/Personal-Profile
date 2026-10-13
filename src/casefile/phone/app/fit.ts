@@ -9,15 +9,20 @@ export interface Fit { s: number; tx: number; ty: number }
 
 /** the top bar's height (css px, before the safe-area inset) */
 export const BAR = 64
-/** the panel's height by case: normal; the cover's (one line of action: eyebrow + "Inside my drive: six areas →", PM 10-13); the compact one for short viewports (summary and small line hidden) */
-export const PANEL = { stop: 252, cover: 80, compact: 150 } as const
+/**
+ * the panel's height by case: normal; the cover's (one line of action: eyebrow + "Inside my drive: six areas →", PM 10-13); the compact one for
+ * short viewports (summary and small line hidden); and the cover's on a short viewport (the title line only, eyebrow hidden, PM 10-13)
+ */
+export const PANEL = { stop: 252, cover: 80, compact: 150, coverCompact: 64 } as const
 export const COMPACT_BELOW = 600
 /** how much of the width and of the band's height the reticle may take; and the largest scale the "fit" alone may ask for */
 export const FILL_W = 0.62, FILL_H = 0.9, MAX_FIT = 1.1
 /** the visible part of the reticle is framed between these margins inside the band */
-export const MARK_TOP = 4, MARK_BOTTOM = 6, TOP_GAP = 8
+export const MARK_TOP = 4, MARK_BOTTOM = 6
 
-export const panelSpec = (viewH: number, cover: boolean) => (cover ? PANEL.cover : viewH < COMPACT_BELOW ? PANEL.compact : PANEL.stop)
+export const panelSpec = (viewH: number, cover: boolean) => (cover ? (viewH < COMPACT_BELOW ? PANEL.coverCompact : PANEL.cover) : viewH < COMPACT_BELOW ? PANEL.compact : PANEL.stop)
+/** the reticle is the face's bounding box grown by 10% and 12 px each side (phone bake: scripts/phone-bake.mjs reticle()); so the face is what is left of it */
+const RETICLE_GROW = 1.1, RETICLE_PAD = 12
 
 /** the scale at which the master just covers the viewport */
 export const coverScale = (view: View, master: Master) => Math.max(view.w / master.w, view.h / master.h)
@@ -25,8 +30,10 @@ export const coverScale = (view: View, master: Master) => Math.max(view.w / mast
 /**
  * A stop. The reticle is put in the band between the top (bar, or the cover's sheet) and the panel, centred both ways, at
  * s = max(cover, min(fit, 1.1)): the master always covers the viewport, and the reticle takes at most 62% of the width and 90% of the band
- * unless covering needs more. A reticle taller than the band is aligned to the band's top + 8. The translation is then clamped so the master
- * still covers the viewport.
+ * unless covering needs more. A reticle taller than the band still has its FACE centred in the band (PM 10-13: the reticle's centre is the face's, so the
+ * reticle overflows both ways and the marks, clamped by visibleRect, frame the visible part); except on the cover, whose face is bottom-aligned when it is
+ * taller than the band: it may then pass under the sheet's edge but never behind the panel. The translation is then clamped so the master still covers
+ * the viewport.
  */
 export function stopFit(view: View, master: Master, reticle: Rect, top: number, panelH: number): Fit {
   const band = Math.max(40, view.h - panelH - top)
@@ -35,7 +42,10 @@ export function stopFit(view: View, master: Master, reticle: Rect, top: number, 
   const s = Math.max(coverScale(view, master), Math.min(fit, MAX_FIT))
   const cx = (reticle.x0 + reticle.x1) / 2, cy = (reticle.y0 + reticle.y1) / 2
   let tx = view.w / 2 - cx * s
-  let ty = rh * s > band ? top + TOP_GAP - reticle.y0 * s : top + band / 2 - cy * s
+  let ty = top + band / 2 - cy * s
+  // the cover (its panel is the one-line one): a face taller than the band sits on the panel's top, and overflows at the top only
+  const faceH = (rh - 2 * RETICLE_PAD) / RETICLE_GROW
+  if (panelH <= PANEL.cover && faceH * s > band) ty = top + band - (cy + faceH / 2) * s
   tx = Math.min(0, Math.max(view.w - master.w * s, tx))
   ty = Math.min(0, Math.max(view.h - master.h * s, ty))
   return { s, tx, ty }

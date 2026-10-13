@@ -27,9 +27,28 @@ describe('stopFit (plan 2.1, PM rule of 10-12)', () => {
     expect((r.x0 + r.x1) / 2).toBeCloseTo(195, 4)
     expect((r.y0 + r.y1) / 2).toBeCloseTo(BAR + (860 - panel - BAR) / 2, 4)
   })
-  it('a reticle taller than the band is aligned to band top + 8', () => {
-    const tall = { x0: 100, y0: 100, x1: 380, y1: 900 }, view = { w: 390, h: 664 }, f = stopFit(view, master, tall, BAR, 252), r = rectOn(f, tall)
-    expect(r.y0).toBeCloseTo(BAR + 8, 4)
+  it('a reticle taller than the band has its face centred in the band (not its top aligned to band top + 8)', () => {
+    const tall = { x0: 100, y0: 260, x1: 380, y1: 730 }, view = { w: 390, h: 664 }, panel = 252, f = stopFit(view, { w: 480, h: 1400 }, tall, BAR, panel), r = rectOn(f, tall)   // (a tall master: the clamp does not interfere)
+    const band = view.h - panel - BAR
+    expect(r.y1 - r.y0).toBeGreaterThan(band)                       // it is taller than the band here
+    expect((r.y0 + r.y1) / 2).toBeCloseTo(BAR + band / 2, 4)        // and sits centred: the old rule gave r.y0 = BAR + 8
+    expect(r.y0).toBeLessThan(BAR + 8 - 1)
+  })
+  it('the real X-001 reticle (master y 395, 250 x 453) on 390 x 664: the face (335 px) is inside the band (348 px)', () => {
+    const x001 = { x0: 127, y0: 168.5, x1: 377, y1: 621.5 }, view = { w: 390, h: 664 }, f = stopFit(view, master, x001, BAR, 252)
+    const faceH = (453 - 24) / 1.1, mid = (x001.y0 + x001.y1) / 2, a = (mid - faceH / 2) * f.s + f.ty, b = (mid + faceH / 2) * f.s + f.ty
+    expect(a).toBeGreaterThanOrEqual(BAR - 0.5)
+    expect(b).toBeLessThanOrEqual(664 - 252 + 0.5)
+  })
+  it('the cover: a face taller than the band sits on the panel and overflows at the top only', () => {
+    const cover = { x0: 127, y0: 348.5, x1: 377, y1: 801.5 }, view = { w: 375, h: 548 }, panel = panelSpec(548, true), top = 190
+    const f = stopFit(view, master, cover, top, panel), faceH = (453 - 24) / 1.1, mid = (cover.y0 + cover.y1) / 2
+    const bottom = (mid + faceH / 2) * f.s + f.ty
+    expect(faceH * f.s).toBeGreaterThan(548 - panel - top)         // it does not fit
+    expect(bottom).toBeCloseTo(548 - panel, 4)                      // so it sits on the panel's top: nothing behind the panel
+    // and when it fits it is centred
+    const roomy = stopFit({ w: 412, h: 860 }, master, cover, 250, 80), rr = rectOn(roomy, cover)
+    expect((rr.y0 + rr.y1) / 2).toBeCloseTo(250 + (860 - 80 - 250) / 2, 3)
   })
   it('the translation is clamped so the master covers: tx in [W - mw*s, 0], ty in [H - mh*s, 0]', () => {
     for (const [w, h] of SIZES) {
@@ -42,7 +61,8 @@ describe('stopFit (plan 2.1, PM rule of 10-12)', () => {
     expect(panelSpec(664, false)).toBe(252)
     expect(panelSpec(664, true)).toBe(80)
     expect(panelSpec(548, false)).toBe(150)
-    expect(panelSpec(599, true)).toBe(80)
+    expect(panelSpec(599, true)).toBe(64)          // the cover's one-line panel on a short viewport: the title line only
+    expect(panelSpec(600, true)).toBe(80)
     expect(panelSpec(600, false)).toBe(252)
   })
 })

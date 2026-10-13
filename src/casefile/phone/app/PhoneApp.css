@@ -44,6 +44,14 @@ body.ph-body { color: var(--ink); font-family: var(--sans); -webkit-font-smoothi
 .ph-pc .ph-title { font-size: 20px; margin-top: 4px; }   /* the cover's panel is one line of action: eyebrow, then the title and its arrow */
 .ph-pc .ph-row { display: none; }
 .ph-ps { min-height: var(--ph-ps); }
+/* a short viewport (under 600 px, data-compact): the cover's sheet and its one-line panel go compact (nothing under 11 px, no text dropped but the panel's eyebrow) */
+.ph-root[data-compact] .ph-sheet { padding: calc(env(safe-area-inset-top) + 72px) 20px 8px; }
+.ph-root[data-compact] .ph-thesis { font-size: 19px; line-height: 1.18; }
+.ph-root[data-compact] .ph-thesis.ph-r { margin-top: 0; }
+.ph-root[data-compact] .ph-facts { font-size: 11.5px; line-height: 1.35; margin-top: 4px; }
+.ph-root[data-compact] .ph-pc { padding-top: 10px; }
+.ph-root[data-compact] .ph-pc .ph-lbl { display: none; }
+.ph-root[data-compact] .ph-pc .ph-title { font-size: 19px; margin-top: 0; }
 .ph-lbl { font: 500 11px/1.35 var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--label); }
 .ph-title { font: 780 26px/1.15 var(--sans); letter-spacing: -.015em; margin-top: 8px; }
 .ph-sum { font: 400 15px/1.45 var(--sans); color: var(--ink2); margin-top: 8px; }
