@@ -1,6 +1,6 @@
 # PM preview: the phone (a vw x vh browser viewport) simulated offline from the baked frames.
 #   entrance -> cover -> pan to X-001 -> pan to SR-01 -> pan back to X-001 -> open X-001 (window) -> close X-001
-# The stage fit rule (PM, 10-12):
+# The stage fit rule (PM, 10-12; bands 10-13: the cover's is 250 .. vh - 80, a file stop's 64 .. vh - 252, 150 when vh < 600):
 #   cover = max(vw / master.w, vh / master.h)            the master always covers the viewport
 #   fit   = min(vw * 0.62 / reticleW, bandH * 0.9 / reticleH)        band = 64 .. vh - panel; panel 252 (cover stop 168), 150 when vh < 600
 #   s     = max(cover, min(fit, 1.1))
@@ -25,10 +25,15 @@ def decode(name, file):
     subprocess.run(['ffmpeg', '-v', 'error', '-y', '-i', os.path.join(d, file), os.path.join(p, 'f-%04d.png')], check=True)
     return sorted(glob.glob(os.path.join(p, 'f-*.png')))
 
+def overlay(id):
+    # the page's paper over the scene: (height of the top sheet / bar, height of the bottom panel)
+    return (250, 80) if id == 'YW-000' else (64, 150 if vh < 600 else 252)
+def band(id):
+    t, b = overlay(id); return (t, vh - b)
+
 def stop_T(id):
     r = M['stops'][id]['reticle']; rw, rh = r['x1'] - r['x0'], r['y1'] - r['y0']
-    panel = 150 if vh < 600 else (168 if id == 'YW-000' else 252)
-    b0, b1 = 64, vh - panel; bh = b1 - b0
+    b0, b1 = band(id); bh = b1 - b0
     cover = max(vw / MW, vh / MH)
     fit = min(vw * 0.62 / rw, bh * 0.9 / rh)
     s = max(cover, min(fit, 1.1))
@@ -49,6 +54,16 @@ def uncovered(T):
     cw = max(0, min(vw, x1) - max(0, x0)); ch = max(0, min(vh, y1) - max(0, y0))
     return 1 - (cw * ch) / (vw * vh)
 
+PAPER = (231, 228, 221)   # --bg
+def paper(im, ov):
+    top, bot = ov
+    if top <= 0 and bot <= 0: return im
+    lay = Image.new('RGBA', im.size, (0, 0, 0, 0)); dr = ImageDraw.Draw(lay)
+    a = (*PAPER, 215)
+    if top > 0: dr.rectangle([0, 0, im.width, round(top * SC)], fill=a)
+    if bot > 0: dr.rectangle([0, im.height - round(bot * SC), im.width, im.height], fill=a)
+    return Image.alpha_composite(im.convert('RGBA'), lay).convert('RGB')
+
 def render(img, T):
     s, ox, oy = T
     w, h = round(MW * s * SC), round(MH * s * SC)
@@ -67,35 +82,38 @@ def render(img, T):
 
 frames = []   # (PIL image or path, T, label)
 def still(file): return Image.open(os.path.join(d, file))
-def add_hold(file, T, n, label):
+def add_hold(file, T, n, label, ov=(0, 0)):
     im = still(file)
-    for _ in range(n): frames.append((im, T, label))
-def add_clip(name, c, Tf, label):
+    for _ in range(n): frames.append((im, T, label, ov))
+def add_clip(name, c, Tf, label, Of=None):
     fs = decode(name, c['file'])
-    for i, f in enumerate(fs): frames.append((f, Tf(i, len(fs)), label))
+    for i, f in enumerate(fs): frames.append((f, Tf(i, len(fs)), label, Of(i, len(fs)) if Of else (0, 0)))
 
 cover = M['stops']['YW-000']; T_cov = stop_T('YW-000'); T_x1 = stop_T('X-001'); T_sr = stop_T('SR-01')
+O_cov, O_f, O_win = overlay('YW-000'), overlay('X-001'), (0, 0)
+pan = lambda Ta, Tb: (lambda i, n: lerp(Ta, Tb, smooth(i / (n - 1))))
+pano = lambda Oa, Ob: (lambda i, n: lerp(Oa, Ob, smooth(i / (n - 1))))
 add_clip('entrance', M['entrance'], lambda i, n: T_cov, 'entrance')
-add_hold(cover['still']['file'], T_cov, 20, 'cover')
-add_clip('pan1', M['pans']['YW-000>X-001'], lambda i, n: lerp(T_cov, T_x1, smooth(i / (n - 1))), 'pan YW-000 > X-001')
-add_hold(M['stops']['X-001']['still']['file'], T_x1, 20, 'X-001')
-add_clip('pan2', M['pans']['X-001>SR-01'], lambda i, n: lerp(T_x1, T_sr, smooth(i / (n - 1))), 'pan X-001 > SR-01')
-add_hold(M['stops']['SR-01']['still']['file'], T_sr, 20, 'SR-01')
-add_clip('pan3', M['pans']['SR-01>X-001'], lambda i, n: lerp(T_sr, T_x1, smooth(i / (n - 1))), 'pan SR-01 > X-001')
-add_hold(M['stops']['X-001']['still']['file'], T_x1, 20, 'X-001')
+add_hold(cover['still']['file'], T_cov, 20, 'cover', O_cov)
+add_clip('pan1', M['pans']['YW-000>X-001'], pan(T_cov, T_x1), 'pan YW-000 > X-001', pano(O_cov, O_f))
+add_hold(M['stops']['X-001']['still']['file'], T_x1, 20, 'X-001', O_f)
+add_clip('pan2', M['pans']['X-001>SR-01'], pan(T_x1, T_sr), 'pan X-001 > SR-01', lambda i, n: O_f)
+add_hold(M['stops']['SR-01']['still']['file'], T_sr, 20, 'SR-01', O_f)
+add_clip('pan3', M['pans']['SR-01>X-001'], pan(T_sr, T_x1), 'pan SR-01 > X-001', lambda i, n: O_f)
+add_hold(M['stops']['X-001']['still']['file'], T_x1, 20, 'X-001', O_f)
 o = M['open']['X-001']
-add_clip('open', o, lambda i, n: lerp(T_x1, WIN_T, o['cam'][i]), 'open X-001')
-add_hold(o['window']['file'], WIN_T, 30, 'window')
+add_clip('open', o, lambda i, n: lerp(T_x1, WIN_T, o['cam'][i]), 'open X-001', lambda i, n: lerp(O_f, O_win, o['cam'][i]))
+add_hold(o['window']['file'], WIN_T, 30, 'window', O_win)
 c = M['close']['X-001']
-add_clip('close', c, lambda i, n: lerp(T_x1, WIN_T, c['cam'][i]), 'close X-001')
-add_hold(M['stops']['X-001']['still']['file'], T_x1, 20, 'X-001')
+add_clip('close', c, lambda i, n: lerp(T_x1, WIN_T, c['cam'][i]), 'close X-001', lambda i, n: lerp(O_f, O_win, c['cam'][i]))
+add_hold(M['stops']['X-001']['still']['file'], T_x1, 20, 'X-001', O_f)
 
 # render
 seq = os.path.join(out, '_seq'); shutil.rmtree(seq, ignore_errors=True); os.makedirs(seq)
 labels = []
-for i, (f, T, label) in enumerate(frames):
+for i, (f, T, label, ov) in enumerate(frames):
     img = f if isinstance(f, Image.Image) else Image.open(f)
-    render(img, T).save(os.path.join(seq, f'f-{i + 1:04d}.png'), compress_level=1); labels.append(label)
+    paper(render(img, T), ov).save(os.path.join(seq, f'f-{i + 1:04d}.png'), compress_level=1); labels.append(label)
 mp4 = os.path.join(out, f'phone-preview-{vw}x{vh}.mp4')
 subprocess.run(['ffmpeg', '-v', 'error', '-y', '-framerate', '25', '-i', os.path.join(seq, 'f-%04d.png'), '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-crf', '18', '-movflags', '+faststart', mp4], check=True)
 
