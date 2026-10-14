@@ -36,7 +36,7 @@ const opened = []
 for (const id of await p.evaluate(() => Object.keys(window.__phone.manifest.open))) {
   await p.evaluate((id) => window.__phone.openEntry(id), id)
   await until(p, (id) => window.__phone.phase === 'file' && window.__phone.openId === id, id, 30000); await p.waitForTimeout(700)
-  const info = await p.evaluate(() => { const f = document.querySelector('.ph-file.on'); f.scrollTo({ top: f.scrollHeight }); return { demo: !!f.querySelector('.ph-fdemo .dm'), core: !!f.querySelector('.ph-fdemo [data-core]'), body: f.querySelectorAll('.file-tab--stacked').length } })
+  const info = await p.evaluate(() => { const f = document.querySelector('.ph-file.on'); scrollTo(0, document.documentElement.scrollHeight); return { demo: !!f.querySelector('.ph-fdemo .dm'), core: !!f.querySelector('.ph-fdemo [data-core]'), body: f.querySelectorAll('.file-tab--stacked').length } })
   await p.waitForTimeout(500)
   opened.push({ id, ...info })
   await p.evaluate(() => window.__phone.closeFile(true)); await until(p, () => window.__phone.phase === 'settled' && !window.__phone.busy, null, 30000); await p.waitForTimeout(300)

@@ -1,9 +1,10 @@
-// The phone's file page (plan P3b). One FileView per opened entry. It owns a scroller that sits over the stage:
+// The phone's file page (plan P3b). One FileView per opened entry. It owns a block that sits over the stage and scrolls with the DOCUMENT
+// (so Safari's toolbar can minimise while a long file is read; the shell hides the reel and puts the page at the top while a file is open):
 //   [the window: the drive's face, washed to line art, with the demo grown from the secure element]
 //   [the panel: the stop's own panel, moved here, continuing into]
 //   [the body: FileBody, stacked, on paper].
 // While the open clip plays the view is driven by the open timeline (tau, the page layer's clock); once it has settled the window is a plain
-// <img> of the window still INSIDE the scroller, so the face scrolls away natively with the page (the fixed stage is then hidden).
+// <img> of the window still inside that block, so the face scrolls away natively with the page (the fixed stage is then hidden).
 // Everything animated is a function of tau or of the app clock; no CSS transition drives anything that must stay in step with the picture.
 import { smooth } from '../../../motion/waves'
 import type { Entry } from '../../../data/types'
@@ -117,7 +118,9 @@ export class FileView {
 
   /** the screen changed (rotation, the toolbar): the window and the demo's box are laid out again */
   relayout(view: { w: number; h: number }, winFit: Fit, heights: { stop: number; file: number }) {
+    const sameWidth = Math.abs(view.w - this.env.view.w) < 1
     this.env.view = view; this.env.winFit = winFit; this.env.heights = heights
+    if (this.settled && sameWidth) return   // Safari's toolbar sliding in or out changes only the height: the page being read stays as it is
     this.demoNeed = 0   // the demo's own height is read again at the new width (the observer fires when its size changes)
     this.layout()
     if (this.shown) this.fitHead()
@@ -224,7 +227,6 @@ export class FileView {
     this.img.src = this.env.url(this.env.shot.window.file)
     void this.img.decode().catch(() => undefined)
     this.scroller.classList.add('on', 'opening')
-    dom.main.inert = true
     this.update(0, 'opening')
   }
 
@@ -238,8 +240,7 @@ export class FileView {
     // the reticle's four marks are the window's frame: they scroll with it
     for (const m of dom.marks) this.zone.appendChild(m)
     this.scroller.classList.remove('opening')
-    dom.html.classList.add('ph-infile')
-    this.scroller.addEventListener('scroll', this.onScroll, { passive: true })
+    addEventListener('scroll', this.onScroll, { passive: true })
     this.observe()
     this.onScroll()
   }
@@ -248,24 +249,23 @@ export class FileView {
   async beginClose(reduced: boolean) {
     if (!this.settled) return
     this.settled = false
-    this.scroller.removeEventListener('scroll', this.onScroll)
+    removeEventListener('scroll', this.onScroll)
     this.io?.disconnect()
     const { dom, stage } = this.env
-    if (this.scroller.scrollTop > 1) await this.scrollTop(reduced ? 0 : 240)
+    if (scrollY > 1) await this.scrollTop(reduced ? 0 : 240)
     stage.box.style.visibility = ''
     this.img.classList.remove('on')
     const first = dom.reticle.firstChild
     for (const m of dom.marks) dom.reticle.insertBefore(m, first)
     this.scroller.classList.add('opening')
     this.setLabel(0)
-    dom.html.classList.remove('ph-infile')
   }
 
   private scrollTop(ms: number) {
     return new Promise<void>((res) => {
-      const s = this.scroller, y0 = s.scrollTop, t0 = performance.now()
-      if (ms <= 0) { s.scrollTop = 0; res(); return }
-      const f = (now: number) => { const k = Math.min(1, (now - t0) / ms); s.scrollTop = y0 * (1 - smooth(k)); if (k < 1) requestAnimationFrame(f); else res() }
+      const y0 = scrollY, t0 = performance.now()
+      if (ms <= 0) { scrollTo(0, 0); res(); return }
+      const f = (now: number) => { const k = Math.min(1, (now - t0) / ms); scrollTo(0, y0 * (1 - smooth(k))); if (k < 1) requestAnimationFrame(f); else res() }
       requestAnimationFrame(f)
     })
   }
@@ -312,7 +312,7 @@ export class FileView {
 
   // ── the scroll: the sticky label, and the text that decrypts as it first comes into view ──
   private onScroll = () => {
-    const y = this.scroller.scrollTop, bar = this.env.dom.bar.offsetHeight
+    const y = scrollY, bar = this.env.dom.bar.offsetHeight
     this.setLabel(clamp((y - (this.Wz - bar - 36)) / 36, 0, 1))
   }
   private setLabel(k: number) {
@@ -333,7 +333,7 @@ export class FileView {
         if (reduced) { for (const l of g.lines) l.set(1); continue }
         this.active.push({ g, t0: performance.now() }); this.run()
       }
-    }, { root: this.scroller, rootMargin: '0px 0px -8% 0px', threshold: 0 })
+    }, { rootMargin: '0px 0px -8% 0px', threshold: 0 })
     for (const g of this.groups) if (!g.started) this.io.observe(g.el)
   }
 
@@ -373,7 +373,7 @@ export class FileView {
     this.disposed = true
     cancelAnimationFrame(this.raf); clearTimeout(this.statusTimer)
     this.io?.disconnect()
-    this.scroller.removeEventListener('scroll', this.onScroll)
+    removeEventListener('scroll', this.onScroll)
     const { dom, panel, stage } = this.env
     if (this.shown) {
       panel.el.classList.remove('ph-infile', 'ph-headfile'); panel.el.style.transform = ''; panel.el.style.minHeight = ''
@@ -381,8 +381,6 @@ export class FileView {
       const first = dom.reticle.firstChild
       for (const m of dom.marks) if (m.parentElement !== dom.reticle) dom.reticle.insertBefore(m, first)
       stage.box.style.visibility = ''
-      dom.main.inert = false
-      dom.html.classList.remove('ph-infile')
     }
     this.setLabel(0); if (this.shown) this.env.dom.fileLabel.textContent = ''
     this.unmountDemo()

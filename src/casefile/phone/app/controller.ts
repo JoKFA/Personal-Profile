@@ -90,7 +90,9 @@ export async function startPhone(host: HTMLElement, cancelled: () => boolean = (
   /** the entry whose file is opening, open or closing (any of the 19 stops, on the reel or not) */
   let openId: string | null = null
   /** where a file was opened from: the page's scroll position and the element to hand the focus back to */
-  let origin: { y: number; opener: HTMLElement | null } = { y: 0, opener: null }
+  let origin: { sec: number; opener: HTMLElement | null } = { sec: 0, opener: null }
+  /** a file is open: the page is the file (document scroll), the reel is out of the flow and its snap does not act */
+  let fileMode = false
   /** a close was asked for while the file was still opening */
   let closeAfterOpen: boolean | null = null
   const fitCache = new Map<string, Fit>()
@@ -114,6 +116,7 @@ export async function startPhone(host: HTMLElement, cancelled: () => boolean = (
     // each panel's natural height with no minimum: the fit's panel height is the spec or the tallest content, whichever is more
     let natC = 0, natS = 0
     for (const [id, p] of dom.panels) {
+      if (p.el.classList.contains('ph-infile')) continue   // (a panel that is the head of an open file is not a stop's)
       p.el.style.minHeight = '0px'
       const h = p.el.offsetHeight
       p.el.style.minHeight = ''
@@ -226,6 +229,7 @@ export async function startPhone(host: HTMLElement, cancelled: () => boolean = (
     const y = scrollY
     if (Math.abs(y - prevY) > 0.5) dir = y > prevY ? 1 : -1
     prevY = y
+    if (fileMode) return   // the file page reads the scroll itself (the sticky label, the text that decrypts)
     scrollP = y / view.h
     if (phase === 'settled' || phase === 'panning') {
       if (progTo === null) want = clamp(sectionWant(scrollP, dir, dom.sections.length), 0, N - 1)
@@ -262,8 +266,25 @@ export async function startPhone(host: HTMLElement, cancelled: () => boolean = (
     document.documentElement.classList.toggle('ph-locked', on)
     if (on) document.addEventListener('touchmove', stopMove, { passive: false }); else document.removeEventListener('touchmove', stopMove)
   }
-  /** while a file is open the document does not move (html is overflow: hidden); the file's own scroller does, so a touch inside it is left alone */
-  const stopMove = (e: TouchEvent) => { if ((e.target as Element | null)?.closest?.('.ph-file.on')) return; if (e.cancelable) e.preventDefault() }
+  const stopMove = (e: TouchEvent) => { if (e.cancelable) e.preventDefault() }
+  const html = document.documentElement
+  /** the page becomes the file: from the top, the reel out of the flow, no snap (the reel's place is remembered as a share of the screen height) */
+  function enterFileMode() {
+    if (fileMode) return
+    fileMode = true
+    html.classList.add('ph-filemode'); dom.main.inert = true
+    scrollTo(0, 0)
+  }
+  /** back to the reel, in the same task as the picture's last frame: the reel is in the flow again and the page is where it was (at the same share of the screen) */
+  function leaveFileMode() {
+    if (!fileMode) return
+    fileMode = false
+    html.classList.remove('ph-filemode'); dom.main.inert = false
+    layout()
+    const y = Math.round(origin.sec * view.h)
+    scrollTo(0, y)
+    scrollP = y / view.h; prevY = scrollY; dir = 0
+  }
   const goPanelFocus = (el: HTMLElement | null) => el?.focus({ preventScroll: true })
 
   // ── the file page (P3b): any of the 19 stops opens; the view is built (and its text sealed) before the tap ──
@@ -327,7 +348,7 @@ export async function startPhone(host: HTMLElement, cancelled: () => boolean = (
     kick()
     const v = await warm(id)
     if (my !== flow || disposed) return
-    curView = v; v.show()
+    curView = v; enterFileMode(); v.show()
     record(`${bridge.visitor.id} opened ${id}`)
     await stage.run({
       clipKey: openKey(id), clip: sh,
@@ -336,7 +357,7 @@ export async function startPhone(host: HTMLElement, cancelled: () => boolean = (
     })
     if (my !== flow || disposed) return
     phase = 'file'; tau = Math.max(tau, OPEN_END); shotIndex = sh.quads.length - 1; busy = false
-    v.update(OPEN_END, 'file'); v.settle(); syncDom(); kick()
+    v.update(OPEN_END, 'file'); v.settle(); lockScroll(false); syncDom(); kick()   // the file scrolls with the document from here
     v.focusHeading()
     if (closeAfterOpen !== null) { const play = closeAfterOpen; closeAfterOpen = null; void closeFile(play) }
   }
@@ -345,7 +366,7 @@ export async function startPhone(host: HTMLElement, cancelled: () => boolean = (
   async function enterFile(id: string, o: { push: boolean; inputAt?: number }) {
     if (!m.open[id] || phase !== 'settled' || busy) return
     busy = true
-    origin = { y: scrollY, opener: document.activeElement instanceof HTMLElement && document.activeElement !== document.body ? document.activeElement : null }
+    origin = { sec: scrollY / view.h, opener: document.activeElement instanceof HTMLElement && document.activeElement !== document.body ? document.activeElement : null }
     lockScroll(true)
     if (stage.current !== stillKey(id)) {
       page.setPlain(id, 1)   // the stop is skipped: its panel is already there when the open begins
@@ -365,6 +386,7 @@ export async function startPhone(host: HTMLElement, cancelled: () => boolean = (
     if (!o.play || !sh) {
       // a back gesture (iOS already animated it) or no close clip: land on the end state at once
       stage.finish(); stage.show(stillKey(id)); phase = 'closing'; tau = 0
+    lockScroll(true); layout()   // (the toolbar may have moved while it was read: the stage is fitted to the screen as it is now)
       v?.update(0, 'closing')
       return true
     }
@@ -397,6 +419,7 @@ export async function startPhone(host: HTMLElement, cancelled: () => boolean = (
     lockScroll(false)
     syncDom(); preload(); kick()
     const back = opener && document.contains(opener) ? opener : dom.panels.get(reel[at])?.open ?? null
+    leaveFileMode()
     goPanelFocus(back)
     pump()
   }
@@ -499,7 +522,11 @@ export async function startPhone(host: HTMLElement, cancelled: () => boolean = (
 
   // ── listeners ──
   const prime = () => stage.prime()
-  const onResize = () => { if (visualViewport && visualViewport.scale > 1.01) return; layout(); kick() }
+  const onResize = () => {
+    if (visualViewport && visualViewport.scale > 1.01) return
+    if (fileMode && phase === 'file' && Math.abs(innerWidth - view.w) < 1) return   // Safari's toolbar sliding while a file is read: only the height moves, the page stays as it is
+    layout(); kick()
+  }
   const onVis = () => { if (document.hidden) stage.suspend(); else { stage.resume(); kick() } }
   const onShow = (e: PageTransitionEvent) => { if (e.persisted) { stage.resync(); layout(); preload(); kick() } }
   const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape' && phase === 'file') backButton() }
@@ -576,7 +603,7 @@ export async function startPhone(host: HTMLElement, cancelled: () => boolean = (
     dispose() {
       disposed = true
       cancelAnimationFrame(raf); clearTimeout(scrollTimer)
-      lockScroll(false)
+      lockScroll(false); html.classList.remove('ph-filemode')
       root.removeEventListener('click', onClick)
       for (const t of ['touchend', 'pointerup', 'click']) document.removeEventListener(t, prime)
       removeEventListener('scroll', onScroll); removeEventListener('resize', onResize); visualViewport?.removeEventListener('resize', onResize)

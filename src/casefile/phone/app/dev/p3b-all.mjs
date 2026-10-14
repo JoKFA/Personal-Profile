@@ -49,10 +49,10 @@ for (const id of ids) {
     }
     out.lowContrast = [...new Set(out.lowContrast)].slice(0, 10)
     out.issues = out.issues.slice(0, 6); out.small = [...new Set(out.small)].slice(0, 12)
-    out.overflowX = document.querySelector('.ph-file.on').scrollWidth - W
+    out.overflowX = document.documentElement.scrollWidth - W
     return out
   })
-  await p.evaluate(() => { const f = document.querySelector('.ph-file.on'); f.scrollTo({ top: f.scrollHeight }) })
+  await p.evaluate(() => { scrollTo(0, document.documentElement.scrollHeight) })
   await p.waitForTimeout(1400)
   await p.screenshot({ path: `${OUT}/${id}-b.png` })
   await p.evaluate(() => window.__phone.closeFile(true))

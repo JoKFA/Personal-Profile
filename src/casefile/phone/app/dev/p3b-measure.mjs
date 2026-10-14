@@ -81,12 +81,12 @@ await swipe(cdp, W, H); await until(p, () => window.__phone.at === 3 && window._
 await swipe(cdp, W, H); await until(p, () => window.__phone.at === 4 && window.__phone.phase === 'settled'); await p.waitForTimeout(700)
 { const bb = await p.locator('.ph-go[data-id="X-009"]').boundingBox(); await p.touchscreen.tap(bb.x + bb.width / 2, bb.y + bb.height / 2) }
 await until(p, () => window.__phone.phase === 'file'); await p.waitForTimeout(700)
-await p.evaluate(() => { const f = document.querySelector('.ph-file.on'); f.scrollTo({ top: 700 }) }); await p.waitForTimeout(500)
+await p.evaluate(() => { scrollTo(0, 700) }); await p.waitForTimeout(500)
 await p.locator('.ph-back').tap(); await settled(); await p.waitForTimeout(600); rec.push('open/close X-009 with the body scrolled')
 // 4. a related-file jump: X-001 -> X-004 by the real link in its body, then close
 await swipe(cdp, W, H, 'up'); await until(p, () => window.__phone.at === 3 && window.__phone.phase === 'settled'); await p.waitForTimeout(400)
 await p.evaluate(() => window.__phone.openEntry('X-001')); await until(p, () => window.__phone.phase === 'file'); await p.waitForTimeout(700)
-await p.evaluate(() => { const f = document.querySelector('.ph-file.on'); f.scrollTo({ top: f.scrollHeight }) }); await p.waitForTimeout(500)
+await p.evaluate(() => { scrollTo(0, document.documentElement.scrollHeight) }); await p.waitForTimeout(500)
 await p.locator('.ph-file.on .file-rel').first().tap()
 await until(p, () => window.__phone.phase === 'file' && window.__phone.openId === 'X-004'); await p.waitForTimeout(900); rec.push('jump X-001 -> X-004 (related link)')
 await p.locator('.ph-back').tap(); await settled(); await p.waitForTimeout(600); rec.push('close X-004')

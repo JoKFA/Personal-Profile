@@ -13,7 +13,7 @@ await until(p, () => window.__phone.phase === 'file'); await p.waitForTimeout(90
 await p.screenshot({ path: `${OUT}/${ID}-b-window.png` })
 const info = await p.evaluate(() => { const f = document.querySelector('.ph-file'); return { sh: f.scrollHeight, ch: f.clientHeight, wz: getComputedStyle(f).getPropertyValue('--ph-wz') } })
 console.log(JSON.stringify(info))
-await p.evaluate(() => { const f = document.querySelector('.ph-file'); f.scrollTo({ top: f.scrollHeight }) })
+await p.evaluate(() => { scrollTo(0, document.documentElement.scrollHeight) })
 await p.waitForTimeout(1500)
 await p.screenshot({ path: `${OUT}/${ID}-c-end.png` })
 console.log(errs)
