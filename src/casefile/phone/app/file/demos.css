@@ -26,9 +26,9 @@
 /* network: the four-site map is scaled to about 0.75: its drawing text is raised to match */
 .ph-fdemo .br-body { grid-template-columns: 1fr; padding: 6px 12px 8px; }
 .ph-fdemo .br-map { max-height: none; }
-.ph-fdemo .br-site .t { font-size: 16px; }
-.ph-fdemo .br-site .z { font-size: 15px; }
-.ph-fdemo .br-core text { font-size: 15px; }
+.ph-fdemo .br-site .t { font-size: 17px; }
+.ph-fdemo .br-site .z { font-size: 16px; }
+.ph-fdemo .br-core text { font-size: 16px; }
 .ph-fdemo .br-core .s { display: none; }
 .ph-fdemo .br-side { border-left: 0; padding: 4px 0 0; flex-direction: row; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; }
 .ph-fdemo .br-n { font-size: 44px; }
@@ -44,7 +44,7 @@
 .ph-fdemo .cc-row b { font-size: 11px; } .ph-fdemo .cc-treat span { font-size: 11px; }
 /* quorum (ED-01) */
 .ph-fdemo .qm-body { grid-template-columns: 1fr; }
-.ph-fdemo .qm-plot .ax-t { font-size: 11.5px; }
+.ph-fdemo .qm-plot .ax-t { font-size: 12.5px; }
 .ph-fdemo .qm-seats { grid-template-columns: repeat(3, 1fr); }
 .ph-fdemo .qm-seats em { font-size: 11px; } .ph-fdemo .qm-seats .pf { font-size: 11px; } .ph-fdemo .qm-seats .sees { display: none; }
 .ph-fdemo .qm-seats .sees { display: block; font-size: 11px; }
@@ -76,3 +76,22 @@
 .ph-fbody .ph-fgame .sn-form button:disabled, .ph-fbody .ph-fgame .sn-try button:disabled { opacity: .5; }
 .ph-fgame .sn-form input { font-size: 16px; padding: 14px 10px; }
 .ph-fgame .sn-m div:last-child { font-size: 13px; }
+
+/* contrast (>= 4.5:1 for text): the palette's lighter text and badge colours are deepened on the phone */
+.ph-fdemo .dm-stages span, .ph-fdemo .vm-gate.wait, .ph-fdemo .thinking, .ph-fdemo .bu-verbs, .ph-fdemo .cc-step b, .ph-fdemo .qm-seats .n, .ph-fdemo .pw-methods .lbl { color: var(--label); }
+.ph-fdemo .dm-stages .on { color: var(--ink); } .ph-fdemo .dm-stages .done { color: var(--acc-text); }
+.ph-fdemo .dm-head .live, .ph-fdemo .dm-cap.fail b, .ph-fdemo .tbl text, .ph-fdemo .dfd .tbl text, .ph-fdemo .dfd .bd text, .ph-fdemo .qm-q, .ph-fdemo .cc-row.gap b, .ph-fdemo .x { color: #b3350f; fill: #b3350f; }
+.ph-fdemo .dm-cap b, .ph-fgame .dm-cap b { color: #7a5f22; }
+.ph-fdemo .dm-cap.pass b, .ph-fgame .dm-cap.pass b { color: var(--acc-text); } .ph-fdemo .dm-cap.fail b { color: #b3350f; }
+.ph-fdemo .sev { background: #b3350f; } .ph-fdemo .sev-high { background: #8f5410; } .ph-fdemo .sev-medium { background: #6f5f10; } .ph-fdemo .sev-low { background: #5f5d56; }
+.ph-fdemo .verdict b { background: #b3350f; } .ph-fdemo .verdict.fp b { background: #5f5d56; }
+.ph-fdemo .pw-dev .iot { color: #7a5f22; } .ph-fdemo .bu-moral b { color: #7a5f22; } .ph-fdemo .bu-r .guards { color: #7a5f22; }
+.ph-fdemo .sn-m div:last-child, .ph-fgame .sn-m.you div:last-child { color: var(--acc-text); }
+.ph-fgame .sn-m.bot div:last-child { color: var(--ink); } .ph-fgame .sn-form label { color: #7a5f22; }
+.ph-fdemo .cc-row.na b, .ph-fdemo .cc-treat span { color: var(--label); }
+.ph-fdemo .dfd .tbl text { fill: #b3350f; }
+.ph-fdemo .vm-gate.fail span, .ph-fdemo .vm-merge.block, .ph-fdemo .pt pre.leak { color: #a3371a; }
+.ph-fdemo .vm-merge.block { border-color: #a3371a; }
+.ph-fdemo .vv-svc.warn span { color: #8f5410; }
+.ph-fdemo .vv-svc.warn i { background: #cf7a1f; }
+.ph-fgame .dm-head .live, .ph-fgame .dm-cap.fail b { color: #b3350f; }

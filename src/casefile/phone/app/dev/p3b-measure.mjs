@@ -55,9 +55,18 @@ await p.waitForTimeout(1500)
 await p.touchscreen.tap(W / 2, H * 0.4); await p.waitForTimeout(300)
 const API = false
 const rec = []
+// --marksonly: only the four ink marks stay visible (domsync.py reads them); the scenario is then two plain open/close cycles of X-001 through the API
+if (MARKS_ONLY) await p.addStyleTag({ content: '.ph-reel, .ph-bar, .ph-tag, .ph-rule, .ph-file { opacity: 0 !important }' })
 await cdp.send('Page.startScreencast', { format: 'jpeg', quality: 80, maxWidth: W, maxHeight: H, everyNthFrame: 1 })
 await p.waitForTimeout(400)
 const settled = () => until(p, () => window.__phone.phase === 'settled' && !window.__phone.busy)
+if (MARKS_ONLY) {
+  await swipe(cdp, W, H); await until(p, () => window.__phone.at === 1 && window.__phone.phase === 'settled'); await p.waitForTimeout(700)
+  for (let r = 0; r < RUNS; r++) {
+    await p.evaluate(() => window.__phone.openEntry('X-001')); await until(p, () => window.__phone.phase === 'file'); await p.waitForTimeout(600)
+    await p.evaluate(() => window.__phone.closeFile(true)); await until(p, () => window.__phone.phase === 'settled'); await p.waitForTimeout(600)
+  }
+} else {
 // 1. X-001 from the reel: the real Open button, the real back button
 await swipe(cdp, W, H); await until(p, () => window.__phone.at === 1 && window.__phone.phase === 'settled'); await p.waitForTimeout(700)
 { const bb = await p.locator('.ph-go[data-id="X-001"]').boundingBox(); await p.touchscreen.tap(bb.x + bb.width / 2, bb.y + bb.height / 2) }
@@ -72,15 +81,16 @@ await swipe(cdp, W, H); await until(p, () => window.__phone.at === 3 && window._
 await swipe(cdp, W, H); await until(p, () => window.__phone.at === 4 && window.__phone.phase === 'settled'); await p.waitForTimeout(700)
 { const bb = await p.locator('.ph-go[data-id="X-009"]').boundingBox(); await p.touchscreen.tap(bb.x + bb.width / 2, bb.y + bb.height / 2) }
 await until(p, () => window.__phone.phase === 'file'); await p.waitForTimeout(700)
-await p.evaluate(() => { const f = document.querySelector('.ph-file'); f.scrollTo({ top: 700 }) }); await p.waitForTimeout(500)
+await p.evaluate(() => { const f = document.querySelector('.ph-file.on'); f.scrollTo({ top: 700 }) }); await p.waitForTimeout(500)
 await p.locator('.ph-back').tap(); await settled(); await p.waitForTimeout(600); rec.push('open/close X-009 with the body scrolled')
 // 4. a related-file jump: X-001 -> X-004 by the real link in its body, then close
 await swipe(cdp, W, H, 'up'); await until(p, () => window.__phone.at === 3 && window.__phone.phase === 'settled'); await p.waitForTimeout(400)
 await p.evaluate(() => window.__phone.openEntry('X-001')); await until(p, () => window.__phone.phase === 'file'); await p.waitForTimeout(700)
-await p.evaluate(() => { const f = document.querySelector('.ph-file'); f.scrollTo({ top: f.scrollHeight }) }); await p.waitForTimeout(500)
-await p.locator('.ph-file .file-rel').first().tap()
+await p.evaluate(() => { const f = document.querySelector('.ph-file.on'); f.scrollTo({ top: f.scrollHeight }) }); await p.waitForTimeout(500)
+await p.locator('.ph-file.on .file-rel').first().tap()
 await until(p, () => window.__phone.phase === 'file' && window.__phone.openId === 'X-004'); await p.waitForTimeout(900); rec.push('jump X-001 -> X-004 (related link)')
 await p.locator('.ph-back').tap(); await settled(); await p.waitForTimeout(600); rec.push('close X-004')
+}
 await cdp.send('Page.stopScreencast')
 
 const A = await p.evaluate(() => {

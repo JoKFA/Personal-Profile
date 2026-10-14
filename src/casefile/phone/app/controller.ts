@@ -25,6 +25,8 @@ const FADE_SHOT: [number, number] = [0.45, 1.0]
 const FADE_STOP = 0.12
 /** the close that hands over to another file runs this much faster (plan 2.6) */
 const JUMP_RATE = 1.5
+/** how long an entry opened from elsewhere waits for its open clip to buffer before it cross-fades instead */
+const BUFFER_WAIT_MS = 1200
 const RISE_S = 0.4
 /** a cold link to a file waits this long for its open clip before cross-fading instead */
 const COLD_WAIT_MS = 1500
@@ -59,9 +61,9 @@ export async function startPhone(host: HTMLElement, cancelled: () => boolean = (
   // ── what the manifest has, registered by key ──
   for (const id of Object.keys(m.stops)) stage.register(stillKey(id), url(m.stops[id].still.file))
   for (const [k, c] of Object.entries(m.pans)) { const [a, b] = k.split('>'); stage.register(panKey(a, b), url(c.file)) }
+  if (m.entrance) stage.register(entranceKey, url(m.entrance.file))
   for (const [id, o] of Object.entries(m.open)) { stage.register(openKey(id), url(o.file)); stage.register(windowKey(id), url(o.window.file)) }
   for (const [id, c] of Object.entries(m.close)) stage.register(closeKey(id), url(c.file))
-  if (m.entrance) stage.register(entranceKey, url(m.entrance.file))
 
   // ── state ──
   let phase: Phase = 'settled'
@@ -71,12 +73,12 @@ export async function startPhone(host: HTMLElement, cancelled: () => boolean = (
   let panK = 0, tau = 0, shotIndex = 0
   let shot: Shot | OpenShot | null = null
   let rise = 1, riseOn = false
-  let scrollP = 0
-  let view = { w: innerWidth, h: innerHeight }
   /** a first visit: the page layer (bar, reticle, paper) stays away until the entrance has played */
   const entering = !!entry
   let ready!: () => void
   const readyP = new Promise<void>((r) => { ready = r })
+  let scrollP = 0
+  let view = { w: innerWidth, h: innerHeight }
   let fits: Fit[] = [], winFit: Fit = { s: 1, tx: 0, ty: 0 }
   /** per stop: where its band starts and how tall its panel is (the marks frame the visible part of the reticle inside them) */
   let tops: number[] = [], panels: number[] = []
@@ -172,12 +174,12 @@ export async function startPhone(host: HTMLElement, cancelled: () => boolean = (
     const f: PageFrame = { phase, stop: stopId(), settled: phase === 'settled' || phase === 'file', tau, dt, rise }
     // while panning the stop being left seals; once a pan has landed `at` is the new stop and it decrypts
     const moving = page.update(f)
-    syncDom()
-    if (moving || busy || scrolling || rise < 1) kick()
     if (entering) dom.bar.style.opacity = rise < 1 ? String(smooth(rise)) : ''
-    else last = 0
+    syncDom()
     // (waiting for the entrance: nothing moves, so the loop is not run)
     if (entering && !riseOn) { last = 0; return }
+    if (moving || busy || scrolling || rise < 1) kick()
+    else last = 0
   }
   function kick() { if (!raf && !disposed) raf = requestAnimationFrame(frame) }
 
@@ -260,7 +262,8 @@ export async function startPhone(host: HTMLElement, cancelled: () => boolean = (
     document.documentElement.classList.toggle('ph-locked', on)
     if (on) document.addEventListener('touchmove', stopMove, { passive: false }); else document.removeEventListener('touchmove', stopMove)
   }
-  const stopMove = (e: TouchEvent) => { if (e.cancelable) e.preventDefault() }
+  /** while a file is open the document does not move (html is overflow: hidden); the file's own scroller does, so a touch inside it is left alone */
+  const stopMove = (e: TouchEvent) => { if ((e.target as Element | null)?.closest?.('.ph-file.on')) return; if (e.cancelable) e.preventDefault() }
   const goPanelFocus = (el: HTMLElement | null) => el?.focus({ preventScroll: true })
 
   // ── the file page (P3b): any of the 19 stops opens; the view is built (and its text sealed) before the tap ──
@@ -346,8 +349,9 @@ export async function startPhone(host: HTMLElement, cancelled: () => boolean = (
     lockScroll(true)
     if (stage.current !== stillKey(id)) {
       page.setPlain(id, 1)   // the stop is skipped: its panel is already there when the open begins
-      void warm(id)
+      void warm(id); void stage.loadStill(windowKey(id)); stage.loadClip(openKey(id)); stage.loadClip(closeKey(id))
       await crossTo(stillKey(id))
+      await Promise.all([stage.buffered(openKey(id), BUFFER_WAIT_MS), stage.stills.ready(windowKey(id))])
       if (disposed) return
     }
     await openCore(id, o)
@@ -400,11 +404,12 @@ export async function startPhone(host: HTMLElement, cancelled: () => boolean = (
   async function jumpTo(id: string) {
     if (phase !== 'file' || !openId || !m.open[id] || id === openId || busy) return
     const a = openId
-    void warm(id)
+    void warm(id); void stage.loadStill(windowKey(id)); stage.loadClip(openKey(id))   // B's open clip buffers while A closes
     if (!(await closeCore(a, { play: true, rate: JUMP_RATE }))) return
     const va = curView; views.delete(a); va?.dispose()
     openId = id; page.setPlain(id, 1); curView = null
     await crossTo(stillKey(id))
+    await Promise.all([stage.buffered(openKey(id), BUFFER_WAIT_MS), stage.stills.ready(windowKey(id))])
     if (disposed) return
     await openCore(id, { push: false, replace: true })
   }
@@ -429,11 +434,6 @@ export async function startPhone(host: HTMLElement, cancelled: () => boolean = (
     void enterFile(id, { push: false })
   }
 
-  // ── listeners ──
-  const prime = () => stage.prime()
-  const onResize = () => { if (visualViewport && visualViewport.scale > 1.01) return; layout(); kick() }
-  const onVis = () => { if (document.hidden) stage.suspend(); else { stage.resume(); kick() } }
-  const onShow = (e: PageTransitionEvent) => { if (e.persisted) { stage.resync(); layout(); preload(); kick() } }
   // ── the entrance (first visit, plan §2.6): the sealed entry page holds until the clip can play through, then the clip plays under it and the page leaves over its first frames ──
   const ENTRANCE_MIN_HAVE = 0.3, ENTRANCE_WAIT_MS = 2000, GATE_FADE_S = 0.45, GATE_FADE_REDUCED_S = 0.25
   const playable = async (v: HTMLVideoElement | undefined, ms: number) => {
@@ -497,6 +497,11 @@ export async function startPhone(host: HTMLElement, cancelled: () => boolean = (
     })
   }
 
+  // ── listeners ──
+  const prime = () => stage.prime()
+  const onResize = () => { if (visualViewport && visualViewport.scale > 1.01) return; layout(); kick() }
+  const onVis = () => { if (document.hidden) stage.suspend(); else { stage.resume(); kick() } }
+  const onShow = (e: PageTransitionEvent) => { if (e.persisted) { stage.resync(); layout(); preload(); kick() } }
   const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape' && phase === 'file') backButton() }
   const mq = matchMedia('(orientation: landscape)')
   const onOrient = () => { if (mq.matches) root.setAttribute('data-land', ''); else root.removeAttribute('data-land'); layout() }
@@ -527,12 +532,12 @@ export async function startPhone(host: HTMLElement, cancelled: () => boolean = (
   layout()
   void document.fonts?.ready.then(() => { if (!disposed) { layout(); kick() } })
   const first = coldId ?? reel[at]
+  if (entry) { root.setAttribute('data-entering', ''); dom.bar.style.opacity = '0'; entry.attach({ prime, enter }) }   // (the first touch may come before the cover is in)
   stage.pin([stillKey(first)])
   await stage.loadStill(stillKey(first))
   await Promise.all(dom.lines.map((l) => l.ready))
   if (disposed) return { dispose() {} }
   if (coldId && coldIx < 0) scrollTo({ top: N * view.h, behavior: 'auto' })   // an entry that is not on the reel belongs to the Index
-  if (entry) { root.setAttribute('data-entering', ''); dom.bar.style.opacity = '0'; entry.attach({ prime, enter }) }   // (the first touch may come before the cover is in)
   else if (at > 0) scrollTo({ top: at * view.h, behavior: 'auto' })
   scrollP = scrollY / view.h; prevY = scrollY
   // a return visit: the paper rises over 0.4 s; a cold link to a file: its panel is already there; a first visit: it waits for the entrance

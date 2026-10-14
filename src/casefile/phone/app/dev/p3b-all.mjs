@@ -18,7 +18,7 @@ for (const id of ids) {
   await p.waitForTimeout(1200)
   await p.screenshot({ path: `${OUT}/${id}-a.png` })
   const m = await p.evaluate(() => {
-    const f = document.querySelector('.ph-file'), W = innerWidth
+    const f = document.querySelector('.ph-file.on'), W = innerWidth
     const out = { sh: f.scrollHeight, ch: f.clientHeight, issues: [], small: [] }
     const dm = f.querySelector('.ph-fdemo'); const dr = dm.getBoundingClientRect()
     const demo = dm.querySelector('.dm-panel')
@@ -31,11 +31,28 @@ for (const id of ids) {
         if (fs_ < 10.9 && getComputedStyle(e).visibility !== 'hidden') out.small.push(`${e.tagName}:${(e.textContent || '').trim().slice(0, 18)}:${fs_.toFixed(1)}`)
       }
     }
+    // contrast of the text that is on screen at rest (inactive, dimmed states with opacity < 1 are the demos' own animation and are skipped)
+    const rgb = (c) => { const m = c.match(/rgba?\(([^)]+)\)/); if (!m) return null; const [r, g, b, a = 1] = m[1].split(',').map((x) => parseFloat(x)); return { r, g, b, a } }
+    const mix = (fg, bg) => ({ r: fg.r * fg.a + bg.r * (1 - fg.a), g: fg.g * fg.a + bg.g * (1 - fg.a), b: fg.b * fg.a + bg.b * (1 - fg.a), a: 1 })
+    const lum = (c) => { const f = (v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4 }; return 0.2126 * f(c.r) + 0.7152 * f(c.g) + 0.0722 * f(c.b) }
+    const paper = { r: 231, g: 228, b: 221, a: 1 }
+    out.lowContrast = []
+    for (const e of f.querySelectorAll('*')) {
+      if (e.closest('svg') || !e.childNodes.length || ![...e.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim())) continue
+      const cs = getComputedStyle(e); if (cs.visibility === 'hidden' || e.getBoundingClientRect().width === 0) continue
+      let dim = false, el = e; const bgs = []
+      while (el && el !== document.documentElement) { const c = getComputedStyle(el); if (parseFloat(c.opacity) < 0.99) dim = true; const b = rgb(c.backgroundColor); if (b && b.a > 0) bgs.push(b); el = el.parentElement }
+      if (dim || e.closest('.ph-cbx')) continue
+      let bg = paper; for (const b of bgs.reverse()) bg = mix(b, bg)
+      const fg = mix(rgb(cs.color), bg), L1 = lum(fg), L2 = lum(bg), cr = (Math.max(L1, L2) + 0.05) / (Math.min(L1, L2) + 0.05)
+      if (cr < 4.5) out.lowContrast.push(`${e.tagName}.${(e.className && e.className.baseVal !== undefined ? e.className.baseVal : e.className) || ''}:${(e.textContent || '').trim().slice(0, 16)}:${cr.toFixed(2)}`)
+    }
+    out.lowContrast = [...new Set(out.lowContrast)].slice(0, 10)
     out.issues = out.issues.slice(0, 6); out.small = [...new Set(out.small)].slice(0, 12)
-    out.overflowX = document.querySelector('.ph-file').scrollWidth - W
+    out.overflowX = document.querySelector('.ph-file.on').scrollWidth - W
     return out
   })
-  await p.evaluate(() => { const f = document.querySelector('.ph-file'); f.scrollTo({ top: f.scrollHeight }) })
+  await p.evaluate(() => { const f = document.querySelector('.ph-file.on'); f.scrollTo({ top: f.scrollHeight }) })
   await p.waitForTimeout(1400)
   await p.screenshot({ path: `${OUT}/${id}-b.png` })
   await p.evaluate(() => window.__phone.closeFile(true))

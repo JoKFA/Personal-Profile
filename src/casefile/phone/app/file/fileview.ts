@@ -5,14 +5,13 @@
 // While the open clip plays the view is driven by the open timeline (tau, the page layer's clock); once it has settled the window is a plain
 // <img> of the window still INSIDE the scroller, so the face scrolls away natively with the page (the fixed stage is then hidden).
 // Everything animated is a function of tau or of the app clock; no CSS transition drives anything that must stay in step with the picture.
-import { entryById } from '../../../data/entries'
 import { smooth } from '../../../motion/waves'
 import type { Entry } from '../../../data/types'
 import { Line, blocksOf, canSeal, seal } from '../../cipherLine'
 import type { OpenShot } from '../../manifest'
 import type { Fit } from '../fit'
 import { COPY } from '../copy'
-import { OPEN_END, type PageDom, type Panel } from '../page'
+import type { PageDom, Panel } from '../page'
 import type { Stage } from '../stage/stage'
 import type { Bridge } from './FileParts'
 import type { Mounted } from './mount'
@@ -119,6 +118,7 @@ export class FileView {
   /** the screen changed (rotation, the toolbar): the window and the demo's box are laid out again */
   relayout(view: { w: number; h: number }, winFit: Fit, heights: { stop: number; file: number }) {
     this.env.view = view; this.env.winFit = winFit; this.env.heights = heights
+    this.demoNeed = 0   // the demo's own height is read again at the new width (the observer fires when its size changes)
     this.layout()
     if (this.shown) this.fitHead()
   }
@@ -162,7 +162,7 @@ export class FileView {
     this.demoBox.style.visibility = 'hidden'
     const m = this.env.mod.mountDemo(this.demoBox, this.env.entry, this.env.bridge)
     const core = this.demoBox.querySelector<HTMLElement | SVGElement>('[data-core]'), bx = this.demoBox.getBoundingClientRect()
-    this.demoNeed = Math.max(this.demoNeed, Math.ceil((this.demoBox.firstElementChild as HTMLElement | null)?.getBoundingClientRect().height ?? 0))
+    { const h = Math.ceil((this.demoBox.firstElementChild as HTMLElement | null)?.getBoundingClientRect().height ?? 0); if (h > (parseFloat(this.demoBox.style.minHeight) || 0) + 1) this.demoNeed = Math.max(this.demoNeed, h) }
     if (core && bx.width) { const r = core.getBoundingClientRect(); this.coreRel = { x: clamp((r.left + r.width / 2 - bx.left) / bx.width, 0, 1), y: clamp((r.top + r.height / 2 - bx.top) / bx.height, 0, 1) } }
     m.unmount(); this.demoBox.style.visibility = ''
     this.layout()
@@ -212,7 +212,7 @@ export class FileView {
   show() {
     if (this.shown) return
     this.shown = true
-    const { dom, panel, stage } = this.env
+    const { dom, panel } = this.env
     this.layout()
     this.scroller.insertBefore(panel.el, this.bodyEl)
     panel.el.classList.add('ph-infile')
@@ -225,7 +225,6 @@ export class FileView {
     void this.img.decode().catch(() => undefined)
     this.scroller.classList.add('on', 'opening')
     dom.main.inert = true
-    void stage
     this.update(0, 'opening')
   }
 
@@ -305,7 +304,7 @@ export class FileView {
     this.demo = this.env.mod.mountDemo(this.demoBox, this.env.entry, this.env.bridge)
     const first = this.demoBox.firstElementChild
     if (first && typeof ResizeObserver === 'function') {
-      this.ro = new ResizeObserver(() => { const h = Math.ceil(first.getBoundingClientRect().height); if (h > this.demoNeed + 1) { this.demoNeed = h; this.layout() } })
+      this.ro = new ResizeObserver(() => { const h = Math.ceil(first.getBoundingClientRect().height), min = parseFloat(this.demoBox.style.minHeight) || 0; if (h > min + 1 && h > this.demoNeed + 1) { this.demoNeed = h; this.layout() } })
       this.ro.observe(first)
     }
   }
@@ -394,5 +393,3 @@ export class FileView {
 }
 
 const settled = (phase: string) => phase === 'file'
-void entryById
-void OPEN_END
