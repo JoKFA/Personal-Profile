@@ -127,7 +127,7 @@ const sess = (dpr, run, opts) => session(BROWSER, BASE, dpr, run, opts)
 function stillJob(id) {
   return async () => {
     const t = Date.now(), meta = png(`meta-${id}.json`)
-    if (REUSE && fs.existsSync(meta)) { const m = JSON.parse(fs.readFileSync(meta, 'utf8')); R.stop[id] = m.stop; if (m.win) R.win[id] = m.win; return }
+    if (REUSE && fs.existsSync(meta)) { const m = JSON.parse(fs.readFileSync(meta, 'utf8')); R.stop[id] = m.stop; if (m.win && id !== 'YW-000') R.win[id] = m.win; return }
     await sess(DPR_STILL, async (s) => {
       fs.mkdirSync(png(), { recursive: true })
       await s.settle(id)
