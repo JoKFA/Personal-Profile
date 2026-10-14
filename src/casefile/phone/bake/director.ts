@@ -255,6 +255,10 @@ export function install(opts: InstallOptions = {}) {
 
     // camera: from the stop's framing to the face filling the width, at its height
     const q = camK.value
+    // The sealed black drive (X-000) has an opaque dark shell: where every other drive's shell clears to show its board, this one stays a slab, and seen
+    // square-on its soft fresnel rim reads as a large blurred dark glow. Its cover slides off with the turn instead (the engine's own door look): the
+    // board, its traces and its chip are there, hard-edged, as in every other window; closing slides it back on, so the stop is the stop.
+    if (ENTRIES.find((e) => e.id === stopId)?.kind === 'restricted') lab.cover = smooth(Math.min(1, Math.max(0, (q - 0.25) / 0.6)))
     const sp = THREE.MathUtils.lerp(span.value, INNER.w / (innerWidth / innerHeight), q)
     // the face's top at the top of the screen: its centre sits (span/2 − h/2) above the aim
     const lead = THREE.MathUtils.lerp(-dy.value, sp / 2 - INNER.h / 2, q)

@@ -18,6 +18,8 @@ export interface LabHooks {
   idle0?: boolean
   /** the camera's aim follows `to` (world) by weight k (0 = the engine's own aim, 1 = `to`): the door keeps the drive in the middle of the frame */
   aim?: { to: number[]; k: number }
+  /** the enclosure's cover slid off the board (0 → 1), as the door does it */
+  cover?: number
 }
 /** window.__camOv: the camera, overridden */
 export interface CamOverride { yaw: number; elev: number; span: number; dist?: number; aim?: number[] | 'sel'; dy?: number }
