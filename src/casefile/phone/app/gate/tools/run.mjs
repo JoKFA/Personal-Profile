@@ -14,8 +14,10 @@ const PROFILES = { none: null, '4g': { latency: 60, downloadThroughput: (9e6 / 8
 fs.mkdirSync(OUT, { recursive: true })
 
 const initScript = () => {
-  const S = { gateVisibleAt: 0, raf: [], gaps: [] }
+  const S = { gateVisibleAt: 0, raf: [], gaps: [], fontAt: [] }
   window.__g = S
+  // when a web font arrives and the text it sets is drawn again (the name swaps from the system font to Manrope)
+  document.fonts.addEventListener('loadingdone', (e) => S.fontAt.push([Math.round(performance.now()), e.fontfaces.map((f) => f.family + ' ' + f.weight).join(',')]))
   let last = 0
   const tick = (now) => {
     requestAnimationFrame(tick)
@@ -87,7 +89,7 @@ await p.screenshot({ path: path.join(OUT, `final-${TAG}.png`) })
 await cdp.send('Page.stopScreencast')
 const A = await p.evaluate(() => {
   const ph = window.__phone, st = ph.stage
-  return { timeOrigin: performance.timeOrigin, entry: { ...ph.entry }, mode: st.mode, rejects: st.rejects, fades: st.fades, handoffs: st.handoffs, csp: ph.csp, gaps: window.__g.gaps, gateGone: !document.querySelector('.ph-gate'), yw: localStorage.getItem('yw.entry'), cover: { phase: ph.phase, at: ph.at } }
+  return { timeOrigin: performance.timeOrigin, entry: { ...ph.entry }, mode: st.mode, rejects: st.rejects, fades: st.fades, handoffs: st.handoffs, csp: ph.csp, gaps: window.__g.gaps, fontAt: window.__g.fontAt, gateGone: !document.querySelector('.ph-gate'), yw: localStorage.getItem('yw.entry'), cover: { phase: ph.phase, at: ph.at } }
 })
 const E = A.entry
 const waitMs = E.firstFrameAt && E.sealedAt ? E.firstFrameAt - E.sealedAt : null
@@ -103,7 +105,7 @@ rec.numbers = {
   navToCoverReadableMs: +(E.coverAt + 400 - 0).toFixed(0),
   rafGapsOver50ms: A.gaps.length, worstGapMs: A.gaps.reduce((m, g) => Math.max(m, g[1]), 0),
 }
-rec.csp = [...A.csp, ...csp]; rec.errs = errs; rec.gaps = A.gaps
+rec.csp = [...A.csp, ...csp]; rec.errs = errs; rec.gaps = A.gaps; rec.fontAt = A.fontAt
 const base0 = reqs.length ? Math.min(...reqs.map((r) => r.t0)) : 0
 rec.requests = reqs.filter((r) => r.t1).map((r) => ({ url: r.url.slice(0, 70), status: r.status, startMs: Math.round((r.t0 - base0) * 1000), firstByteMs: Math.round(((r.tFirst ?? r.t1) - base0) * 1000), endMs: Math.round((r.t1 - base0) * 1000), bytes: r.bytes }))
 const d = path.join(OUT, `screencast-${TAG}`); fs.rmSync(d, { recursive: true, force: true }); fs.mkdirSync(d, { recursive: true })
