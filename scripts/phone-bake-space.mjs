@@ -191,7 +191,7 @@ export function spaceJobs(c) {
       for (let i = 0; i < 3; i++) await s.step()
       await s.p.evaluate(() => window.__ph.space.closeArchive())
       const dir = mk('space-exit'), q = [], cam = []
-      let n = 0, doorFrame = -1, retook = false, readyAt = -1
+      let n = 0, doorFrame = -1, retook = false, readyAt = -1, retookAt = -1
       for (let k = 0; k < 900; k++) {
         await s.step()
         const sm = await s.ispace()
@@ -201,14 +201,22 @@ export function spaceJobs(c) {
         if (!inside && doorFrame < 0) doorFrame = n
         q.push(inside ? [] : roundPts(d.quad)); cam.push(round(d.cam, 4))
         await s.shot(frameFile(dir, n++))
-        // the archive has closed the file again: the director takes the camera from where the engine left it, back to the cover's framing
-        if (sm.closed && !retook) { await s.p.evaluate(() => window.__ph.retake()); retook = true }
+        // the door has run back: the drive stands where the door left it, lifted; the director takes it from there to the cover's stop pose (the pose
+        // the reel uses), the camera springing back to the cover's aim. No landing in the slot first: archive.close() goes on in the background.
+        if (!retook && !sm.suspended && !sm.doorOn && !sm.doorOpen) { await s.p.evaluate(() => window.__ph.retake()); retook = true; retookAt = n }
         if (retook && readyAt < 0 && (await s.ready())) readyAt = n
-        if (readyAt >= 0 && n - readyAt >= 20) break
+        if (readyAt >= 0 && n - readyAt >= 100) break
       }
       if (readyAt < 0) throw new Error('the exit never came back to the cover stop')
-      py(path.join(HERE, 'phone-bake-blend.py'), png('stop-YW-000.png'), dir, String(EXIT_BLEND))
-      writeMeta('space-exit', { count: n, q, cam, doorFrame, retookAt: q.length })
+      // the drive and the camera spring into the stop pose and settle a while: the clip is cut at the first frame within 1.5% of the cover still
+      // (the entrance's rule) and only the last 8 frames are blended into it, so the blend absorbs the idle residual and nothing more
+      const cutDir = framesDir('space-exit-cut')
+      const cut = JSON.parse(py(path.join(HERE, 'phone-bake-cut.py'), png('stop-YW-000.png'), dir, cutDir, '1.5', String(EXIT_BLEND), String(Math.max(retookAt, 0))))
+      if (Math.max(...cut.blend) >= 2) throw new Error(`the exit's blend moved a frame by ${Math.max(...cut.blend)}% (>= 2%)`)
+      log(`exit: retaken at frame ${retookAt}, cut at ${cut.cut} (residual ${cut.residual}%), blend per-frame diff vs the clean frame (%): ${cut.blend.join(' ')}`)
+      fs.rmSync(dir, { recursive: true, force: true }); fs.renameSync(cutDir, dir)
+      const keepN = cut.frames
+      writeMeta('space-exit', { count: keepN, q: q.slice(0, keepN), cam: cam.slice(0, keepN), doorFrame, retookAt, cutFrame: cut.cut, residual: cut.residual, blend: cut.blend })
     }, { label: 'exit', interior: true, exact: true })
     log(`exit done (${((Date.now() - t) / 1000).toFixed(0)} s)`)
   }

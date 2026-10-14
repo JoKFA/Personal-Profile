@@ -16,6 +16,8 @@ export interface LabHooks {
   light?: { reveal: number; glow: number; die: number }
   /** hold the field's idle "breathing" at 0: the baked pixels are still when nothing moves (art decision, plan §3.1) */
   idle0?: boolean
+  /** the camera's aim follows `to` (world) by weight k (0 = the engine's own aim, 1 = `to`): the door keeps the drive in the middle of the frame */
+  aim?: { to: number[]; k: number }
 }
 /** window.__camOv: the camera, overridden */
 export interface CamOverride { yaw: number; elev: number; span: number; dist?: number; aim?: number[] | 'sel'; dy?: number }

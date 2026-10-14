@@ -163,11 +163,12 @@ async function renderClip(name, frames, s, { n, blendTo, quads = false, stopWhen
     if (i === 0 || i === n - 1 || i % 10 === 0) await s.assertSceneOnly()
     if (stopWhen && (await stopWhen(i))) break
   }
-  if (blendTo) py(path.join(HERE, 'phone-bake-blend.py'), blendTo, dir, String(BLEND))
-  return { count, q, cam }
+  let blend = null
+  if (blendTo) { blend = JSON.parse(py(path.join(HERE, 'phone-bake-blend.py'), blendTo, dir, String(BLEND))); if (Math.max(...blend.diffs) >= 2) throw new Error(`${name}: the blend moved a frame by ${Math.max(...blend.diffs)}% (>= 2%): the clip does not end on its still`) }
+  return { count, q, cam, blend: blend && blend.diffs }
 }
 /** encode a frames dir into the output (content-hashed) and record it */
-function finishClip(name, { count, q, cam, marks }, quads) {
+function finishClip(name, { count, q, cam, marks, blend }, quads) {
   const tmp = path.join(WORK, 'tmp'); fs.mkdirSync(tmp, { recursive: true })
   const mp4 = path.join(tmp, `${name}.mp4`)
   const enc = encodeOf(name)
@@ -181,7 +182,7 @@ function finishClip(name, { count, q, cam, marks }, quads) {
   }
   encodeClip(dir, mp4, { crf: enc.crf, width: enc.width })
   const a = hashed(OUT, name, 'mp4', mp4)
-  R.clip[name] = { ...a, w: enc.width, h: enc.width * 2, frames: count, fps: FPS, crf: enc.crf, marks, ...(cut ? { cut: { frame: cut.cut, residual: cut.residual, blend: ENTRANCE_CUT.blend } } : {}), ...(quads ? { quads: q, cam } : {}) }
+  R.clip[name] = { ...a, w: enc.width, h: enc.width * 2, frames: count, fps: FPS, crf: enc.crf, marks, blend, ...(cut ? { cut: { frame: cut.cut, residual: cut.residual, blend: ENTRANCE_CUT.blend } } : {}), ...(quads ? { quads: q, cam } : {}) }
 }
 
 const clipJob = (name, body, quads = false) => async () => {

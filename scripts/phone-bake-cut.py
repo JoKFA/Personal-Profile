@@ -19,11 +19,14 @@ for i, f in enumerate(fs):
 if cut is None: raise SystemExit(f'no frame reaches {thr}% of the still')
 if cut + 1 < n: raise SystemExit('cut too early to blend')
 shutil.rmtree(out, ignore_errors=True); os.makedirs(out)
+blend = []   # how far each blended frame moved from its clean frame (mean abs diff, % of 255)
 for i in range(cut + 1):
     src = fs[i]
     if i > cut - n:
         w = (i - (cut - n)) / n
         a = np.asarray(Image.open(src).convert('RGB'), dtype=np.float32)
-        Image.fromarray(np.rint(a * (1 - w) + still * w).clip(0, 255).astype(np.uint8)).save(os.path.join(out, f'f-{i:04d}.png'), compress_level=3)
+        b = np.rint(a * (1 - w) + still * w).clip(0, 255)
+        blend.append(round(float(np.abs(b - a).mean() / 255 * 100), 3))
+        Image.fromarray(b.astype(np.uint8)).save(os.path.join(out, f'f-{i:04d}.png'), compress_level=3)
     else: shutil.copyfile(src, os.path.join(out, f'f-{i:04d}.png'))
-print(json.dumps({'cut': cut, 'frames': cut + 1, 'residual': series[cut], 'series': series}))
+print(json.dumps({'cut': cut, 'frames': cut + 1, 'residual': series[cut], 'blend': blend, 'series': series}))

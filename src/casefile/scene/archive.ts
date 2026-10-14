@@ -927,6 +927,8 @@ export class Archive {
       aim.lerp(new THREE.Vector3(hp.x, hp.y + CARD.H / 2, hp.z), D.stand).lerp(new THREE.Vector3(hp.x + DIE_ON_FACE.x, hp.y + DIE_ON_FACE.y, hp.z + BOARD_Z), D.die)
       distanceD = doorDistance(distance, D.dolly); spanB = doorSpan(spanB, distance, distanceD, D.lens)
     }
+    // lab (the phone bake's door): the aim follows a target the director gives, by weight k (the camera is the engine's own otherwise)
+    if (lab?.aim) aim.lerp(new THREE.Vector3(lab.aim.to[0], lab.aim.to[1], lab.aim.to[2]), lab.aim.k)
     // lab (phone keyframes): window.__camOv = { yaw, elev (deg), span, dist, aim: [x, y, z] | 'sel', dy } overrides the camera
     const ov = LAB ? window.__camOv : undefined
     if (ov) {

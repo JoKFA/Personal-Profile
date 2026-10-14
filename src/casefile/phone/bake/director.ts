@@ -186,8 +186,6 @@ export function install(opts: InstallOptions = {}) {
     // the baked field lies still (before the first stop too: the entrance's pixels)
     const still: Pick<LabHooks, 'idle0'> = master ? { idle0: true } : {}
     if (!stopId) { window.__lab = { ...still }; return }
-    // the engine's own door: its camera, its drive, no overrides but the phone's sharpness
-    if (mode === 'door') { window.__camOv = undefined; window.__lab = { ...still, sharp: true, blur: 0.35 }; return }
     // motion blur stays (speed shows only while something moves, A2); depth of field never (A9)
     const f = frameOf(stopId), fspan = f.span * sc()
     // one hero at a time: the other records' light steps back; pans smear a third as much as the desktop's
@@ -196,11 +194,25 @@ export function install(opts: InstallOptions = {}) {
     for (const [key, sp] of letGo) { damp(sp, 0, 4, dt); if (sp.value < 0.002) letGo.delete(key); else cells.set(key, sp.value) }
     const lab: LabHooks = { ...still, sharp: true, clear: clearK.value, lift: f.lift, quiet: quietK.value, blur: 0.35, clearCells: cells }
     const g = (a as unknown as { heroGroup: THREE.Group }).heroGroup
-    damp(span, fspan, 4.2, dt); damp(dy, dyOf(f), 4.2, dt); damp(dist, 140, 4.2, dt); damp(yaw, VIEW.yaw, 4.2, dt); damp(elev, VIEW.elev, 4.2, dt)
+    damp(span, fspan, 4.2, dt); if (mode !== 'door') damp(dy, dyOf(f), 4.2, dt); damp(dist, 140, 4.2, dt); damp(yaw, VIEW.yaw, 4.2, dt); damp(elev, VIEW.elev, 4.2, dt)
     // the camera's aim follows the drive a beat behind (the engine pans the archive; the aim adds the weight)
     const hc = g.position.clone().add(new THREE.Vector3(0, CARD.H / 2, 0))
     // the stop: the engine places the drive (it pans the archive under the camera, lifts the drive, on its own springs);
     // the director takes the drive only when it is opened, from wherever it is at that moment
+    // the engine's own door (beginOpen, the key's light, beginDoor; and, running backwards, close()): the engine's camera and its drive, with the
+    // light the cover had kept until the engine takes it over, and the camera's AIM following the drive: it springs after the drive's centre (the
+    // cover's offset relaxing to the middle of the screen: the page clears its sheet and panel for the door) and hands over to the door's own aim
+    // as the drive stands (weight 1 − stand), so the drive never leaves the frame and only grows as the dolly comes. Nothing else is invented.
+    if (mode === 'door') {
+      const x = a as unknown as { opening: boolean; door: { on: boolean; t: number } }
+      window.__camOv = undefined
+      damp(dy, 0, 4.2, dt); vdamp(aim!, hc.clone().add(new THREE.Vector3(0, dy.value, 0)), 6, dt)
+      const A = vval(aim!), stand = x.door.on ? doorAt(Math.min(x.door.t, DOOR.end)).stand : 0
+      // (until the drive is asked to open, it stays at the cover's lift: no seating before the rise)
+      if (x.opening) delete lab.lift
+      window.__lab = { ...lab, aim: { to: [A.x, A.y, A.z], k: 1 - stand } }
+      return
+    }
     if (mode === 'stop') {
       window.__lab = lab
       vdamp(aim!, hc.clone().add(new THREE.Vector3(0, dy.value, 0)), 6, dt)

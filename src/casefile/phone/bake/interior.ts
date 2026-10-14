@@ -29,12 +29,15 @@ export interface InteriorSample {
   suspended: boolean
   /** archive.close() (the desktop's whole way out) has finished */
   closed: boolean
+  /** the door is running (forwards or backwards) / is open (the interior is behind it) */
+  doorOn: boolean; doorOpen: boolean
 }
 
 export function createInterior() {
   // (suspended is the archive's private flag: the door's cut sets it; sessions that skip the door set it here)
   const archive = window.__cf as unknown as { suspended: boolean; interior: null | { exit: () => Promise<void> } }
   const host = window.__cf as Archive
+  const doorOf = () => (window.__cf as unknown as { door: { on: boolean; open: boolean } }).door
   let space: Space | null = null, clock: Clock | null = null, rt: Runtime | null = null, last: SpaceFrame | null = null
   let off: (() => void) | null = null, closed = false
   const api = {
@@ -79,11 +82,11 @@ export function createInterior() {
       space!.update(f, DT, 0); space!.render(); last = f
     },
     sample(): InteriorSample {
-      const s = clock!.state
+      const s = clock!.state, door = doorOf()
       const f = last, out: InteriorSample = {
         frame: f ? { intro: f.intro, area: f.area, p: f.p, into: f.into, compose: f.compose, travel: f.travel } : null,
         clock: { intro: s.intro, area: s.area, p: s.p, travel: s.travel, tour: s.tour, playing: s.playing, reason: s.reason, retained: s.retained },
-        chips: [], plate: null, drawing: !!rt, suspended: archive.suspended, closed,
+        chips: [], plate: null, drawing: !!rt, suspended: archive.suspended, closed, doorOn: door.on, doorOpen: door.open,
       }
       if (f && rt) {
         const i = f.area
