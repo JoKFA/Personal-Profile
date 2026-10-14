@@ -13,6 +13,8 @@ export const COPY = {
   availability: 'Master of Cybersecurity, SFU · CCNA · Security+ · Full-time from Apr 2027',
   coverTitle: 'Inside my drive: six areas →',
   open: 'Open →', back: '← All files', index: 'Index', contact: 'Contact',
+  // approved (plan §8, 10-12)
+  hold: 'Hold to verify',
   // pending (plan §8)
   landscape: 'Turn your phone upright to open the archive.',
   keyIssued: (id: string) => `KEY ISSUED · ${id}`,

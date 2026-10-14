@@ -2,9 +2,11 @@
 import { chromium } from '@playwright/test'
 const GPU = ['--use-angle=d3d11', '--enable-gpu', '--ignore-gpu-blocklist']
 
-export async function launch(W, H, { dsf = 3 } = {}) {
+export async function launch(W, H, { dsf = 3, gate = false } = {}) {
   const b = await chromium.launch({ channel: 'chrome', args: GPU })
   const ctx = await b.newContext({ viewport: { width: W, height: H }, deviceScaleFactor: dsf, isMobile: true, hasTouch: true })
+  // a fresh context is a first visit, which starts at the entry page (P4); the P2/P3 scripts walk the shell itself, so they start as a return visit
+  if (!gate) await ctx.addInitScript(() => { try { localStorage.setItem('yw.entry', '1') } catch { /* */ } })
   const p = await ctx.newPage(); p.setDefaultTimeout(90000)
   const errs = []
   p.on('pageerror', (e) => errs.push('pageerror ' + e)); p.on('console', (m) => { if (m.type() === 'error') errs.push('console.error ' + m.text()) })

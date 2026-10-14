@@ -29,6 +29,8 @@ export interface StepSpec {
   rate?: number
   /** when the input that caused the step arrived (performance.now), for the latency record */
   inputAt?: number
+  /** the clip's first frame has been presented (the entrance: the entry page starts to leave over it) */
+  onFirstFrame?(): void
   /** time (s), clip-frame index and progress 0..1 the page layer should show; called for every presented frame (clip) or animation frame (fade) */
   onTick(time: number, index: number, k: number): void
 }
@@ -198,6 +200,7 @@ export class Stage {
         clearTimeout(wd.start); clearTimeout(wd.frame)
         if (first) {
           first = false; started = true; rec.firstFrameAt = now; rec.latencyMs = now - inputAt
+          spec.onFirstFrame?.()
           // the clip's first frame is on the compositor (the clip sits below the still, playing): the start still fades out over it for 100 ms,
           // then the clip goes above the stills (where the end of the step needs it)
           const from = this.stills.get(spec.from)

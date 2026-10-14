@@ -5,7 +5,8 @@ import { smooth } from '../../motion/waves'
 import { reconVisitor, type Visitor } from '../../visitor'
 import { Line } from '../cipherLine'
 import type { OpenShot, Pt as MPt, Rect, Shot } from '../manifest'
-import { closeKey, loadManifest, openKey, panKey, readFlags, stillKey, windowKey } from './assets'
+import { closeKey, entranceKey, loadManifest, openKey, panKey, readFlags, stillKey, windowKey } from './assets'
+import type { EnterOptions, EntryBridge } from './gate/entry'
 import { sampleAt } from './clock'
 import { stopCopy } from './copy'
 import type { FileView } from './file/fileview'
@@ -38,7 +39,8 @@ const quadAt = (quads: MPt[][], pos: number): MPt[] => { const i = clamp(Math.fl
 const lerpRect = (a: Rect, b: Rect, k: number): Rect => ({ x0: a.x0 + (b.x0 - a.x0) * k, y0: a.y0 + (b.y0 - a.y0) * k, x1: a.x1 + (b.x1 - a.x1) * k, y1: a.y1 + (b.y1 - a.y1) * k })
 
 /** `cancelled`: asked once the manifest is in; a start that was cancelled meanwhile (React StrictMode's first effect in dev) builds nothing */
-export async function startPhone(host: HTMLElement, cancelled: () => boolean = () => false): Promise<PhoneHandle> {
+/** `entry`: a first visit (P4): the entry page is over the shell; once it is sealed the entrance plays under it and the shell takes over */
+export async function startPhone(host: HTMLElement, cancelled: () => boolean = () => false, entry?: EntryBridge): Promise<PhoneHandle> {
   const flags = readFlags()
   const { m, url } = await loadManifest(flags.dev)
   if (cancelled()) return { dispose() {} }
@@ -59,6 +61,7 @@ export async function startPhone(host: HTMLElement, cancelled: () => boolean = (
   for (const [k, c] of Object.entries(m.pans)) { const [a, b] = k.split('>'); stage.register(panKey(a, b), url(c.file)) }
   for (const [id, o] of Object.entries(m.open)) { stage.register(openKey(id), url(o.file)); stage.register(windowKey(id), url(o.window.file)) }
   for (const [id, c] of Object.entries(m.close)) stage.register(closeKey(id), url(c.file))
+  if (m.entrance) stage.register(entranceKey, url(m.entrance.file))
 
   // ── state ──
   let phase: Phase = 'settled'
@@ -70,6 +73,10 @@ export async function startPhone(host: HTMLElement, cancelled: () => boolean = (
   let rise = 1, riseOn = false
   let scrollP = 0
   let view = { w: innerWidth, h: innerHeight }
+  /** a first visit: the page layer (bar, reticle, paper) stays away until the entrance has played */
+  const entering = !!entry
+  let ready!: () => void
+  const readyP = new Promise<void>((r) => { ready = r })
   let fits: Fit[] = [], winFit: Fit = { s: 1, tx: 0, ty: 0 }
   /** per stop: where its band starts and how tall its panel is (the marks frame the visible part of the reticle inside them) */
   let tops: number[] = [], panels: number[] = []
@@ -152,7 +159,7 @@ export async function startPhone(host: HTMLElement, cancelled: () => boolean = (
     const { pts, anchor } = marksTarget()
     // the reticle belongs to the stops: it leaves with the last one when the Index comes up
     const away = clamp((scrollP - (N - 1)) / 0.5, 0, 1)
-    page.placeMarks(pts, anchor, phase === 'settled' || phase === 'panning' ? 1 - smooth(away) : 1)
+    page.placeMarks(pts, anchor, (phase === 'settled' || phase === 'panning' ? 1 - smooth(away) : 1) * (entering ? smooth(rise) : 1))
   }
 
   // ── the loop: runs only while something moves ──
@@ -167,7 +174,10 @@ export async function startPhone(host: HTMLElement, cancelled: () => boolean = (
     const moving = page.update(f)
     syncDom()
     if (moving || busy || scrolling || rise < 1) kick()
+    if (entering) dom.bar.style.opacity = rise < 1 ? String(smooth(rise)) : ''
     else last = 0
+    // (waiting for the entrance: nothing moves, so the loop is not run)
+    if (entering && !riseOn) { last = 0; return }
   }
   function kick() { if (!raf && !disposed) raf = requestAnimationFrame(frame) }
 
@@ -424,6 +434,69 @@ export async function startPhone(host: HTMLElement, cancelled: () => boolean = (
   const onResize = () => { if (visualViewport && visualViewport.scale > 1.01) return; layout(); kick() }
   const onVis = () => { if (document.hidden) stage.suspend(); else { stage.resume(); kick() } }
   const onShow = (e: PageTransitionEvent) => { if (e.persisted) { stage.resync(); layout(); preload(); kick() } }
+  // ── the entrance (first visit, plan §2.6): the sealed entry page holds until the clip can play through, then the clip plays under it and the page leaves over its first frames ──
+  const ENTRANCE_MIN_HAVE = 0.3, ENTRANCE_WAIT_MS = 2000, GATE_FADE_S = 0.45, GATE_FADE_REDUCED_S = 0.25
+  const playable = async (v: HTMLVideoElement | undefined, ms: number) => {
+    if (!v) return false
+    if (v.readyState < 4) await new Promise<void>((res) => { const f = () => { clearTimeout(t); v.removeEventListener('canplaythrough', f); res() }; const t = setTimeout(f, ms); v.addEventListener('canplaythrough', f) })
+    return v.readyState >= 4
+  }
+  const fadeAway = (el: HTMLElement, seconds: number) => new Promise<void>((res) => {
+    const t0 = performance.now()
+    const step = (now: number) => {
+      const k = clamp((now - t0) / 1000 / seconds, 0, 1)
+      el.style.opacity = String(1 - smooth(k))
+      if (k < 1 && !disposed) requestAnimationFrame(step); else { el.style.opacity = '0'; res() }
+    }
+    requestAnimationFrame(step)
+  })
+  async function enter(gate: HTMLElement, o: EnterOptions) {
+    const lg = entry!.log; lg.enterAt = performance.now()
+    // the sealed page holds (no blank, no spinner); past 1.2 s it says, in the words it already has, what it is waiting for
+    const note = setTimeout(() => gate.classList.add('waiting'), 1200)
+    await readyP
+    if (disposed) { clearTimeout(note); return }
+    const cover = stillKey(reel[0]), clip = m.entrance
+    let via: 'clip' | 'fade' = 'fade'
+    if (stage.mode === 'clips' && !o.reduced && clip) {
+      // hold on the sealed page (no blank, no spinner) until the entrance can play through; a slow network gives up and cross-fades
+      const t0 = performance.now()
+      if (!stage.pool.holding(entranceKey)) stage.loadClip(entranceKey)
+      const v = stage.pool.holding(entranceKey)
+      // waiting is for a clip that is nearly there: one that is hardly begun on a slow network is not worth the wait
+      const have = v && v.duration > 0 && v.buffered.length ? v.buffered.end(v.buffered.length - 1) / v.duration : 0
+      if (v && (v.readyState >= 4 || have >= ENTRANCE_MIN_HAVE) && await playable(v, ENTRANCE_WAIT_MS)) via = 'clip'
+      lg.clipWaitMs = performance.now() - t0
+    }
+    clearTimeout(note); gate.classList.remove('waiting')
+    lg.via = via
+    let gone: Promise<void> | null = null
+    const leave = () => { if (!gone) gone = fadeAway(gate, via === 'clip' ? GATE_FADE_S : o.reduced ? GATE_FADE_REDUCED_S : GATE_FADE_S); return gone }
+    let ran: Promise<unknown> = Promise.resolve()
+    if (via === 'clip') {
+      // the cover waits under the clip; the page leaves once the clip's first frame is on screen (or the step has fallen back to a cross-fade)
+      let framed!: () => void
+      const onFrame = new Promise<void>((r) => { framed = r })
+      ran = stage.run({
+        clipKey: entranceKey, clip, from: '', to: cover, duration: clip.frames / clip.fps, fade: FADE_SHOT,
+        onFirstFrame: () => { lg.firstFrameAt = performance.now(); framed() }, onTick: () => {},
+      })
+      await Promise.race([onFrame, ran])
+      if (!lg.firstFrameAt) lg.firstFrameAt = performance.now()
+    } else { stage.show(cover); lg.firstFrameAt = performance.now() }
+    await leave()
+    if (disposed) return
+    // the page is gone; the entrance (if any) plays on, then the paper rises over the cover
+    void ran.then(() => {
+      if (disposed) return
+      lg.coverAt = performance.now()
+      stage.show(cover)
+      root.removeAttribute('data-entering'); riseOn = true; document.documentElement.classList.remove('ph-entry'); kick()
+      if (via === 'fade') stage.pool.release(new Set())   // (the entrance was given up on: stop fetching it)
+      preload()
+    })
+  }
+
   const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape' && phase === 'file') backButton() }
   const mq = matchMedia('(orientation: landscape)')
   const onOrient = () => { if (mq.matches) root.setAttribute('data-land', ''); else root.removeAttribute('data-land'); layout() }
@@ -459,14 +532,20 @@ export async function startPhone(host: HTMLElement, cancelled: () => boolean = (
   await Promise.all(dom.lines.map((l) => l.ready))
   if (disposed) return { dispose() {} }
   if (coldId && coldIx < 0) scrollTo({ top: N * view.h, behavior: 'auto' })   // an entry that is not on the reel belongs to the Index
+  if (entry) { root.setAttribute('data-entering', ''); dom.bar.style.opacity = '0'; entry.attach({ prime, enter }) }   // (the first touch may come before the cover is in)
   else if (at > 0) scrollTo({ top: at * view.h, behavior: 'auto' })
   scrollP = scrollY / view.h; prevY = scrollY
-  stage.show(stillKey(first))
-  // a return visit: the paper rises over 0.4 s; a cold link to a file: its panel is already there
-  if (coldId) { page.setPlain(first, 1); rise = 1 } else { rise = 0; riseOn = true }
+  // a return visit: the paper rises over 0.4 s; a cold link to a file: its panel is already there; a first visit: it waits for the entrance
+  if (entry) { rise = 0; riseOn = false } else stage.show(stillKey(first))
+  if (coldId) { page.setPlain(first, 1); rise = 1 } else if (!entry) { rise = 0; riseOn = true }
   syncDom()
   root.setAttribute('data-ready', '')
-  preload();   kick()
+  if (entry) {
+    // the entrance is attached now (after the cover, so the cover has the network first), and the gate may proceed
+    if (stage.mode === 'clips' && m.entrance) stage.loadClip(entranceKey)
+    ready()
+  } else preload()
+  kick()
 
   if (coldId) {
     // the stop's picture, then its open clip (buffered if it can be, else a crossfade), then the file
@@ -478,7 +557,7 @@ export async function startPhone(host: HTMLElement, cancelled: () => boolean = (
   const api = {
     get phase() { return phase }, get at() { return at }, get want() { return want }, get busy() { return busy },
     get mode() { return stage.mode }, get ready() { return root.hasAttribute('data-ready') },
-    stage, page, dom, manifest: m, csp, layout: L, get fits() { return fits }, get winFit() { return winFit }, get view() { return view },
+    stage, page, dom, manifest: m, csp, entry: entry?.log, layout: L, get fits() { return fits }, get winFit() { return winFit }, get view() { return view },
     get tau() { return tau }, get panK() { return panK }, get shotIndex() { return shotIndex },
     marks: () => dom.marks.map((e) => { const r = e.getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 } }),
     openFile: (i: number) => enterFile(reel[i], { push: true }), openEntry: (id: string) => enterFile(id, { push: true }), jumpTo,

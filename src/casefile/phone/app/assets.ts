@@ -34,3 +34,4 @@ export const windowKey = (id: string) => `window:${id}`
 export const panKey = (a: string, b: string) => `pan:${a}>${b}`
 export const openKey = (id: string) => `open:${id}`
 export const closeKey = (id: string) => `close:${id}`
+export const entranceKey = 'entrance'

@@ -1,0 +1,16 @@
+/* The phone's entry page (plan M1 P4). Gate.tsx's own CSS (gate.css, fingerprint.css) is shared with the desktop; the few rules the desktop
+   gets from archive.css (which the phone shell never loads) are here, scoped to .ph-gate. */
+.ph-gate { position: fixed; inset: 0; z-index: 70; background: var(--bg); display: grid; place-items: center; overflow: hidden;
+  touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; }
+.ph-gate *, .ph-gate *::before, .ph-gate *::after { box-sizing: border-box; }
+.ph-gate button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; }
+.ph-gate .gate-skip { position: absolute; right: var(--g); bottom: var(--bottom); border-bottom: 1px solid var(--label); padding: 10px 0 3px; touch-action: manipulation; }
+.ph-gate .gate-skip:focus-visible { outline: none; border-bottom: 2px solid var(--ink); color: var(--ink); }
+.ph-gate .lbl { font: 500 10.5px/1.35 var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--label); }
+.ph-gate .lbl.ok { color: var(--acc-text); }
+/* the line under the print: the only new words on this page */
+.ph-gate .fp-hold { font-size: 11.5px; letter-spacing: .16em; color: var(--ink); white-space: nowrap; }
+/* the seal is on screen and the host is taking over: nothing here is touchable any more */
+.ph-gate[data-phase="transfer"] { pointer-events: none; }
+.ph-gate[data-phase="transfer"] .gz-skip { visibility: hidden; }
+.ph-gate[data-phase="transfer"].waiting .gz-skip { visibility: visible; }

@@ -2,6 +2,7 @@
 // scan line → its four readings, each with what an attacker does with it → sealed: the readings turn
 // to cipher, the print is pulled into the 16 × 16 bits of its SHA-256 → the white field the archive
 // slides into (handoff.ts). One canvas and a few positioned labels, all driven by one clock `t`.
+// On a phone (`phone` given, plan M1 P4) the same page is *held*: the visitor's finger reads the print and drives `t` on a compressed clock (see HOLD).
 import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import type { Visitor } from '../visitor'
 import { handover } from './handoff'
@@ -18,6 +19,21 @@ const T = {
   // (the scene is built in small steps from the first frame, while all this plays: onBuild)
   title: 5.95, end: 6.6,
 } as const
+/** The phone's hold-to-verify mode: the same page, a different clock (nothing here exists on the desktop). */
+export interface PhoneDrive {
+  /** the line under the print */
+  label: string
+  /** every pointerdown on the page (the first one unlocks the video pool) */
+  onPress(first: boolean): void
+  /** the seal is on screen and the page stays on it: the host takes the page over from here */
+  onSealed(e: { root: HTMLElement; skipped: boolean }): void
+}
+/** Holding: [from t, to t, seconds of holding it takes], 2.0 s from the first touch to the seal; then the sealed page rests briefly and leaves. */
+const HOLD: [number, number, number][] = [[0, T.prof, 0.75], [T.prof, T.seal, 0.55], [T.seal, 6.15, 0.7]]
+const HOLD_END = HOLD[HOLD.length - 1][1]
+/** no touch for this long and the page plays itself at the desktop's pace */
+const IDLE_S = 3
+const holdRate = (tt: number) => { for (const [a, b, d] of HOLD) if (tt < b) return (b - a) / d; return 1 }
 const PHASES: [string, number][] = [['Read', T.read[0]], ['Profile', T.prof], ['Seal', T.seal]]
 const AIMS = ['Match a known exploit', 'Time a phishing email', 'Write the lure in your language', 'Fit a fake sign-in to your screen']
 const LABELS = ['System', 'Local time', 'Language', 'Display']
@@ -35,7 +51,7 @@ interface Layout {
   print: { cx: number; cy: number; w: number; h: number }; labelX: number; labelTop: number; capBottom: number
   lat: { cx: number; cy: number; size: number }
 }
-function layout(): Layout {
+function layout(hold = false): Layout {
   const W = innerWidth, H = innerHeight, phone = W < 760, g = Math.max(16, Math.min(56, W * 0.033)), top = Math.max(22, Math.min(48, H * 0.046))
   let print: Layout['print'] = { cx: 0, cy: 0, w: 0, h: 0 }, labelX = 0, labelTop = 0, capBottom = 0, stack = phone, layoutCols = 2
   if (!phone) {
@@ -50,18 +66,21 @@ function layout(): Layout {
   }
   if (stack) {
     // top to bottom: name, print, the four readings, the sentence, the way out
-    const y0 = top + 92, cb = H - 84, cols = !phone && W >= 960 ? 4 : 2, rows = cols === 4 ? 112 : 2 * 80
+    // (the phone's hold line takes 8 px between the print and the readings, and the readings' two rows sit 8 px closer, so that the shortest phones keep the clearance they have)
+    const y0 = top + 92, cb = H - 84, cols = !phone && W >= 960 ? 4 : 2, rows = cols === 4 ? 112 : 2 * 80, extra = hold ? 8 : 0
     // (a short window may shrink the print below a phone's floor: the readings must stay off the sentence)
-    const ph = clamp(cb - 108 - 16 - rows - 20 - y0, phone ? 170 : 120, Math.min(H * 0.42, W * 1.05)), pw = ph * 0.7
+    const ph = clamp(cb - 108 - 16 - rows - 20 - extra - y0, phone ? 170 : 120, Math.min(H * 0.42, W * 1.05)), pw = ph * 0.7
     layoutCols = cols
     print = { cx: W / 2, cy: y0 + ph / 2, w: pw, h: ph }
-    labelX = g; labelTop = y0 + ph + 20; capBottom = cb
+    labelX = g; labelTop = y0 + ph + 20 + extra; capBottom = cb
   }
   return { W, H, phone, stack, cols: layoutCols, g, top, print, labelX, labelTop, capBottom, lat: { cx: print.cx, cy: print.cy, size: print.w * 0.92 } }
 }
 
-export function Gate({ visitor, reduced, sceneReady, onBuild, onReveal, onStrike, onDone }: {
+export function Gate({ visitor, reduced, sceneReady, onBuild, onReveal, onStrike, onDone, phone }: {
   visitor: Visitor; reduced: boolean; sceneReady: boolean
+  /** the phone shell: hold to verify (plan M1 P4); the desktop never passes it */
+  phone?: PhoneDrive
   /** the entry is on screen: the archive can start to be built, a step at a time, under it */
   onBuild: () => void; onReveal: () => void
   /** `skipped`: the visitor left the entry before it had finished */
@@ -91,9 +110,21 @@ export function Gate({ visitor, reduced, sceneReady, onBuild, onReveal, onStrike
     let L: Layout, P: Print, ink: Inked, morph: Morph, grain: CanvasPattern | null = null
     let labelY: number[] = [], scanAt: number[] = []
     let t = reduced ? T.end : 0, last = performance.now(), raf = 0, started = false, done = false
+    // the phone's hold: where the finger is (the print is read outward from it), whether it is down, and the idle clock
+    const PH = phone
+    let pressed = false, pid = -1, auto = false, touchAt = performance.now(), shownAt = 0, appear = 0, pressedOnce = false
+    let reach: { x: number; y: number; max: number } | null = null
 
     const scanY = (tt: number) => { const pr = L.print, k = eio(seg(tt, T.read[0], T.read[1])); return lerp(pr.cy - pr.h / 2 - 18, pr.cy + pr.h / 2 + 18, k) }
     const timeForScan = (y: number) => { for (let i = 0; i <= 400; i++) { const tt = lerp(T.read[0], T.read[1], i / 400); if (scanY(tt) >= y) return tt } return T.read[1] }
+    const reachR = (tt: number) => (reach ? reach.max * eio(seg(tt, T.read[0], T.read[1])) : 0)
+    const timeForReach = (x: number, y: number) => { const d = Math.hypot(x - reach!.x, y - reach!.y); for (let i = 0; i <= 400; i++) { const tt = lerp(T.read[0], T.read[1], i / 400); if (reachR(tt) >= d) return tt } return T.read[1] }
+    /** the print is read outward from here (the finger, kept inside the print) */
+    const setReach = (x: number, y: number) => {
+      const pr = L.print, l = pr.cx - pr.w / 2, tp = pr.cy - pr.h / 2, cx = clamp(x, l, l + pr.w), cy = clamp(y, tp, tp + pr.h)
+      reach = { x: cx, y: cy, max: Math.max(Math.hypot(cx - l, cy - tp), Math.hypot(l + pr.w - cx, cy - tp), Math.hypot(cx - l, tp + pr.h - cy), Math.hypot(l + pr.w - cx, tp + pr.h - cy)) + 12 }
+      scanAt = P.minutiae.map((m) => timeForReach(m.x, m.y))
+    }
     const fr = () => Math.floor(t * 24)
     const resolve = (text: string, p: number, salt: number, frame: number) => {
       let s = ''
@@ -110,7 +141,7 @@ export function Gate({ visitor, reduced, sceneReady, onBuild, onReveal, onStrike
 
     function rebuild() {
       const dpr = Math.min(2, devicePixelRatio || 1)
-      L = layout()
+      L = layout(!!PH)
       cv.width = Math.round(L.W * dpr); cv.height = Math.round(L.H * dpr)
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
       P = buildPrint(hex, L.print); ink = paintPrint(P, dpr, INK); morph = buildMorph(P, L.lat)
@@ -143,9 +174,9 @@ export function Gate({ visitor, reduced, sceneReady, onBuild, onReveal, onStrike
         const cols = L.cols, colW = Math.min(300, (L.W - g * 2 - 14 * (cols - 1)) / cols), x0 = (L.W - (colW * cols + 14 * (cols - 1))) / 2
         mis.forEach((el) => { el.style.width = colW + 'px' })
         const hs = mis.map((el) => el.offsetHeight), row0 = Math.max(...order.slice(0, cols).map(({ i }) => hs[i]))
-        order.forEach(({ i }, k) => { labelY[i] = L.labelTop + (k < cols ? 0 : row0 + 16); mis[i].style.transform = `translate(${x0 + (k % cols) * (colW + 14)}px, ${labelY[i]}px)` })
+        order.forEach(({ i }, k) => { labelY[i] = L.labelTop + (k < cols ? 0 : row0 + (PH ? 8 : 16)); mis[i].style.transform = `translate(${x0 + (k % cols) * (colW + 14)}px, ${labelY[i]}px)` })
       }
-      scanAt = P.minutiae.map((m) => timeForScan(m.y))
+      if (PH) setReach(reach?.x ?? L.print.cx, reach?.y ?? L.print.cy); else scanAt = P.minutiae.map((m) => timeForScan(m.y))
       // the sentence, anchored from the bottom
       const caps = [q('.fp-cap1'), q('.fp-cap2'), q('.fp-cap3')], subs = [q('.fp-sub1'), q('.fp-sub3')]
       subs.forEach((el) => { el.style.maxWidth = phone ? '' : '510px' })
@@ -154,6 +185,7 @@ export function Gate({ visitor, reduced, sceneReady, onBuild, onReveal, onStrike
       subs.forEach((el) => { el.style.transform = `translate(${g}px, ${capY + capH + 12}px)` })
       const hv = q('.fp-hash'); q('.fp-hash code').textContent = hashText
       hv.style.transform = `translate(${L.lat.cx - hv.offsetWidth / 2}px, ${L.lat.cy + L.lat.size / 2 + (phone ? 18 : 26)}px)`
+      if (PH) { const hd = q('.fp-hold'); hd.style.transform = `translate(${pr.cx - hd.offsetWidth / 2}px, ${pr.cy + pr.h / 2 + 4}px)` }
     }
 
     function scanLight(y: number, a: number, back: boolean) {
@@ -168,6 +200,30 @@ export function Gate({ visitor, reduced, sceneReady, onBuild, onReveal, onStrike
       ctx.restore()
     }
 
+    /** The phone's print: an unlit impression from the first frame, its ridges inked outward from the finger (a thin olive front, no glow), then a hairline cooling it at the seal. */
+    function paintHeld(tt: number) {
+      const pr = L.print, full = tt >= T.read[1], R = reachR(tt), y0 = pr.cy - pr.h / 2
+      if (!full) {
+        ctx.save(); ctx.globalAlpha = (0.2 + (pressed || R > 0 ? 0 : 0.04 * Math.sin(performance.now() / 650))) * appear
+        ctx.drawImage(ink.ink, ink.x0, ink.y0, ink.w, ink.h); ctx.restore()
+      }
+      if (full || R > 0) {
+        ctx.save(); ctx.beginPath()
+        if (full) ctx.rect(ink.x0, ink.y0, ink.w, ink.h); else ctx.arc(reach!.x, reach!.y, R, 0, Math.PI * 2)
+        ctx.clip(); ctx.globalAlpha = tt >= T.seal ? lerp(1, 0.82, seg(tt, T.sealScan[0], T.sealScan[1])) : 1
+        ctx.drawImage(ink.ink, ink.x0, ink.y0, ink.w, ink.h); ctx.restore()
+      }
+      if (R > 0 && tt < T.read[1] + 0.25) {
+        ctx.save(); ctx.beginPath(); ctx.rect(ink.x0, ink.y0, ink.w, ink.h); ctx.clip()
+        ctx.globalAlpha = 0.55 * (1 - seg(tt, T.read[1], T.read[1] + 0.25)); ctx.strokeStyle = OLIVE; ctx.lineWidth = 1
+        ctx.beginPath(); ctx.arc(reach!.x, reach!.y, R, 0, Math.PI * 2); ctx.stroke(); ctx.restore()
+      }
+      if (tt >= T.sealScan[0] && tt <= T.sealScan[1] + 0.2) {
+        const yb = lerp(y0 + pr.h + 18, y0 - 18, eio(seg(tt, T.sealScan[0], T.sealScan[1])))
+        ctx.save(); ctx.globalAlpha = 0.7 * (1 - seg(tt, T.sealScan[1], T.sealScan[1] + 0.2)); ctx.fillStyle = OLIVE; ctx.fillRect(ink.x0 - 8, yb - 0.5, ink.w + 16, 1); ctx.restore()
+      }
+    }
+
     function draw(tt: number) {
       const { W, H, print: pr } = L
       ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over'
@@ -180,7 +236,7 @@ export function Gate({ visitor, reduced, sceneReady, onBuild, onReveal, onStrike
       const x0 = pr.cx - pr.w / 2, y0 = pr.cy - pr.h / 2
       // exhibit chrome: corner marks and a millimetre scale
       if (chrome > 0) {
-        ctx.save(); ctx.globalAlpha = chrome * sstep(0, 0.5, tt); ctx.strokeStyle = 'rgba(22,23,26,.5)'; ctx.lineWidth = 1
+        ctx.save(); ctx.globalAlpha = chrome * Math.max(sstep(0, 0.5, tt), appear); ctx.strokeStyle = 'rgba(22,23,26,.5)'; ctx.lineWidth = 1
         const m = 18, l = 14, X0 = x0 - m, Y0 = y0 - m, X1 = x0 + pr.w + m, Y1 = y0 + pr.h + m
         ctx.beginPath()
         ctx.moveTo(X0, Y0 + l); ctx.lineTo(X0, Y0); ctx.lineTo(X0 + l, Y0); ctx.moveTo(X1 - l, Y0); ctx.lineTo(X1, Y0); ctx.lineTo(X1, Y0 + l)
@@ -199,7 +255,8 @@ export function Gate({ visitor, reduced, sceneReady, onBuild, onReveal, onStrike
       }
       // the print: exposed by the scan, then pulled into the hash
       const sy = scanY(tt)
-      if (tt < T.morph) {
+      if (PH && tt < T.morph) paintHeld(tt)
+      else if (tt < T.morph) {
         const lim = tt < T.read[1] ? sy : Infinity
         if (lim > y0 - 20) {
           ctx.save(); ctx.beginPath(); ctx.rect(ink.x0, ink.y0, ink.w, Math.max(0, Math.min(ink.h, lim - ink.y0))); ctx.clip()
@@ -275,7 +332,8 @@ export function Gate({ visitor, reduced, sceneReady, onBuild, onReveal, onStrike
       const ph = PHASES.reduce((a, [, at], i) => (tt >= at - 0.05 ? i : a), 0)
       q('.fp-ph-n').textContent = `0${ph + 1} / 03`; q('.fp-ph-t').textContent = PHASES[ph][0]
       const chrome = 1 - sstep(T.labelsOut[0], T.labelsOut[1], tt)
-      show(q('.fp-exh'), Math.min(sstep(0.1, 0.5, tt), chrome))
+      show(q('.fp-exh'), Math.min(Math.max(sstep(0.1, 0.5, tt), appear), chrome))
+      if (PH) show(q('.fp-hold'), appear * (1 - sstep(T.sealScan[0], T.sealScan[0] + 0.3, tt)) * (pressed ? 0.3 : 1))
       // labels: number and kind with the leader, the value resolving from cipher, then the attacker's use
       mis.forEach((el, i) => {
         const at = scanAt[i] ?? T.read[1]
@@ -305,7 +363,16 @@ export function Gate({ visitor, reduced, sceneReady, onBuild, onReveal, onStrike
     const tick = (now: number) => {
       raf = requestAnimationFrame(tick)
       const dt = Math.min(0.05, (now - last) / 1000); last = now
-      if (!done) t = Math.min(T.end, t + dt)
+      if (PH) {
+        if (!started) { shownAt = now; touchAt = now }
+        appear = sstep(0, 0.6, (now - shownAt) / 1000)
+        // no touch for IDLE_S: it plays itself at the desktop's pace
+        if (!pressed && !auto && !reduced && now - touchAt >= IDLE_S * 1000) auto = true
+      }
+      if (!done) {
+        t = Math.min(T.end, t + dt * (!PH ? 1 : pressed ? holdRate(t) : auto ? 1 : 0))
+        if (PH && pressed && t >= HOLD_END) t = T.end
+      }
       draw(t); dom(t)
       if (!started) { started = true; onBuild() }
       // reduced motion opens on the sealed still and waits for Continue
@@ -325,6 +392,7 @@ export function Gate({ visitor, reduced, sceneReady, onBuild, onReveal, onStrike
       st.current.skipped ??= t < T.end - 0.05
       t = T.end; done = true
       if (!started) { started = true; onBuild() }
+      if (PH) { st.current.leaving = true; pressed = false; r.dataset.phase = 'transfer'; PH.onSealed({ root: r, skipped: !!st.current.skipped }); return }
       if (!sceneReadyRef.current) { st.current.waiting = true; r.classList.add('waiting'); return }
       st.current.leaving = true; st.current.waiting = false; r.classList.remove('waiting'); r.dataset.phase = 'transfer'
       if (reduced) { onReveal(); onStrike(false); onDone(); return }
@@ -338,16 +406,32 @@ export function Gate({ visitor, reduced, sceneReady, onBuild, onReveal, onStrike
       leaveRef.current()
     }
     const onPointer = (e: PointerEvent) => { if (!skipBtn.current?.contains(e.target as Node)) leaveRef.current() }
-    addEventListener('keydown', onKey); r.addEventListener('pointerdown', onPointer)
+    const onDown = (e: PointerEvent) => {
+      if (!e.isPrimary) return
+      PH!.onPress(!pressedOnce); pressedOnce = true
+      if (skipBtn.current?.contains(e.target as Node) || st.current.leaving || done || reduced) return
+      pressed = true; pid = e.pointerId; auto = false; touchAt = performance.now()
+      try { r.setPointerCapture(e.pointerId) } catch { /* the pointer is gone */ }
+      if (t === 0) setReach(e.clientX, e.clientY)
+    }
+    const onUp = (e: PointerEvent) => { if (e.pointerId === pid) { pressed = false; pid = -1; touchAt = performance.now() } }
+    const onHide = () => { if (document.hidden) { pressed = false; pid = -1; touchAt = performance.now() } }
+    const noMenu = (e: Event) => e.preventDefault()
+    if (PH) {
+      r.addEventListener('pointerdown', onDown); r.addEventListener('pointerup', onUp); r.addEventListener('pointercancel', onUp); r.addEventListener('contextmenu', noMenu)
+      document.addEventListener('visibilitychange', onHide)
+    } else { addEventListener('keydown', onKey); r.addEventListener('pointerdown', onPointer) }
     skipBtn.current?.focus({ preventScroll: true })
     return () => {
       cancelAnimationFrame(raf); clearTimeout(rz); out?.kill(); st.current = { leaving: false, waiting: false }
       removeEventListener('resize', onResize); removeEventListener('keydown', onKey); r.removeEventListener('pointerdown', onPointer)
+      r.removeEventListener('pointerdown', onDown); r.removeEventListener('pointerup', onUp); r.removeEventListener('pointercancel', onUp); r.removeEventListener('contextmenu', noMenu)
+      document.removeEventListener('visibilitychange', onHide)
     }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
-    <div ref={root} className="gate gz fp" data-phase="read" role="dialog" aria-label="Entry: your browser fingerprint" style={{ visibility: 'hidden' }}>
+    <div ref={root} className={phone ? 'gate gz fp ph-gate' : 'gate gz fp'} data-phase="read" role="dialog" aria-label="Entry: your browser fingerprint" style={{ visibility: 'hidden' }}>
       <p className="sr-only">
         In {visitor.ms} milliseconds this page read your system ({visitor.os}, {visitor.browser}), your local time and city ({visitor.time}, {visitor.city}), your language and your screen, without asking.
         Together they are a fingerprint: the same browser gives the same one, no cookie needed. To an attacker it is a profile: enough to match a known exploit, time a phishing email, write its lure in your language and fit a fake sign-in to your screen.
@@ -362,6 +446,7 @@ export function Gate({ visitor, reduced, sceneReady, onBuild, onReveal, onStrike
           <div key={l} className="fp-mi" data-i={i}><div className="h lbl"><span className="n">0{i + 1}</span><span>{l}</span></div><div className="v" /><div className="a">→ {AIMS[i]}</div></div>
         ))}
         <div className="fp-hash"><span className="lbl ok">✓ SHA-256</span><code /></div>
+        {phone ? <div className="fp-hold lbl">{phone.label}</div> : null}
       </div>
       <div className="fp-say" aria-hidden="true">
         <p className="fp-cap fp-cap1">Your browser has a <b>fingerprint.</b></p>

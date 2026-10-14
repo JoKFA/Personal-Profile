@@ -3,6 +3,9 @@
    in step with the picture: the only transition here is the 120 ms clip -> still fade, which is the handoff rule itself. */
 html.ph { scroll-snap-type: y mandatory; overscroll-behavior-y: none; -webkit-text-size-adjust: 100%; }
 html.ph-locked { overflow: hidden; }
+html.ph-entry { overflow: hidden; }   /* the entry page and the entrance (P4): the reel does not scroll until the paper has risen */
+/* a first visit: the page layer (bar, reticle, paper) is not shown until the entrance has played, whatever order the entry page and the shell arrive in */
+.ph-root[data-entering] .ph-bar, .ph-root[data-entering] .ph-reticle, .ph-root[data-entering] .ph-reel { visibility: hidden; }
 html.ph, body.ph-body { margin: 0; background: var(--bg); }
 body.ph-body { color: var(--ink); font-family: var(--sans); -webkit-font-smoothing: antialiased; overflow: visible; height: auto; }
 .ph-host { position: relative; }
