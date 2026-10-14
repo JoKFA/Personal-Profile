@@ -1,3 +1,14 @@
 body{margin:0;background:#e7e4dd;color:#16171a;font-family:system-ui,sans-serif}.prerender{max-width:760px;margin:0 auto;padding:48px 20px;line-height:1.6}
 /* with scripting the app replaces this text within a moment: do not flash it first (crawlers read the DOM regardless; without scripting it shows) */
 @media (scripting:enabled){.prerender{visibility:hidden}}
+/* a phone (the media query the build's preloads use): the first paint is paper and the name, on the pixels the entry page's name and the top bar's name use (PhoneApp.css .ph-bar, .ph-a),
+   so that what is built after it builds around it. Only the name (the h1) is shown; the rest stays hidden as above. Nothing here applies to any other device. */
+@media (scripting:enabled) and (pointer:coarse) and (max-width:599px){
+.prerender h1{visibility:visible;position:fixed;left:20px;top:calc(env(safe-area-inset-top) + 15px);margin:0;font:800 17px/1 'Manrope Variable',Manrope,system-ui,sans-serif;letter-spacing:-.01em;text-transform:uppercase}
+}
+/* the same name, from the phone shell's first render until its top bar exists (PhoneName.tsx): React replaces the prerendered text, this takes over in the same frame */
+.ph-prename{display:none;position:fixed;left:20px;top:calc(env(safe-area-inset-top) + 15px);z-index:3;line-height:1;color:#16171a;font-family:'Manrope Variable',Manrope,system-ui,sans-serif}
+@media (pointer:coarse) and (max-width:599px){.ph-prename{display:block}}
+.ph-prename .n{display:block;font-weight:800;font-size:17px;letter-spacing:-.01em;text-transform:uppercase}
+.ph-prename .r{display:block;margin-top:6px;font-weight:700;font-size:11px;letter-spacing:.16em;text-transform:uppercase}
+.ph-host:has(.ph-bar)~.ph-prename{display:none}

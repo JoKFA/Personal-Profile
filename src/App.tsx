@@ -2,6 +2,7 @@ import { lazy, Suspense } from 'react'
 import { Navigate, Route, Routes } from 'react-router-dom'
 import CasefileApp from './casefile/CasefileApp'
 import { warmPhone } from './casefile/phone/app/early'
+import PhoneName from './casefile/phone/app/PhoneName'
 
 // ?phone-spike: the phone plan's P0 stage (baked stills and clips); a separate chunk, no scene code, nothing for any other URL
 const Spike = lazy(() => import('./casefile/phone/spike/Spike'))
@@ -24,7 +25,7 @@ if (PHONE) warmPhone()   // the shell's chunk, the entry page's chunk and the ma
 // opening or closing a file never rebuilds the 3D archive. Old v2 links still land.
 export default function App() {
   if (SPIKE) return <Suspense fallback={null}><Spike /></Suspense>
-  if (PHONE) return <Suspense fallback={null}><PhoneApp /></Suspense>
+  if (PHONE) return <Suspense fallback={<PhoneName />}><PhoneApp /></Suspense>
   return (
     <Routes>
       <Route path="/portfolio" element={<Navigate to="/" replace />} />

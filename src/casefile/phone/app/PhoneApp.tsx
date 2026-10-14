@@ -3,6 +3,7 @@ import '../../styles/tokens.css'
 import './PhoneApp.css'
 import { startPhone, type PhoneHandle } from './controller'
 import { EntryBridge, isFirstVisit } from './gate/entry'
+import PhoneName from './PhoneName'
 
 // The entry page (a first visit only) is its own chunk's worth of code: a return visit never loads it.
 const PhoneGate = lazy(() => import('./gate/PhoneGate'))
@@ -35,6 +36,7 @@ export default function PhoneApp() {
   return (
     <>
       <div className="ph-host" ref={ref}>{failed ? <p className="ph-fail" role="alert">The archive could not be loaded. Reload to try again.</p> : null}</div>
+      <PhoneName />
       {gate && !failed && bridge ? <Suspense fallback={null}><PhoneGate bridge={bridge} /></Suspense> : null}
     </>
   )

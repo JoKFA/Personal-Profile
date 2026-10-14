@@ -33,6 +33,8 @@ const measure = () => {
     readings: box('.fp-mi .h, .fp-mi .v, .fp-mi .a'), sentence: box('.fp-cap, .fp-sub'),
     readingBoxes: [...g.querySelectorAll('.fp-mi')].map(rect), sentenceBoxes: [...g.querySelectorAll('.fp-cap, .fp-sub')].map(rect),
     phase: box('.fp-phase'), lock: box('.gz-lock .a, .gz-lock .b'), skip: box('.gz-skip .t1'),
+    // the marks: [square centre x, y, number box x0, y0, x1, y1]
+    marks2: JSON.parse(g.dataset.marks),
     // the hash block is on screen only after the brackets are gone: not part of the hairline check
   }
 }
@@ -50,6 +52,15 @@ const issues = (W, H, m) => {
   // the sentence is measured by its line boxes (its glyphs sit inside them), the readings by their boxes
   for (const t of m.readingBoxes) for (const s of m.sentenceBoxes) if (gap(t, s) < 8) out.push(`reading ${r(gap(t, s))} px from the sentence`)
   if (m.holdPx < 11) out.push('hold line under 11 px')
+  // Skip against the small lines and the sentence (it may share their row, but not their pixels)
+  for (const s of m.sentence) if (gap(m.skip[0], s) < 8) out.push(`Skip ${r(gap(m.skip[0], s))} px from the sentence`)
+  // the marks: no number on another number or on a square (any square), no two squares on each other
+  const sq = m.marks2.map(([x, y]) => ({ x0: x - 5, y0: y - 5, x1: x + 5, y1: y + 5 })), nb = m.marks2.map(([, , a, b, c, d]) => ({ x0: a, y0: b, x1: c, y1: d }))
+  nb.forEach((a, i) => {
+    nb.forEach((c, j) => { if (j > i && gap(a, c) < 1) out.push(`number ${i + 1} touches number ${j + 1}`) })
+    sq.forEach((c, j) => { if (gap(a, c) < 1) out.push(`number ${i + 1} touches the square of mark ${j + 1}`) })
+  })
+  sq.forEach((a, i) => sq.forEach((c, j) => { if (j > i && gap(a, c) < 0) out.push(`square ${i + 1} overlaps square ${j + 1}`) }))
   for (const [n, bs] of texts) for (const t of bs) if (t.x0 < -0.5 || t.x1 > W + 0.5 || t.y1 > H + 0.5) out.push(`${n} past the screen`)
   return [...new Set(out)]
 }
@@ -76,7 +87,7 @@ for (const [W, H] of SIZES) {
   await p.waitForFunction(() => window.__phone && window.__phone.entry && window.__phone.entry.sealedAt > 0, undefined, { timeout: 30000 }); await touch('touchEnd')
   await p.waitForTimeout(40); await shot('5-sealed')
   const found = issues(W, H, m0)
-  report.push({ size: `${W}x${H}`, print: [pw, ph], holdPx: m0.holdPx, issues: found, errs })
+  report.push({ size: `${W}x${H}`, print: [pw, ph], holdPx: m0.holdPx, issues: found, errs, skip: m0.skip[0] })
   await b.close()
 }
 fs.writeFileSync(path.join(OUT, 'sizes.json'), JSON.stringify(report, null, 1))

@@ -42,7 +42,8 @@ function phonePreload(): Plugin {
         const tag = (attrs: Record<string, string | boolean>) => ({ tag: 'link', attrs: { ...attrs, media: PHONE }, injectTo: 'head' as const })
         return [
           ...[...want].map((f) => tag({ rel: 'preload', as: 'script', crossorigin: '', href: `/${f}` })),
-          ...[...css].map((f) => tag({ rel: 'preload', as: 'style', href: `/${f}` })),
+          // (crossorigin like the stylesheet links Vite adds when a chunk loads: without it the preload is not reused and the sheet is fetched twice)
+          ...[...css].map((f) => tag({ rel: 'preload', as: 'style', crossorigin: '', href: `/${f}` })),
         ]
       },
     },

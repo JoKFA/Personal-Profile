@@ -27,6 +27,9 @@ pre = [i for i in range(len(fs)) if ms[i] < (first_paint or t_gate)]
 if pre:
     corner = sorted({Image.open(fs[i]).convert('RGB').getpixel((5, 5)) for i in pre})
     lum = [float(allsmall(fs[i]).mean()) for i in pre]
+    white = [i for i in range(len(fs)) if i in pre and float(allsmall(fs[i]).mean()) >= 250 and float(allsmall(fs[i]).std()) < 1]
+    named = [i for i in pre if float(allsmall(fs[i]).mean()) < 250 and i not in white]
+    print('white frames (#fff, flat) before the entry page: %d%s; paper frames: %d%s' % (len(white), (' (%.2fs..%.2fs)' % (ms[white[0]] / 1000, ms[white[-1]] / 1000)) if white else '', len(named), (' (from %.2fs)' % (ms[named[0]] / 1000)) if named else ''))
     print('before the entry page: %d compositor frames, first at %.2fs, last at %.2fs; luma %.0f..%.0f; distinct corner colours %s' % (len(pre), ms[pre[0]] / 1000, ms[pre[-1]] / 1000, min(lum), max(lum), corner[:4]))
 else:
     print('before the entry page: no compositor frames (the first frame already has the page on it)')

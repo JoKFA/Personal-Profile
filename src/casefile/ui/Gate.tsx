@@ -50,12 +50,14 @@ interface Layout {
   /** the four readings sit under the print in a 2 × 2 grid (a phone, or no room for a column beside it) */
   /** columns of the stacked readings: 2 × 2, or one row of four where the window is wide */
   stack: boolean; cols: number; g: number; top: number
+  /** the phone's short layout: the head is squeezed and Skip stands on the small line's row (so the print keeps the room the way out had) */
+  tight: boolean
   print: { cx: number; cy: number; w: number; h: number }; labelX: number; labelTop: number; capBottom: number
   lat: { cx: number; cy: number; size: number }
 }
-function layout(hold = false, below?: number): Layout {
+function layout(hold = false, below?: number, tightRow = false): Layout {
   const W = innerWidth, H = innerHeight, phone = W < 760, g = Math.max(16, Math.min(56, W * 0.033)), top = Math.max(22, Math.min(48, H * 0.046))
-  let print: Layout['print'] = { cx: 0, cy: 0, w: 0, h: 0 }, labelX = 0, labelTop = 0, capBottom = 0, stack = phone, layoutCols = 2
+  let print: Layout['print'] = { cx: 0, cy: 0, w: 0, h: 0 }, labelX = 0, labelTop = 0, capBottom = 0, stack = phone, layoutCols = 2, squeezed = false
   if (!phone) {
     // the print sits between the name (top left) and the sentence (bottom left) and touches neither
     const y0 = top + Math.max(96, H * 0.13), capTop = H - Math.max(118, H * 0.14)
@@ -72,7 +74,8 @@ function layout(hold = false, below?: number): Layout {
     let y0 = top + 92, cb = H - 84
     const cols = !phone && W >= 960 ? 4 : 2, rows = cols === 4 ? 112 : 2 * 80, extra = hold ? 18 : 0
     // (a short phone: the head and the foot give up room before the print does: the name is 49 px tall, the exhibit line sits 40 px over the print, the way out is 44 px)
-    if (hold && below !== undefined && cb - y0 - below < 170) { y0 = 97; cb = H - 76 }
+    // (and when even that leaves the print under its usual size, the way out joins the small line's row: the sentence stands on the bottom margin)
+    if (hold && below !== undefined && (tightRow || cb - y0 - below < 170)) { y0 = 97; cb = tightRow ? H - 22 : H - 76; squeezed = true }
     // (a short window may shrink the print below a phone's floor: the readings must stay off the sentence)
     const phFit = clamp(cb - 108 - 16 - rows - 20 - extra - y0, phone ? 170 : 120, Math.min(H * 0.42, W * 1.05))
     // (a phone that cannot hold all of it at the print's usual size gives the print what is left, down to 100 px: nothing may touch the sentence)
@@ -81,7 +84,7 @@ function layout(hold = false, below?: number): Layout {
     print = { cx: W / 2, cy: y0 + ph / 2, w: pw, h: ph }
     labelX = g; labelTop = y0 + ph + 20 + extra; capBottom = cb
   }
-  return { W, H, phone, stack, cols: layoutCols, g, top, print, labelX, labelTop, capBottom, lat: { cx: print.cx, cy: print.cy, size: print.w * 0.92 } }
+  return { W, H, phone, stack, tight: squeezed, cols: layoutCols, g, top, print, labelX, labelTop, capBottom, lat: { cx: print.cx, cy: print.cy, size: print.w * 0.92 } }
 }
 
 export function Gate({ visitor, reduced, sceneReady, onBuild, onReveal, onStrike, onDone, phone }: {
@@ -122,6 +125,7 @@ export function Gate({ visitor, reduced, sceneReady, onBuild, onReveal, onStrike
     let pressed = false, pid = -1, auto = false, touchAt = performance.now(), shownAt = 0, appear = 0, pressedOnce = false
     let reach: { x: number; y: number; max: number } | null = null
     let bracketHalf = 0
+    let numPos: { x: number; y: number }[] = []
 
     const scanY = (tt: number) => { const pr = L.print, k = eio(seg(tt, T.read[0], T.read[1])); return lerp(pr.cy - pr.h / 2 - 18, pr.cy + pr.h / 2 + 18, k) }
     const timeForScan = (y: number) => { for (let i = 0; i <= 400; i++) { const tt = lerp(T.read[0], T.read[1], i / 400); if (scanY(tt) >= y) return tt } return T.read[1] }
@@ -147,8 +151,14 @@ export function Gate({ visitor, reduced, sceneReady, onBuild, onReveal, onStrike
     const show = (el: HTMLElement, a: number, dy = 0) => { el.style.opacity = String(a); el.style.visibility = a > 0.001 ? 'visible' : 'hidden'; el.style.translate = dy ? `0 ${dy}px` : '' }
     const wipe = (el: HTMLElement, p: number) => { el.style.clipPath = p >= 1 ? 'none' : `inset(-20% ${100 - p * 100}% -20% 0)` }
 
+    /** the small lines leave room for Skip on their row (the tight phone layout), or have the sentence's width */
+    function narrowSubs(narrow: boolean) {
+      const w = narrow ? L.W - 2 * L.g - skipBtn.current!.offsetWidth + 4 : 0
+      for (const c of ['.fp-sub1', '.fp-sub3']) q(c).style.width = w ? `${w}px` : ''
+    }
     /** what the phone's page needs under the print, measured: the hold line's room, two rows of readings (8 px apart), 8 px, the sentence and its small line */
-    function below() {
+    function below(narrow: boolean) {
+      narrowSubs(narrow)
       const cols = 2, colW = Math.min(300, (L.W - L.g * 2 - 14 * (cols - 1)) / cols)
       mis.forEach((el, i) => { el.style.width = colW + 'px'; el.querySelector('.v')!.textContent = values[i] })
       const row = Math.max(...mis.map((el) => el.offsetHeight))
@@ -158,7 +168,7 @@ export function Gate({ visitor, reduced, sceneReady, onBuild, onReveal, onStrike
     function rebuild() {
       const dpr = Math.min(2, devicePixelRatio || 1)
       L = layout(!!PH)
-      if (PH && L.stack) L = layout(true, below())
+      if (PH && L.stack) { L = layout(true, below(false)); if (L.tight) L = layout(true, below(true), true) }
       cv.width = Math.round(L.W * dpr); cv.height = Math.round(L.H * dpr)
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
       P = buildPrint(hex, L.print); ink = paintPrint(P, dpr, INK); morph = buildMorph(P, L.lat)
@@ -198,9 +208,20 @@ export function Gate({ visitor, reduced, sceneReady, onBuild, onReveal, onStrike
       // the sentence, anchored from the bottom
       const caps = [q('.fp-cap1'), q('.fp-cap2'), q('.fp-cap3')], subs = [q('.fp-sub1'), q('.fp-sub3')]
       subs.forEach((el) => { el.style.maxWidth = phone ? '' : '510px' })
+      if (PH) narrowSubs(L.tight)
       const capH = Math.max(...caps.map((el) => el.offsetHeight)), subH = Math.max(...subs.map((el) => el.offsetHeight)), capY = L.capBottom - subH - 12 - capH
       caps.forEach((el) => { el.style.transform = `translate(${g}px, ${capY + capH - el.offsetHeight}px)` })
-      subs.forEach((el) => { el.style.transform = `translate(${g}px, ${capY + capH + 12}px)` })
+      // (tight: the small lines stand on the bottom, so that their last line and Skip share one baseline whichever of them is on screen)
+      subs.forEach((el) => { el.style.transform = `translate(${g}px, ${capY + capH + 12 + (PH && L.tight ? subH - el.offsetHeight : 0)}px)` })
+      if (PH) {
+        const skip = skipBtn.current!
+        skip.style.translate = ''
+        if (L.tight && skip.querySelector<HTMLElement>('.t1')!.offsetParent) {
+          const base = (e: HTMLElement) => { const m = document.createElement('span'); m.style.display = 'inline-block'; m.style.width = '0'; m.style.height = '0'; e.appendChild(m); const y = m.getBoundingClientRect().bottom; m.remove(); return y }
+          const dy = base(subs[0]) - base(skip.querySelector<HTMLElement>('.t1')!)
+          if (Number.isFinite(dy)) skip.style.translate = `0 ${dy}px`
+        }
+      }
       const hv = q('.fp-hash'); q('.fp-hash code').textContent = hashText
       hv.style.transform = `translate(${L.lat.cx - hv.offsetWidth / 2}px, ${L.lat.cy + L.lat.size / 2 + (phone ? 18 : 26)}px)`
       if (PH) {
@@ -208,7 +229,34 @@ export function Gate({ visitor, reduced, sceneReady, onBuild, onReveal, onStrike
         // the brackets stand outside the hold line by 9 px when the print is narrower than it
         bracketHalf = Math.max(pr.w / 2 + 18, hd.offsetWidth / 2 + 9)
         r.dataset.bracket = [pr.cx - bracketHalf, pr.cy - pr.h / 2 - 18, pr.cx + bracketHalf, pr.cy + pr.h / 2 + BRACKET_BELOW].map(Math.round).join(',')
+        placeNumbers()
       }
+    }
+
+    /** The marks' numbers, each on the side of its square where nothing else is: not on another number, a square or one of the brackets' marks (a small print puts the squares close). */
+    function placeNumbers() {
+      const NW = 11, NH = 9, plate = 7
+      const [bx0, by0, bx1, by1] = r.dataset.bracket!.split(',').map(Number)
+      const hair = [[bx0 - 3, by0 - 3, bx0 + 17, by0 + 17], [bx1 - 17, by0 - 3, bx1 + 3, by0 + 17], [bx0 - 3, by1 - 17, bx0 + 17, by1 + 3], [bx1 - 17, by1 - 17, bx1 + 3, by1 + 3]]
+      const hit = (a: number[], c: number[]) => a[0] < c[2] && a[2] > c[0] && a[1] < c[3] && a[3] > c[1]
+      const plates = P.minutiae.map((m) => [m.x - plate, m.y - plate, m.x + plate, m.y + plate])
+      const placed: number[][] = []
+      numPos = P.minutiae.map((m, i) => {
+        let best: number[] | null = null
+        outer: for (let st = 0; st <= 24; st += 4) {
+          for (const [dx, dy] of [[8 + st, -16 - st], [-19 - st, -16 - st], [8 + st, 7 + st], [-19 - st, 7 + st], [-5.5, -17 - st], [-5.5, 8 + st], [8 + st, -4.5], [-19 - st, -4.5]]) {
+            const c = [m.x + dx, m.y + dy, m.x + dx + NW, m.y + dy + NH]
+            if (c[0] < 2 || c[2] > L.W - 2 || c[1] < 2) continue
+            if (plates.some((q2) => hit(c, q2)) || placed.some((q2) => hit(c, [q2[0] - 1, q2[1] - 1, q2[2] + 1, q2[3] + 1])) || hair.some((q2) => hit(c, q2))) continue
+            best = c; break outer
+          }
+        }
+        best ??= [m.x + 8, m.y - 16, m.x + 8 + NW, m.y - 16 + NH]
+        placed[i] = best
+        return { x: best[0], y: best[1] + 8 }
+      })
+      // (for the tests: each square's centre and each number's box)
+      r.dataset.marks = JSON.stringify(P.minutiae.map((m, i) => [m.x, m.y, placed[i][0], placed[i][1], placed[i][2], placed[i][3]].map((v) => Math.round(v * 10) / 10)))
     }
 
     function scanLight(y: number, a: number, back: boolean) {
@@ -343,7 +391,7 @@ export function Gate({ visitor, reduced, sceneReady, onBuild, onReveal, onStrike
         ctx.fillStyle = 'rgba(231,228,221,.95)'; ctx.fillRect(m.x - s / 2 - 2, m.y - s / 2 - 2, s + 4, s + 4)
         ctx.strokeStyle = ok > 0 ? (L.stack ? OLIVE : col) : red > 0 ? THREAT : INK; ctx.lineWidth = 1.3; ctx.strokeRect(m.x - s / 2, m.y - s / 2, s, s)
         ctx.fillStyle = ctx.strokeStyle
-        if (L.stack) { ctx.font = '500 9px "JetBrains Mono", monospace'; ctx.fillText(String(i + 1).padStart(2, '0'), m.x + 7, m.y - 6) }
+        if (L.stack) { ctx.font = '500 9px "JetBrains Mono", monospace'; ctx.fillText(String(i + 1).padStart(2, '0'), PH && numPos[i] ? numPos[i].x : m.x + 7, PH && numPos[i] ? numPos[i].y : m.y - 6) }
         else ctx.fillRect(m.x - 1, m.y - 1, 2, 2)
         if (!L.phone && red > 0 && ok <= 0) { const rr = 9 + 14 * eout(seg(tt, T.prof + i * 0.14, T.prof + i * 0.14 + 0.7)); ctx.globalAlpha = chrome * (1 - seg(tt, T.prof + i * 0.14, T.prof + i * 0.14 + 0.7)); ctx.strokeStyle = THREAT; ctx.lineWidth = 1; ctx.strokeRect(m.x - rr / 2, m.y - rr / 2, rr, rr) }
         ctx.restore()
