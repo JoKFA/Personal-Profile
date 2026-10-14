@@ -9,7 +9,7 @@ import { launch, until } from '../../dev/lib.mjs'
 const [OUT, ...rest] = process.argv.slice(2)
 const flag = (n, d) => { const a = rest.find((x) => x.startsWith(`--${n}=`)); return a ? a.slice(n.length + 3) : d }
 const BASE = flag('base', 'http://127.0.0.1:4196'), PATH = flag('path', 'hold'), NET = flag('net', 'none'), QUERY = flag('query', ''), TAG = flag('tag', `${PATH}-${NET}`)
-const [W, H] = flag('size', '390x664').split('x').map(Number)
+const [W, H] = flag('size', '390x664').split('x').map(Number), SC = Number(flag('sc', 1))   // --sc=2: the screencast at 2x (the name strip)
 const PROFILES = { none: null, '4g': { latency: 60, downloadThroughput: (9e6 / 8), uploadThroughput: (9e6 / 8) }, slow: { latency: 400, downloadThroughput: (400e3 / 8), uploadThroughput: (400e3 / 8) } }
 fs.mkdirSync(OUT, { recursive: true })
 
@@ -32,14 +32,16 @@ const shots = []
 cdp.on('Page.screencastFrame', (f) => { shots.push({ ts: f.metadata.timestamp, data: f.data }); void cdp.send('Page.screencastFrameAck', { sessionId: f.sessionId }).catch(() => {}) })
 const csp = []
 p.on('console', (m) => { if (/Content Security Policy|securitypolicy/i.test(m.text())) csp.push(m.text().slice(0, 200)) })
-const reqs = []
+const reqs = [], byId = new Map()
 await cdp.send('Network.enable')
-cdp.on('Network.responseReceived', (e) => reqs.push({ url: e.response.url.replace(BASE, ''), status: e.response.status, t: e.timestamp, type: e.type }))
-cdp.on('Network.loadingFinished', (e) => { const r = reqs.find((x) => x.id === e.requestId); void r })
+// every request: when it was asked for, when its last byte arrived, how many bytes crossed the wire (monotonic seconds, made relative below)
+cdp.on('Network.requestWillBeSent', (e) => { const r = { url: e.request.url.replace(BASE, ''), type: e.type, t0: e.timestamp }; byId.set(e.requestId, r); reqs.push(r) })
+cdp.on('Network.responseReceived', (e) => { const r = byId.get(e.requestId); if (r) { r.status = e.response.status; r.tFirst = e.timestamp } })
+cdp.on('Network.loadingFinished', (e) => { const r = byId.get(e.requestId); if (r) { r.t1 = e.timestamp; r.bytes = e.encodedDataLength } })
 const prof = PROFILES[NET]
 if (prof) await cdp.send('Network.emulateNetworkConditions', { offline: false, ...prof })
 await cdp.send('Network.setCacheDisabled', { cacheDisabled: true })
-await cdp.send('Page.startScreencast', { format: 'jpeg', quality: 80, maxWidth: W, maxHeight: H, everyNthFrame: 1 })
+await cdp.send('Page.startScreencast', { format: 'jpeg', quality: 80, maxWidth: W * SC, maxHeight: H * SC, everyNthFrame: 1 })
 
 const touch = (type, x, y) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints: type === 'touchEnd' ? [] : [{ x, y, id: 1 }] })
 const T0 = Date.now()
@@ -102,7 +104,8 @@ rec.numbers = {
   rafGapsOver50ms: A.gaps.length, worstGapMs: A.gaps.reduce((m, g) => Math.max(m, g[1]), 0),
 }
 rec.csp = [...A.csp, ...csp]; rec.errs = errs; rec.gaps = A.gaps
-rec.requests = reqs.filter((r) => /\.(js|css|mp4|webp|json)$/.test(r.url.split('?')[0])).map((r) => `${r.status} ${r.url}`)
+const base0 = reqs.length ? Math.min(...reqs.map((r) => r.t0)) : 0
+rec.requests = reqs.filter((r) => r.t1).map((r) => ({ url: r.url.slice(0, 70), status: r.status, startMs: Math.round((r.t0 - base0) * 1000), firstByteMs: Math.round(((r.tFirst ?? r.t1) - base0) * 1000), endMs: Math.round((r.t1 - base0) * 1000), bytes: r.bytes }))
 const d = path.join(OUT, `screencast-${TAG}`); fs.rmSync(d, { recursive: true, force: true }); fs.mkdirSync(d, { recursive: true })
 shots.forEach((s, i) => fs.writeFileSync(path.join(d, `s-${String(i).padStart(4, '0')}-${s.ts.toFixed(4)}.jpg`), Buffer.from(s.data, 'base64')))
 rec.screencastFrames = shots.length

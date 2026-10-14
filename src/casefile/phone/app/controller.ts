@@ -177,7 +177,10 @@ export async function startPhone(host: HTMLElement, cancelled: () => boolean = (
     const f: PageFrame = { phase, stop: stopId(), settled: phase === 'settled' || phase === 'file', tau, dt, rise }
     // while panning the stop being left seals; once a pan has landed `at` is the new stop and it decrypts
     const moving = page.update(f)
-    if (entering) dom.bar.style.opacity = rise < 1 ? String(smooth(rise)) : ''
+    if (entering && riseOn && root.hasAttribute('data-barwait')) {
+      root.style.setProperty('--ph-bar-a', String(smooth(rise)))
+      if (rise >= 1) { root.removeAttribute('data-barwait'); root.style.removeProperty('--ph-bar-a') }
+    }
     syncDom()
     // (waiting for the entrance: nothing moves, so the loop is not run)
     if (entering && !riseOn) { last = 0; return }
@@ -559,7 +562,7 @@ export async function startPhone(host: HTMLElement, cancelled: () => boolean = (
   layout()
   void document.fonts?.ready.then(() => { if (!disposed) { layout(); kick() } })
   const first = coldId ?? reel[at]
-  if (entry) { root.setAttribute('data-entering', ''); dom.bar.style.opacity = '0'; entry.attach({ prime, enter }) }   // (the first touch may come before the cover is in)
+  if (entry) { root.setAttribute('data-entering', ''); root.setAttribute('data-barwait', ''); entry.attach({ prime, enter }) }   // (the first touch may come before the cover is in)
   stage.pin([stillKey(first)])
   await stage.loadStill(stillKey(first))
   await Promise.all(dom.lines.map((l) => l.ready))

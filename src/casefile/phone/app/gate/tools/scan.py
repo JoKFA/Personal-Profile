@@ -21,8 +21,16 @@ t_gate = res['nav']['gateVisibleAt']; E = res['entry']
 t_cover = E['coverAt']
 # the compositor's own evidence of the first painted entry page: the first frame with any content (a name, a print) rather than bare paper
 allsmall = lambda f: np.asarray(Image.open(f).convert('L').resize((195, 332)), dtype=np.float32)
-first_paint = next((ms[i] for i in range(len(fs)) if allsmall(fs[i]).std() >= 3), None)
-print('first compositor frame with the entry page on it: %.2fs after navigation start (visibility set at %.2fs, first byte %.2fs)' % (first_paint / 1000, t_gate / 1000, res['nav']['responseStart'] / 1000))
+first_paint = next((ms[i] for i in range(len(fs)) if ms[i] >= t_gate - 1 and allsmall(fs[i]).std() >= 1.0), None)
+# what is on screen before the entry page: the compositor's frames from the start of the run (luma, and the colours of a few corner pixels)
+pre = [i for i in range(len(fs)) if ms[i] < (first_paint or t_gate)]
+if pre:
+    corner = sorted({Image.open(fs[i]).convert('RGB').getpixel((5, 5)) for i in pre})
+    lum = [float(allsmall(fs[i]).mean()) for i in pre]
+    print('before the entry page: %d compositor frames, first at %.2fs, last at %.2fs; luma %.0f..%.0f; distinct corner colours %s' % (len(pre), ms[pre[0]] / 1000, ms[pre[-1]] / 1000, min(lum), max(lum), corner[:4]))
+else:
+    print('before the entry page: no compositor frames (the first frame already has the page on it)')
+print('first compositor frame with the entry page on it: %.2fs after navigation start (visibility set at %.2fs, first byte %.2fs)' % ((first_paint or 0) / 1000, t_gate / 1000, res['nav']['responseStart'] / 1000))
 res['firstPaintMs'] = first_paint; json.dump(res, open(os.path.join(out, f'result-{tag}.json'), 'w'), indent=1)
 small = lambda f: np.asarray(Image.open(f).convert('L').resize((195, 332)), dtype=np.float32)
 # the window starts at the first frame that has the entry page on it (the frames before are the page still loading: flat paper, no name yet)

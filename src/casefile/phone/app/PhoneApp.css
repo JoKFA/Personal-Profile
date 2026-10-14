@@ -5,7 +5,11 @@ html.ph { scroll-snap-type: y mandatory; overscroll-behavior-y: none; -webkit-te
 html.ph-locked { overflow: hidden; }
 html.ph-entry { overflow: hidden; }   /* the entry page and the entrance (P4): the reel does not scroll until the paper has risen */
 /* a first visit: the page layer (bar, reticle, paper) is not shown until the entrance has played, whatever order the entry page and the shell arrive in */
-.ph-root[data-entering] .ph-bar, .ph-root[data-entering] .ph-reticle, .ph-root[data-entering] .ph-reel { visibility: hidden; }
+.ph-root[data-entering] .ph-reticle, .ph-root[data-entering] .ph-reel { visibility: hidden; }
+/* ... and the bar shows only the name, on no paper, until the paper has risen (--ph-bar-a, 0..1, set by the controller): the name never leaves the screen */
+.ph-root[data-barwait] .ph-bar { background: color-mix(in srgb, var(--bg) calc(var(--ph-bar-a, 0) * 100%), transparent); }
+.ph-root[data-barwait] .ph-bar::after { opacity: var(--ph-bar-a, 0); }
+.ph-root[data-barwait] .ph-nav { opacity: var(--ph-bar-a, 0) !important; }
 html.ph, body.ph-body { margin: 0; background: var(--bg); }
 body.ph-body { color: var(--ink); font-family: var(--sans); -webkit-font-smoothing: antialiased; overflow: visible; height: auto; }
 .ph-host { position: relative; }

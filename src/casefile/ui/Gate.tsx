@@ -31,6 +31,8 @@ export interface PhoneDrive {
 /** Holding: [from t, to t, seconds of holding it takes], 2.0 s from the first touch to the seal; then the sealed page rests briefly and leaves. */
 const HOLD: [number, number, number][] = [[0, T.prof, 0.75], [T.prof, T.seal, 0.55], [T.seal, 6.15, 0.7]]
 const HOLD_END = HOLD[HOLD.length - 1][1]
+/** the phone's bracket stands this far under the print, so that the hold line sits between the print and the bracket's lower marks, clear of both */
+const BRACKET_BELOW = 30
 /** no touch for this long and the page plays itself at the desktop's pace */
 const IDLE_S = 3
 const holdRate = (tt: number) => { for (const [a, b, d] of HOLD) if (tt < b) return (b - a) / d; return 1 }
@@ -51,7 +53,7 @@ interface Layout {
   print: { cx: number; cy: number; w: number; h: number }; labelX: number; labelTop: number; capBottom: number
   lat: { cx: number; cy: number; size: number }
 }
-function layout(hold = false): Layout {
+function layout(hold = false, below?: number): Layout {
   const W = innerWidth, H = innerHeight, phone = W < 760, g = Math.max(16, Math.min(56, W * 0.033)), top = Math.max(22, Math.min(48, H * 0.046))
   let print: Layout['print'] = { cx: 0, cy: 0, w: 0, h: 0 }, labelX = 0, labelTop = 0, capBottom = 0, stack = phone, layoutCols = 2
   if (!phone) {
@@ -66,10 +68,15 @@ function layout(hold = false): Layout {
   }
   if (stack) {
     // top to bottom: name, print, the four readings, the sentence, the way out
-    // (the phone's hold line takes 8 px between the print and the readings, and the readings' two rows sit 8 px closer, so that the shortest phones keep the clearance they have)
-    const y0 = top + 92, cb = H - 84, cols = !phone && W >= 960 ? 4 : 2, rows = cols === 4 ? 112 : 2 * 80, extra = hold ? 8 : 0
+    // (the phone's hold line sits between the print's brackets and the readings: 18 px more under the print; `below` is what the page then measures it needs under the print)
+    let y0 = top + 92, cb = H - 84
+    const cols = !phone && W >= 960 ? 4 : 2, rows = cols === 4 ? 112 : 2 * 80, extra = hold ? 18 : 0
+    // (a short phone: the head and the foot give up room before the print does: the name is 49 px tall, the exhibit line sits 40 px over the print, the way out is 44 px)
+    if (hold && below !== undefined && cb - y0 - below < 170) { y0 = 97; cb = H - 76 }
     // (a short window may shrink the print below a phone's floor: the readings must stay off the sentence)
-    const ph = clamp(cb - 108 - 16 - rows - 20 - extra - y0, phone ? 170 : 120, Math.min(H * 0.42, W * 1.05)), pw = ph * 0.7
+    const phFit = clamp(cb - 108 - 16 - rows - 20 - extra - y0, phone ? 170 : 120, Math.min(H * 0.42, W * 1.05))
+    // (a phone that cannot hold all of it at the print's usual size gives the print what is left, down to 100 px: nothing may touch the sentence)
+    const ph = hold && below !== undefined ? Math.min(phFit, Math.max(100, cb - y0 - below)) : phFit, pw = ph * 0.7
     layoutCols = cols
     print = { cx: W / 2, cy: y0 + ph / 2, w: pw, h: ph }
     labelX = g; labelTop = y0 + ph + 20 + extra; capBottom = cb
@@ -114,6 +121,7 @@ export function Gate({ visitor, reduced, sceneReady, onBuild, onReveal, onStrike
     const PH = phone
     let pressed = false, pid = -1, auto = false, touchAt = performance.now(), shownAt = 0, appear = 0, pressedOnce = false
     let reach: { x: number; y: number; max: number } | null = null
+    let bracketHalf = 0
 
     const scanY = (tt: number) => { const pr = L.print, k = eio(seg(tt, T.read[0], T.read[1])); return lerp(pr.cy - pr.h / 2 - 18, pr.cy + pr.h / 2 + 18, k) }
     const timeForScan = (y: number) => { for (let i = 0; i <= 400; i++) { const tt = lerp(T.read[0], T.read[1], i / 400); if (scanY(tt) >= y) return tt } return T.read[1] }
@@ -139,9 +147,18 @@ export function Gate({ visitor, reduced, sceneReady, onBuild, onReveal, onStrike
     const show = (el: HTMLElement, a: number, dy = 0) => { el.style.opacity = String(a); el.style.visibility = a > 0.001 ? 'visible' : 'hidden'; el.style.translate = dy ? `0 ${dy}px` : '' }
     const wipe = (el: HTMLElement, p: number) => { el.style.clipPath = p >= 1 ? 'none' : `inset(-20% ${100 - p * 100}% -20% 0)` }
 
+    /** what the phone's page needs under the print, measured: the hold line's room, two rows of readings (8 px apart), 8 px, the sentence and its small line */
+    function below() {
+      const cols = 2, colW = Math.min(300, (L.W - L.g * 2 - 14 * (cols - 1)) / cols)
+      mis.forEach((el, i) => { el.style.width = colW + 'px'; el.querySelector('.v')!.textContent = values[i] })
+      const row = Math.max(...mis.map((el) => el.offsetHeight))
+      const capH = Math.max(...['.fp-cap1', '.fp-cap2', '.fp-cap3'].map((c) => q(c).offsetHeight)), subH = Math.max(...['.fp-sub1', '.fp-sub3'].map((c) => q(c).offsetHeight))
+      return 20 + 18 + 2 * row + 8 + 8 + capH + 12 + subH
+    }
     function rebuild() {
       const dpr = Math.min(2, devicePixelRatio || 1)
       L = layout(!!PH)
+      if (PH && L.stack) L = layout(true, below())
       cv.width = Math.round(L.W * dpr); cv.height = Math.round(L.H * dpr)
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
       P = buildPrint(hex, L.print); ink = paintPrint(P, dpr, INK); morph = buildMorph(P, L.lat)
@@ -156,9 +173,10 @@ export function Gate({ visitor, reduced, sceneReady, onBuild, onReveal, onStrike
       const { print: pr, phone, stack, H, g } = L
       r.classList.toggle('fp-stack', stack)
       r.dataset.print = [pr.cx - pr.w / 2, pr.cy - pr.h / 2, pr.w, pr.h].map(Math.round).join(',')
+      // (the phone's brackets, for the tests: left, top, right, bottom of the corner marks)
       q('.fp-exh-l').textContent = stack ? visitor.id : `${visitor.id} · Browser fingerprint`
       q('.fp-exh-r').textContent = stack ? `${P.whorl ? 'Whorl' : 'Loop'} · ${visitor.ms} ms` : `Pattern · ${P.whorl ? 'whorl' : 'loop'} · ${visitor.ms} ms`
-      const exh = q('.fp-exh'); exh.style.width = pr.w + 'px'; exh.style.transform = `translate(${pr.cx - pr.w / 2}px, ${pr.cy - pr.h / 2 - (stack ? 30 : 34)}px)`
+      const exh = q('.fp-exh'); exh.style.width = pr.w + 'px'; exh.style.transform = `translate(${pr.cx - pr.w / 2}px, ${pr.cy - pr.h / 2 - (PH ? 40 : stack ? 30 : 34)}px)`
       mis.forEach((el, i) => { el.querySelector('.v')!.textContent = values[i] })
       const order = P.minutiae.map((m, i) => ({ m, i })).sort((a, b) => a.m.y - b.m.y)
       labelY = []
@@ -185,7 +203,12 @@ export function Gate({ visitor, reduced, sceneReady, onBuild, onReveal, onStrike
       subs.forEach((el) => { el.style.transform = `translate(${g}px, ${capY + capH + 12}px)` })
       const hv = q('.fp-hash'); q('.fp-hash code').textContent = hashText
       hv.style.transform = `translate(${L.lat.cx - hv.offsetWidth / 2}px, ${L.lat.cy + L.lat.size / 2 + (phone ? 18 : 26)}px)`
-      if (PH) { const hd = q('.fp-hold'); hd.style.transform = `translate(${pr.cx - hd.offsetWidth / 2}px, ${pr.cy + pr.h / 2 + 4}px)` }
+      if (PH) {
+        const hd = q('.fp-hold'); hd.style.transform = `translate(${pr.cx - hd.offsetWidth / 2}px, ${pr.cy + pr.h / 2 + 8}px)`
+        // the brackets stand outside the hold line by 9 px when the print is narrower than it
+        bracketHalf = Math.max(pr.w / 2 + 18, hd.offsetWidth / 2 + 9)
+        r.dataset.bracket = [pr.cx - bracketHalf, pr.cy - pr.h / 2 - 18, pr.cx + bracketHalf, pr.cy + pr.h / 2 + BRACKET_BELOW].map(Math.round).join(',')
+      }
     }
 
     function scanLight(y: number, a: number, back: boolean) {
@@ -214,13 +237,14 @@ export function Gate({ visitor, reduced, sceneReady, onBuild, onReveal, onStrike
         ctx.drawImage(ink.ink, ink.x0, ink.y0, ink.w, ink.h); ctx.restore()
       }
       if (R > 0 && tt < T.read[1] + 0.25) {
-        ctx.save(); ctx.beginPath(); ctx.rect(ink.x0, ink.y0, ink.w, ink.h); ctx.clip()
+        // (the front stays inside the print's own box: it must not cross the labels around it)
+        ctx.save(); ctx.beginPath(); ctx.rect(pr.cx - pr.w / 2, y0, pr.w, pr.h); ctx.clip()
         ctx.globalAlpha = 0.55 * (1 - seg(tt, T.read[1], T.read[1] + 0.25)); ctx.strokeStyle = OLIVE; ctx.lineWidth = 1
         ctx.beginPath(); ctx.arc(reach!.x, reach!.y, R, 0, Math.PI * 2); ctx.stroke(); ctx.restore()
       }
       if (tt >= T.sealScan[0] && tt <= T.sealScan[1] + 0.2) {
-        const yb = lerp(y0 + pr.h + 18, y0 - 18, eio(seg(tt, T.sealScan[0], T.sealScan[1])))
-        ctx.save(); ctx.globalAlpha = 0.7 * (1 - seg(tt, T.sealScan[1], T.sealScan[1] + 0.2)); ctx.fillStyle = OLIVE; ctx.fillRect(ink.x0 - 8, yb - 0.5, ink.w + 16, 1); ctx.restore()
+        const yb = lerp(y0 + pr.h, y0, eio(seg(tt, T.sealScan[0], T.sealScan[1])))
+        ctx.save(); ctx.globalAlpha = 0.7 * (1 - seg(tt, T.sealScan[1], T.sealScan[1] + 0.2)); ctx.fillStyle = OLIVE; ctx.fillRect(pr.cx - pr.w / 2, yb - 0.5, pr.w, 1); ctx.restore()
       }
     }
 
@@ -232,12 +256,12 @@ export function Gate({ visitor, reduced, sceneReady, onBuild, onReveal, onStrike
       const lg = ctx.createRadialGradient(W * 0.3, H * 0.16, 0, W * 0.3, H * 0.16, Math.hypot(W, H) * 0.95)
       lg.addColorStop(0, 'rgba(252,249,242,.9)'); lg.addColorStop(0.42, 'rgba(244,240,232,.35)'); lg.addColorStop(1, 'rgba(206,199,186,.6)')
       ctx.fillStyle = lg; ctx.fillRect(0, 0, W, H)
-      const chrome = 1 - sstep(T.labelsOut[0], T.labelsOut[1] + 0.3, tt)
+      const chrome = 1 - sstep(T.labelsOut[0], T.labelsOut[1] + (PH ? 0 : 0.3), tt)
       const x0 = pr.cx - pr.w / 2, y0 = pr.cy - pr.h / 2
       // exhibit chrome: corner marks and a millimetre scale
       if (chrome > 0) {
         ctx.save(); ctx.globalAlpha = chrome * Math.max(sstep(0, 0.5, tt), appear); ctx.strokeStyle = 'rgba(22,23,26,.5)'; ctx.lineWidth = 1
-        const m = 18, l = 14, X0 = x0 - m, Y0 = y0 - m, X1 = x0 + pr.w + m, Y1 = y0 + pr.h + m
+        const m = 18, l = 14, X0 = PH ? pr.cx - bracketHalf : x0 - m, Y0 = y0 - m, X1 = PH ? pr.cx + bracketHalf : x0 + pr.w + m, Y1 = y0 + pr.h + (PH ? BRACKET_BELOW : m)
         ctx.beginPath()
         ctx.moveTo(X0, Y0 + l); ctx.lineTo(X0, Y0); ctx.lineTo(X0 + l, Y0); ctx.moveTo(X1 - l, Y0); ctx.lineTo(X1, Y0); ctx.lineTo(X1, Y0 + l)
         ctx.moveTo(X1, Y1 - l); ctx.lineTo(X1, Y1); ctx.lineTo(X1 - l, Y1); ctx.moveTo(X0 + l, Y1); ctx.lineTo(X0, Y1); ctx.lineTo(X0, Y1 - l)
@@ -379,6 +403,9 @@ export function Gate({ visitor, reduced, sceneReady, onBuild, onReveal, onStrike
       if (t >= T.end && !done) { done = true; if (!reduced) leaveRef.current() }
     }
     rebuild()
+    // (the phone's measures depend on the fonts: once they are in, the page is laid out again)
+    let gone = false
+    if (PH) void document.fonts?.ready.then(() => { if (!gone) rebuild() })
     r.style.visibility = 'visible'
     raf = requestAnimationFrame(tick)
     let rz = 0
@@ -423,7 +450,7 @@ export function Gate({ visitor, reduced, sceneReady, onBuild, onReveal, onStrike
     } else { addEventListener('keydown', onKey); r.addEventListener('pointerdown', onPointer) }
     skipBtn.current?.focus({ preventScroll: true })
     return () => {
-      cancelAnimationFrame(raf); clearTimeout(rz); out?.kill(); st.current = { leaving: false, waiting: false }
+      gone = true; cancelAnimationFrame(raf); clearTimeout(rz); out?.kill(); st.current = { leaving: false, waiting: false }
       removeEventListener('resize', onResize); removeEventListener('keydown', onKey); r.removeEventListener('pointerdown', onPointer)
       r.removeEventListener('pointerdown', onDown); r.removeEventListener('pointerup', onUp); r.removeEventListener('pointercancel', onUp); r.removeEventListener('contextmenu', noMenu)
       document.removeEventListener('visibilitychange', onHide)

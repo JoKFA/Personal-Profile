@@ -11,6 +11,13 @@
 /* the line under the print: the only new words on this page */
 .ph-gate .fp-hold { font-size: 11.5px; letter-spacing: .16em; color: var(--ink); white-space: nowrap; }
 /* the seal is on screen and the host is taking over: nothing here is touchable any more */
+/* the name: the same pixels as the top bar's (PhoneApp.css .ph-bar, .ph-a, .ph-b: 20 px in, 15 px under the safe area, 17 px and 11 px), so that when the page
+   fades the bar's name is already under it and nothing about the name changes. The place line is left out. */
+.ph-gate .gz-lock { left: 20px; top: calc(env(safe-area-inset-top) + 15px); }
+.ph-gate .gz-lock .a { font: 800 17px/1 var(--sans); letter-spacing: -.01em; text-transform: uppercase; }
+.ph-gate .gz-lock .b { font: 700 11px/1 var(--sans); letter-spacing: .16em; text-transform: uppercase; margin-top: 6px; }
+/* (the bar's line is the role alone: the place after it would be the one thing that changes, and at 390 px it runs into the step counter) */
+.ph-gate .gz-lock .loc { display: none; }
 .ph-gate[data-phase="transfer"] { pointer-events: none; }
 .ph-gate[data-phase="transfer"] .gz-skip { visibility: hidden; }
 .ph-gate[data-phase="transfer"].waiting .gz-skip { visibility: visible; }
