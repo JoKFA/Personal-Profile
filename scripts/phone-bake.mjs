@@ -125,6 +125,10 @@ const hashed = (dir, name, ext, srcFile) => {
 
 // ── jobs (each opens its own page on the one browser, against the one base URL) ──
 let BROWSER = null, BASE = ''
+/** how long a drive holds in its window before its still is taken (and before a close starts): 5 s, settled; the sealed black drive's board is lit by the
+ *  key's light, which fades slowly, so its still is taken where its open clip ends (2.0 s) and its close starts from that same state */
+const KINDS = {}
+const holdSteps = (id) => (KINDS[id] === 'restricted' ? OPEN_FRAMES - 1 : 125)
 const sess = (dpr, run, opts) => session(BROWSER, BASE, dpr, run, opts)
 
 function stillJob(id) {
@@ -140,7 +144,7 @@ function stillJob(id) {
       R.stop[id] = { quad0: stopS.quad0 }
       // (YW-000 goes through the door: it has no window)
       if (id !== 'YW-000') {
-        await s.ph('open'); for (let i = 0; i < 125; i++) await s.step()
+        await s.ph('open'); for (let i = 0; i < holdSteps(id); i++) await s.step()
         await s.assertSceneOnly()
         await s.shot(png(`window-${id}.png`))
         const winS = await s.sample()
@@ -222,7 +226,7 @@ const openJob = (id) => clipJob(`open-${id}`, async (s) => {
 }, true)
 const closeJob = (id) => clipJob(`close-${id}`, async (s) => {
   await s.settle(id)
-  await s.ph('open'); for (let i = 0; i < 125; i++) await s.step()
+  await s.ph('open'); for (let i = 0; i < holdSteps(id); i++) await s.step()
   return { ...(await renderClip(`close-${id}`, async (i) => { if (i === 0) await s.ph('close'); else await s.step() }, s, { n: CLOSE_FRAMES, quads: true })), dest: id }
 }, true)
 const entranceJob = () => clipJob('entrance', async (s) => {
@@ -259,6 +263,7 @@ try {
   // which entries the phone Index lists: asked of the page's director (everything but skills and credentials)
   const stops = await sess(DPR_CLIP, (s) => s.stops(), { label: 'probe' })
   const ids = stops.map((x) => x.id)
+  for (const x of stops) KINDS[x.id] = x.kind
   log(`stops (${ids.length}): ${ids.join(' ')}`)
   const pairs = REEL.flatMap((a, i) => (i < REEL.length - 1 ? [[a, REEL[i + 1]], [REEL[i + 1], a]] : []))
 
