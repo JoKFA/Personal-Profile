@@ -52,9 +52,12 @@ const SNAP = path.join(ROOT, '..', 'p3-bake')
 const PORT = Number(arg('port', 4196))   // (another agent may hold 4196: pass --port)
 
 // ── what a clip is ──
-const PAN_FRAMES = 60          // 2.4 s
+// pans and closes: rendered 4.0 s on the exact clock, then cut where the drive has come to rest: the first frame (not before 2.4 s) within 1.5% of the
+// destination's still, the last 6 frames blended into it (the entrance's rule). At 40 ms a frame the springs need a little longer than the unpaused clock gave them.
+const PAN_FRAMES = 100
+const SETTLE_CUT = { threshold: 1.5, blend: 6, minFrames: 60 }
 const OPEN_FRAMES = 50         // 2.0 s
-const CLOSE_FRAMES = 60        // 2.4 s: the closing timeline, then the stop's springs coming to rest
+const CLOSE_FRAMES = 100       // the closing timeline, then the stop's springs coming to rest (cut as above)
 const BLEND = 6                // last frames blended into the destination's canonical still
 const ENTRANCE_FRAMES = 160    // rendered 6.4 s; the clip is cut where the drive has come to rest (see ENTRANCE_CUT)
 const ENTRANCE_CUT = { threshold: 1.5, blend: 8 }   // PM: cut at the first frame within 1.5% of the cover still, blend the last 8 into it
@@ -168,7 +171,7 @@ async function renderClip(name, frames, s, { n, blendTo, quads = false, stopWhen
   return { count, q, cam, blend: blend && blend.diffs }
 }
 /** encode a frames dir into the output (content-hashed) and record it */
-function finishClip(name, { count, q, cam, marks, blend }, quads) {
+function finishClip(name, { count, q, cam, marks, blend, dest }, quads) {
   const tmp = path.join(WORK, 'tmp'); fs.mkdirSync(tmp, { recursive: true })
   const mp4 = path.join(tmp, `${name}.mp4`)
   const enc = encodeOf(name)
@@ -178,11 +181,20 @@ function finishClip(name, { count, q, cam, marks, blend }, quads) {
     dir = framesDir('entrance-cut')
     cut = JSON.parse(py(path.join(HERE, 'phone-bake-cut.py'), png('stop-YW-000.png'), framesDir(name), dir, String(ENTRANCE_CUT.threshold), String(ENTRANCE_CUT.blend), String(Math.round(STOP_CUE * FPS))))
     if (cut.cut >= count - 6) throw new Error(`the entrance reaches ${ENTRANCE_CUT.threshold}% only at frame ${cut.cut} of ${count}: render a longer one`)
+    if (Math.max(...cut.blend) >= 2) throw new Error(`the entrance's blend moved a frame by ${Math.max(...cut.blend)}% (>= 2%)`)
+    blend = cut.blend
     count = cut.frames
+  } else if (dest && (name.startsWith('pan-') || name.startsWith('close-'))) {
+    dir = framesDir(`${name}-cut`)
+    cut = JSON.parse(py(path.join(HERE, 'phone-bake-cut.py'), png(`stop-${dest}.png`), framesDir(name), dir, String(SETTLE_CUT.threshold), String(SETTLE_CUT.blend), String(SETTLE_CUT.minFrames - 1)))
+    if (Math.max(...cut.blend) >= 2) throw new Error(`${name}: the blend moved a frame by ${Math.max(...cut.blend)}% (>= 2%)`)
+    count = cut.frames
+    if (q) { q = q.slice(0, count); cam = cam.slice(0, count) }
+    blend = cut.blend
   }
   encodeClip(dir, mp4, { crf: enc.crf, width: enc.width })
   const a = hashed(OUT, name, 'mp4', mp4)
-  R.clip[name] = { ...a, w: enc.width, h: enc.width * 2, frames: count, fps: FPS, crf: enc.crf, marks, blend, ...(cut ? { cut: { frame: cut.cut, residual: cut.residual, blend: ENTRANCE_CUT.blend } } : {}), ...(quads ? { quads: q, cam } : {}) }
+  R.clip[name] = { ...a, w: enc.width, h: enc.width * 2, frames: count, fps: FPS, crf: enc.crf, marks, blend, ...(cut ? { cut: { frame: cut.cut, residual: cut.residual, blend: cut.blend.length } } : {}), ...(quads ? { quads: q, cam } : {}) }
 }
 
 const clipJob = (name, body, quads = false) => async () => {
@@ -202,7 +214,7 @@ const clipJob = (name, body, quads = false) => async () => {
 
 const panJob = (a, b) => clipJob(`pan-${a}-${b}`, async (s) => {
   await s.settle(a)
-  return renderClip(`pan-${a}-${b}`, async (i) => { if (i === 0) await s.stopCue(b); else await s.step() }, s, { n: PAN_FRAMES, blendTo: png(`stop-${b}.png`) })
+  return { ...(await renderClip(`pan-${a}-${b}`, async (i) => { if (i === 0) await s.stopCue(b); else await s.step() }, s, { n: PAN_FRAMES })), dest: b }
 })
 const openJob = (id) => clipJob(`open-${id}`, async (s) => {
   await s.settle(id)
@@ -211,7 +223,7 @@ const openJob = (id) => clipJob(`open-${id}`, async (s) => {
 const closeJob = (id) => clipJob(`close-${id}`, async (s) => {
   await s.settle(id)
   await s.ph('open'); for (let i = 0; i < 125; i++) await s.step()
-  return renderClip(`close-${id}`, async (i) => { if (i === 0) await s.ph('close'); else await s.step() }, s, { n: CLOSE_FRAMES, quads: true, blendTo: png(`stop-${id}.png`) })
+  return { ...(await renderClip(`close-${id}`, async (i) => { if (i === 0) await s.ph('close'); else await s.step() }, s, { n: CLOSE_FRAMES, quads: true })), dest: id }
 }, true)
 const entranceJob = () => clipJob('entrance', async (s) => {
   // the engine's own entrance, replayed without the home's brief; the push onto the cover is the prototype's cue
