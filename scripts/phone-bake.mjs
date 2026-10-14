@@ -77,7 +77,7 @@ const sh = (cmd, args, opts = {}) => { const r = spawnSync(cmd, args, { encoding
 
 function prepareSnapshot() {
   const head = sh('git', ['rev-parse', 'HEAD'], { cwd: ROOT })
-  const dirty = sh('git', ['status', '--porcelain', '--', 'src/casefile/data', 'src/casefile/phone/bake', 'src/casefile/scene', 'src/casefile/motion', 'src/casefile/space', 'src/casefile/CasefileApp.tsx', 'vite.config.ts', 'package.json'], { cwd: ROOT })
+  const dirty = sh('git', ['status', '--porcelain', '--', 'src/casefile/data', 'src/casefile/phone/bake', 'src/casefile/scene', 'src/casefile/motion', 'src/casefile/space', 'src/casefile/CasefileApp.tsx'], { cwd: ROOT })   // (the bake's inputs; other agents' edits to vite.config.ts / package.json do not change the pictures, and the snapshot builds HEAD's)
   if (dirty) throw new Error(`the bake renders the committed snapshot, but its inputs have uncommitted changes (commit them first):\n${dirty}`)
   if (!fs.existsSync(path.join(SNAP, '.git'))) { fs.rmSync(SNAP, { recursive: true, force: true }); sh('git', ['worktree', 'add', '--detach', SNAP, head], { cwd: ROOT }) }
   else { sh('git', ['reset', '--hard', '-q'], { cwd: SNAP }); sh('git', ['clean', '-fdq'], { cwd: SNAP }); sh('git', ['checkout', '--detach', '-q', head], { cwd: SNAP }) }

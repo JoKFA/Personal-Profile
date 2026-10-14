@@ -1,6 +1,5 @@
 # PM film of the profile drive's interior (P3c), simulated offline on a 390 x 664 phone from the baked clips (no page layer but the paper):
-#   cover -> door -> intro -> the whole tour (6 stations + 5 flights) -> out-6 -> in-2 -> station 2 -> out-2 -> exit -> cover
-# (stations are 1-based here: out-6 = out-5 in the manifest's 0-based keys.) The stage: the cover is fitted like the reel's cover stop; the door
+#   cover -> door -> intro -> station 1 -> flight -> station 2 -> out-2 -> exit -> cover   (stations 1-based here; the manifest's keys are 0-based) The stage: the cover is fitted like the reel's cover stop; the door
 # moves to the window fit (s = vw / 480, top aligned) by the shot's cam; the interior is on the window fit; the exit moves back by its cam.
 # The paper (semi-transparent) is where the page lays out: the top bar, and below the interior's region (master y 536) the words.
 # usage: python phone-bake-film-space.py <public/phone dir> <out dir> [vw vh]
@@ -63,12 +62,9 @@ dr_ = M['door']['YW-000']
 clip('door', dr_['file'], lambda i, n: lerp(T_cov, WIN, dr_['cam'][i]), lambda i, n: lerp(O_cov, O_in, dr_['cam'][i]), 'door')
 fixed = lambda i, n: WIN; ovin = lambda i, n: O_in
 clip('intro', S['intro']['file'], fixed, ovin, 'intro')
-for i in range(6):
-    clip(f'st{i}', S['stations'][i]['clip']['file'], fixed, ovin, f'station {i + 1}')
-    if i < 5: clip(f'fl{i}', S['fly'][f'{i}>{i + 1}']['file'], fixed, ovin, f'flight {i + 1}>{i + 2}')
-clip('out5', S['out']['5']['file'], fixed, ovin, 'out-6 (to the hub)')
-clip('in1', S['in']['1']['file'], fixed, ovin, 'in-2 (from the hub)')
-clip('st1b', S['stations'][1]['clip']['file'], fixed, ovin, 'station 2 (picked)')
+clip('st0', S['stations'][0]['clip']['file'], fixed, ovin, 'station 1')
+clip('fl0', S['fly']['0>1']['file'], fixed, ovin, 'flight 1>2')
+clip('st1', S['stations'][1]['clip']['file'], fixed, ovin, 'station 2')
 clip('out1', S['out']['1']['file'], fixed, ovin, 'out-2 (to the hub)')
 ex = S['exit']
 clip('exit', ex['file'], lambda i, n: lerp(T_cov, WIN, ex['cam'][i]), lambda i, n: lerp(O_cov, O_in, ex['cam'][i]), 'exit')
@@ -90,6 +86,16 @@ for k, i in enumerate(idx):
     x, y = (k % cols) * tw, (k // cols) * (th + 14)
     sheet.paste(im, (x, y + 14)); dr.text((x + 2, y + 1), f'{i / 25:.2f}s {labels[i]}', fill=(255, 255, 255))
 sheet.save(os.path.join(out, f'phone-interior-{vw}x{vh}-sheet.jpg'), quality=85)
+# tiles every 0.08 s (every 2nd frame) of the door and of the exit, as the PM cuts them with ffmpeg's tile
+def tile(label, name):
+    ids = [i for i, l in enumerate(labels) if l == label][::2]
+    cols = 12; tw2, th2 = 130, 224; rows2 = (len(ids) + cols - 1) // cols
+    T = Image.new('RGB', (cols * tw2, rows2 * (th2 + 12)), (30, 30, 30)); d2 = ImageDraw.Draw(T)
+    for k, i in enumerate(ids):
+        x, y = (k % cols) * tw2, (k // cols) * (th2 + 12)
+        T.paste(Image.open(os.path.join(seq, f'f-{i + 1:05d}.png')).resize((tw2, th2), Image.LANCZOS), (x, y + 12)); d2.text((x + 2, y), f'{i / 25:.2f}s', fill=(255, 255, 255))
+    T.save(os.path.join(out, name), quality=88)
+tile('door', f'door-tile-0.08s-{vw}x{vh}.jpg'); tile('exit', f'exit-tile-0.08s-{vw}x{vh}.jpg')
 shutil.rmtree(seq); shutil.rmtree(tmp)
 info = {'viewport': [vw, vh], 'frames': len(frames), 'seconds': len(frames) / 25, 'cover_fit': [round(v, 3) for v in T_cov], 'window_fit': [round(v, 3) for v in WIN],
         'segments': {}}
