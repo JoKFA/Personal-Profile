@@ -37,6 +37,8 @@ export default function PhoneApp() {
     <>
       <div className="ph-host" ref={ref}>{failed ? <p className="ph-fail" role="alert">The archive could not be loaded. Reload to try again.</p> : null}</div>
       <PhoneName />
+      {/* the pad that marks where a connector meets a node in X-001's diagram (file/demos.css): defined once, used by reference */}
+      <svg className="ph-defs" width="0" height="0" aria-hidden="true" focusable="false"><defs><marker id="ph-pad" markerUnits="userSpaceOnUse" markerWidth="3.8" markerHeight="3.8" refX="1.9" refY="1.9"><rect width="3.8" height="3.8" /></marker></defs></svg>
       {gate && !failed && bridge ? <Suspense fallback={null}><PhoneGate bridge={bridge} /></Suspense> : null}
     </>
   )

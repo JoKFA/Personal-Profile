@@ -103,3 +103,14 @@
 .ph-fdemo .bu-slab, .ph-fdemo .bu-slab.done { filter: none; }
 .ph-fdemo .bu-slab.cur { box-shadow: inset 0 0 0 1px var(--hair2); }
 .ph-fdemo .bu-slab.bad { box-shadow: inset 0 0 0 1.5px var(--alert); }
+/* X-001's window diagram (P6a): the key's trace runs from the chip into this diagram, so its nodes read as pads on a board, not as web cards. Scoped to this file's window on the phone;
+   the shared demo's DOM is untouched. Nodes: square corners, a 1 px ink hairline, the fill does not change with the state (the stroke colour does). Connectors: 1 px, right-angle, in the
+   trace's colour (#c9a35a, fileview.ts), with a 4 px pad where one meets a node's edge (the marker is defined once, in PhoneApp.tsx; the dashed sandbox boundary is a real isolation boundary and stays). */
+.ph-file[data-entry="X-001"] .dm-graph .nd rect { rx: 2px; ry: 2px; fill: rgba(255, 255, 255, .55); stroke: var(--ink); stroke-width: 1px; vector-effect: non-scaling-stroke; }
+.ph-file[data-entry="X-001"] .dm-graph .nd.hot rect { stroke: var(--alert); fill: rgba(255, 255, 255, .55); }
+.ph-file[data-entry="X-001"] .dm-graph .nd.good rect { stroke: var(--acc-text); fill: rgba(255, 255, 255, .55); }
+.ph-file[data-entry="X-001"] .dm-graph .ln { stroke: #c9a35a; stroke-width: 1px; vector-effect: non-scaling-stroke; stroke-linecap: butt; stroke-linejoin: miter; }
+.ph-file[data-entry="X-001"] .dm-graph .ln:nth-of-type(1), .ph-file[data-entry="X-001"] .dm-graph .ln:nth-of-type(2), .ph-file[data-entry="X-001"] .dm-graph .ln:nth-of-type(3), .ph-file[data-entry="X-001"] .dm-graph .ln:nth-of-type(7) { marker-start: url(#ph-pad); marker-end: url(#ph-pad); }
+.ph-file[data-entry="X-001"] .dm-graph .ln:nth-of-type(5), .ph-file[data-entry="X-001"] .dm-graph .ln:nth-of-type(6) { marker-end: url(#ph-pad); }
+#ph-pad rect { fill: #c9a35a; }
+.ph-defs { position: absolute; width: 0; height: 0; overflow: hidden; pointer-events: none; }
