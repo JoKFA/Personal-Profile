@@ -51,6 +51,13 @@ if (!fs.readFileSync(path.join(dist, 'index.html'), 'utf8').includes('href="/Yao
 if (!assets.size) fail('no /assets/ references found in built HTML')
 for (const a of assets) if (!fs.existsSync(path.join(dist, a))) fail(`missing asset ${a}`)
 
+// the production bundle carries no test hooks and no lab (src/casefile/flags.ts, scene/lab.ts): none of their names may be in a built script
+const HOOK_NAMES = /__(phone|cf|space|frames|lab|camOv|phoneDirector|ph|spike|cfCaptureCut|cutExterior|cutInterior)|phone-(expose|reject|app|dev|spike)/
+for (const f of fs.readdirSync(path.join(dist, 'assets')).filter((n) => n.endsWith('.js'))) {
+  const hit = fs.readFileSync(path.join(dist, 'assets', f), 'utf8').match(HOOK_NAMES)
+  if (hit) fail(`assets/${f} contains the test hook name "${hit[0]}" (a production build has none: VITE_HOOKS must not be set)`)
+}
+
 const server = await preview({ preview: { port: 4179, strictPort: true, open: false }, logLevel: 'silent' })
 try {
   for (const url of [...routes, ...assets]) {

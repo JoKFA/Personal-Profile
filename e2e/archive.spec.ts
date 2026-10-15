@@ -106,9 +106,9 @@ test('every file opens without errors or overflow', async ({ page }) => {
   expect(errors).toEqual([])
 })
 
-test('HUD elements never overlap and no JWT or claim strings show', async ({ page }, info) => {
+test('HUD elements never overlap and no JWT or claim strings show', async ({ page }) => {
   await enter(page)
-  const widths = info.project.name.startsWith('phone') ? [390, 360] : [1440, 1280, 1100, 900]
+  const widths = [1440, 1280, 1100, 900]
   for (const w of widths) {
     await page.setViewportSize({ width: w, height: w < 900 ? 844 : 820 }); await page.waitForTimeout(700)
     const hits = await page.evaluate(() => {
@@ -181,8 +181,7 @@ test('holds 60 fps while idle and while navigating', async ({ page }, info) => {
   for (const m of [idle, nav, film, rest]) { expect(m.avg).toBeGreaterThanOrEqual(58); expect(m.p95).toBeLessThanOrEqual(18) }
 })
 
-test('keyboard only: browse, open, Tab stays in the file, Esc returns focus', async ({ page }, info) => {
-  test.skip(info.project.name.startsWith('phone'), 'keyboard flow is a desktop path')
+test('keyboard only: browse, open, Tab stays in the file, Esc returns focus', async ({ page }) => {
   await enter(page)
   await page.evaluate(() => (window as unknown as Win).__cf.jumpTo('X-001')); await page.waitForTimeout(800)
   await page.keyboard.press('ArrowDown'); await page.waitForTimeout(500)
@@ -295,21 +294,7 @@ test('open: the page arrives as ciphertext, decrypts in blocks, and the tag is r
   expect(errors).toEqual([])
 })
 
-test('open (phone): the text decrypts and the drive face gets no block grid', async ({ page }, info) => {
-  test.skip(info.project.name !== 'phone-390', 'the face grid is left out on a phone only')
-  const errors = watchErrors(page)
-  await enter(page)
-  await page.evaluate(() => { const w = window as unknown as { __cg: number }; w.__cg = 0; new MutationObserver(() => { w.__cg += document.querySelectorAll('.cg').length }).observe(document.body, { subtree: true, childList: true }) })
-  await startOpen(page, 'X-001')
-  await tagged(page)
-  await expect(page.locator('.file-verify span')).toHaveText(TAG_LINE)
-  expect(await page.evaluate(() => (window as unknown as { __cg: number }).__cg)).toBe(0)
-  expect(await page.locator('.cg').count()).toBe(0)
-  expect(errors).toEqual([])
-})
-
-test('open: Esc pressed while it decrypts waits for the page, then goes back to browsing without an error', async ({ page }, info) => {
-  test.skip(info.project.name.startsWith('phone-short'), 'a phone covers this in the flow test')
+test('open: Esc pressed while it decrypts waits for the page, then goes back to browsing without an error', async ({ page }) => {
   const errors = watchErrors(page)
   await enter(page)
   await startOpen(page, 'X-001')
@@ -427,12 +412,11 @@ test('close: the page is encrypted again first, the drive holds still, the whole
 
 test('entry: your browser is read as a fingerprint, profiled, sealed, and the archive slides in', async ({ page }, info) => {
   const errors = watchErrors(page)
-  const phone = info.project.name.startsWith('phone')
   await page.goto('/?intro')
   // read: the scan reaches the readings; each value resolves from cipher into a real one
   await expect(page.locator('.fp-cap1')).toBeVisible({ timeout: 5000 })
   const size = await page.locator('.fp-cap1').evaluate((el) => parseFloat(getComputedStyle(el).fontSize))
-  expect(size).toBeGreaterThanOrEqual(phone ? 24 : 28)
+  expect(size).toBeGreaterThanOrEqual(28)
   // profile: every reading carries what an attacker does with it, readable and inside the screen
   await expect(page.locator('.fp-cap2')).toBeVisible({ timeout: 6000 })
   await expect.poll(() => page.locator('.fp-mi .a').last().evaluate((el) => Number(getComputedStyle(el).opacity))).toBeGreaterThan(0.95)
@@ -564,31 +548,19 @@ test('home: the selected files are listed and numbered without overlap, and open
   await page.addInitScript(() => { localStorage.setItem('yw.entry', '1'); localStorage.setItem('yw.hint', '1') })
   await page.goto('/')
   await page.waitForFunction(() => { const s = (window as unknown as Win).__cf?.getSnapshot(); return s?.mode === 'archive' && s.brief && !!document.querySelector('.hud.on') && !document.querySelector('.cf--arriving') }, null, { timeout: 45_000 })
-  const phone = info.project.name.startsWith('phone')
-  // the lens has opened: on a desktop the numbers on the drives fade in once the camera rests (a phone has none)
-  if (!phone) await page.waitForSelector('.brief--lit', { timeout: 15_000 })
+  // the lens has opened: the numbers on the drives fade in once the camera rests
+  await page.waitForSelector('.brief--lit', { timeout: 15_000 })
   await page.waitForTimeout(1200)
   // the list, the numbers on the drives, the sentence and the actions sit inside the screen and never on each other
-  const boxes = await page.evaluate((withNumbers) => ['.brief-co', ...(withNumbers ? ['.brief-leads text'] : []), '.brief-say', '.brief-act', '.hud-lock', '.hud-top'].flatMap((s) => [...document.querySelectorAll(s)].map((e) => ({ s, b: e.getBoundingClientRect().toJSON() as DOMRect }))), !phone)
+  const boxes = await page.evaluate((withNumbers) => ['.brief-co', ...(withNumbers ? ['.brief-leads text'] : []), '.brief-say', '.brief-act', '.hud-lock', '.hud-top'].flatMap((s) => [...document.querySelectorAll(s)].map((e) => ({ s, b: e.getBoundingClientRect().toJSON() as DOMRect }))), true)
   expect(boxes.filter((x) => x.s === '.brief-co')).toHaveLength(4)
-  if (!phone) expect(boxes.filter((x) => x.s === '.brief-leads text'), 'a number on each drive').toHaveLength(4)
+  expect(boxes.filter((x) => x.s === '.brief-leads text'), 'a number on each drive').toHaveLength(4)
   const vw = page.viewportSize()!
   for (const { s, b } of boxes) expect(b.left >= 0 && b.right <= vw.width && b.top >= 0 && b.bottom <= vw.height, `${s} on screen`).toBe(true)
   for (let i = 0; i < boxes.length; i++) for (let j = i + 1; j < boxes.length; j++) {
     const a = boxes[i].b, b = boxes[j].b
     const hit = Math.min(a.right, b.right) - Math.max(a.left, b.left) > 1 && Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top) > 1
     expect(hit, `${boxes[i].s} × ${boxes[j].s}`).toBe(false)
-  }
-  if (phone) {
-    // a phone gets a list under the sentence, 01 → 04, each row at least 44 px and tappable
-    const rows = await page.locator('.brief-co').evaluateAll((els) => els.map((e) => ({ n: e.querySelector('.n')?.textContent, ...(e.getBoundingClientRect().toJSON() as DOMRect) })))
-    const say = await page.locator('.brief-thesis').evaluate((e) => e.getBoundingClientRect().bottom)
-    expect(rows.map((r) => r.n)).toEqual(['01', '02', '03', '04'])
-    rows.forEach((r, i) => {
-      expect(r.height, `row ${i + 1} height`).toBeGreaterThanOrEqual(44)
-      expect(r.top, `row ${i + 1} is under the sentence`).toBeGreaterThanOrEqual(say)
-      if (i) expect(r.top, `row ${i + 1} follows row ${i}`).toBeGreaterThanOrEqual(rows[i - 1].bottom - 1)
-    })
   }
   expect(await noOverflow(page)).toBe(true)
   await page.screenshot({ path: `.codex-runtime/design/home/${info.project.name}-home.png` })
@@ -839,10 +811,9 @@ test('contact is one click away', async ({ page }) => {
 // the subject file is the way into the work space (docs/subject-space-spec.md); the kind legend is spec §25
 type FilmWin = Window & { __cf: { getSnapshot(): { mode: string; kindFocus: string | null } } }
 type SpaceWin = Window & { __space: { clock: { state: { area: number; travel: unknown; tour: boolean; playing: boolean; reason: string; retained: boolean[]; order: number[]; p: number }; select(i: number): void; step(i: number): void }; space: { debug(): { visibleAreas: number[] } } } }
-test('subject file: the drive opens into six areas, each alone in its space, and their evidence stays', async ({ page }, info) => {
+test('subject file: the drive opens into six areas, each alone in its space, and their evidence stays', async ({ page }) => {
   test.setTimeout(180_000)
   const errors = watchErrors(page)
-  const phone = info.project.name.startsWith('phone')
   await enter(page)
   // (the entry may have opened the file already: this visit is made a first one again)
   await page.evaluate(() => sessionStorage.removeItem('yw.space'))
@@ -871,10 +842,10 @@ test('subject file: the drive opens into six areas, each alone in its space, and
     // one area at a time: nothing of any other area is in the scene
     expect(await page.evaluate(() => (window as unknown as SpaceWin).__space.space.debug().visibleAreas)).toEqual([i])
   }
-  // nothing on the left changed the right: the same tab; and, off a phone (where the page is the scroller), the same scroll
+  // nothing on the left changed the right: the same tab and the same scroll
   const right1 = await rightSide()
   expect(right1.tab).toBe(right0.tab)
-  if (!phone) expect(right1.top).toBe(right0.top)
+  expect(right1.top).toBe(right0.top)
   expect(new Set(titles).size).toBe(6)
   // all six results are kept, in the order they were produced
   const kept = await page.evaluate(() => (window as unknown as SpaceWin).__space.clock.state)
@@ -890,7 +861,7 @@ test('subject file: the drive opens into six areas, each alone in its space, and
   expect(await page.evaluate(() => (window as unknown as SpaceWin).__space.clock.state.reason)).toBe('reading')
   // the index: six cells, and each result links to the file of the work behind it
   await page.locator('.space-ev').click()
-  const cells = phone ? page.locator('.space-list .space-cell') : page.locator('.space-index .space-cell')
+  const cells = page.locator('.space-index .space-cell')
   await expect(cells).toHaveCount(6)
   await cells.nth(4).locator('.space-go').click()   // awareness: the BCIT file
   await page.waitForURL(/\/projects\/bcit-cyber-security-office/, { timeout: 15_000 })
@@ -902,18 +873,17 @@ test('subject file: the drive opens into six areas, each alone in its space, and
   await expect(page.locator('.space-title')).toBeVisible()
   expect(await page.evaluate(() => (window as unknown as SpaceWin).__space.clock.state.tour)).toBe(false)
   await page.locator('.space-ev').click()
-  await expect.poll(() => page.locator(phone ? '.space-list .space-thumb img' : '.space-index .space-thumb img').count(), { timeout: 5000 }).toBe(6)
+  await expect.poll(() => page.locator('.space-index .space-thumb img').count(), { timeout: 5000 }).toBe(6)
   // Esc closes the open index first, and only the next one leaves the file
   await page.keyboard.press('Escape')
-  await expect(page.locator(phone ? '.space-list .space-index-grid' : '.space-index')).toHaveCount(0)
+  await expect(page.locator('.space-index')).toHaveCount(0)
   expect(await page.evaluate(() => (window as unknown as FilmWin).__cf.getSnapshot().mode)).toBe('file')
   await closeFile(page)
   expect(await noOverflow(page)).toBe(true)
   expect(errors).toEqual([])
 })
 
-test('subject file: reading the profile pauses the show; hovering does not; a hidden tab freezes it and nothing is caught up', async ({ page }, info) => {
-  test.skip(info.project.name.startsWith('phone'), 'a phone reads by scrolling the page: covered by the flow test')
+test('subject file: reading the profile pauses the show; hovering does not; a hidden tab freezes it and nothing is caught up', async ({ page }) => {
   test.setTimeout(120_000)
   const errors = watchErrors(page)
   await enter(page)
@@ -957,13 +927,13 @@ test('subject file: reading the profile pauses the show; hovering does not; a hi
   expect(errors).toEqual([])
 })
 
-test('the legend lights one kind of record at a time', async ({ page }, info) => {
+test('the legend lights one kind of record at a time', async ({ page }) => {
   await enter(page)
   const key = page.locator('.kind-key')
   await expect(key).toContainText('Experience')
   await expect(key).toContainText('Projects')
   const exp = key.getByRole('button', { name: /Experience/ })
-  if (info.project.name.startsWith('phone')) await exp.tap(); else await exp.hover()
+  await exp.hover()
   await page.waitForFunction(() => (window as unknown as FilmWin).__cf.getSnapshot().kindFocus === 'service', null, { timeout: 3000 })
   // the panel names kinds in plain words
   await expect(page.locator('.panel-eyebrow')).not.toContainText(/Case file|Service record/)
