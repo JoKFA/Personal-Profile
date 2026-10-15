@@ -51,6 +51,9 @@ export async function startPhone(host: HTMLElement, cancelled: () => boolean = (
   const copies = reel.map((id, i) => stopCopy(id, i))
   const dom = buildPage(host, copies, (id) => !!m.open[id])
   const { root } = dom
+  // P6a: the layout's height is the small viewport's (svh): it does not change when the browser's toolbar slides, so nothing is laid out again and nothing jumps mid-read; a browser without svh has innerHeight
+  const svhProbe = document.createElement('div'); svhProbe.className = 'ph-svh'; svhProbe.setAttribute('aria-hidden', 'true'); root.appendChild(svhProbe)   // P6a
+  const svh = () => { const h = svhProbe.offsetHeight; return h > 100 ? h : innerHeight }   // P6a
   const stage = new Stage(root, m.master); root.prepend(stage.box)
   stage.record = flags.expose
   if (flags.reject) stage.pool.play = () => Promise.reject(new DOMException('play() refused (forced by ?phone-reject)', 'NotAllowedError'))
@@ -109,7 +112,7 @@ export async function startPhone(host: HTMLElement, cancelled: () => boolean = (
 
   // ── layout: the fit for every stop on this screen (plan §2.1) ──
   function layout() {
-    view = { w: innerWidth, h: innerHeight }
+    view = { w: innerWidth, h: svh() }   // P6a
     // P5: the Index sheet starts after five screens, so a change of the screen's height (the toolbar sliding) moves it: the page keeps its distance into the sheet
     const ixD = !fileMode && dom.ix.sec.offsetTop > 0 && scrollY >= dom.ix.sec.offsetTop - 1 ? scrollY - dom.ix.sec.offsetTop : null
     root.style.setProperty('--ph-h', `${view.h}px`)
@@ -636,6 +639,7 @@ export async function startPhone(host: HTMLElement, cancelled: () => boolean = (
   // ── listeners ──
   const prime = () => stage.prime()
   const onResize = () => {
+    if (innerWidth === view.w && svh() === view.h) return   // P6a: only the toolbar moved: the layout is the small viewport's and stays
     if (mq.matches) return   // P5: in landscape the page is not laid out again (the notice covers it; turning back finds it as it was)
     if (visualViewport && visualViewport.scale > 1.01) return
     if (fileMode && phase === 'file' && Math.abs(innerWidth - view.w) < 1) return   // Safari's toolbar sliding while a file is read: only the height moves, the page stays as it is
