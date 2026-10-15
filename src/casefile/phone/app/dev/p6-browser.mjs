@@ -20,8 +20,14 @@ await p.waitForSelector('.ph-gate .fp-hold'); await p.waitForTimeout(1500)
 rep.envSeen = await p.evaluate(() => { const d = document.createElement('div'); d.style.cssText = 'position:fixed;padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom)'; document.body.appendChild(d); const cs = getComputedStyle(d); const r = [cs.paddingTop, cs.paddingBottom]; d.remove(); return r })
 
 /** every visible text-bearing element and every control: is any of it inside the top or bottom inset? */
-const insetScan = (name, bottom = true) => p.evaluate(([name, TOP, BOT, bottom]) => {   // (a file page scrolls: what crosses the bottom edge continues; only resting UI is held to the bottom inset)
-  const bad = []; const H = innerHeight
+const insetScan = async (name, bottom = true) => {
+  await p.evaluate(() => { const sh = new CSSStyleSheet(); sh.replaceSync('.ph-root *, .ph-gate * { pointer-events: auto !important }'); document.adoptedStyleSheets = [...document.adoptedStyleSheets, sh]; window.__scanSheet = sh })   // (elementsFromPoint skips pointer-events:none: the gate's lines are)
+  const r = await insetScan0(name, bottom)
+  await p.evaluate(() => { document.adoptedStyleSheets = document.adoptedStyleSheets.filter((x) => x !== window.__scanSheet) })
+  return r
+}
+const insetScan0 = (name, bottom = true) => p.evaluate(([name, TOP, BOT, bottom]) => {   // (a file page scrolls: what crosses the bottom edge continues; only resting UI is held to the bottom inset)
+  const bad = []; const H = innerHeight; let checked = 0
   for (const e of document.querySelectorAll('.ph-root *, .ph-gate *')) {
     const cs = getComputedStyle(e)
     if (cs.visibility === 'hidden' || cs.display === 'none' || Number(cs.opacity) < 0.3 || e.closest('[aria-hidden="true"]')) continue
@@ -31,11 +37,16 @@ const insetScan = (name, bottom = true) => p.evaluate(([name, TOP, BOT, bottom])
     if (e.classList.contains('ph-door')) continue   // (the cover panel's invisible whole-panel button)
     const r = e.getBoundingClientRect(); if (r.width < 2 || r.height < 2 || r.bottom < 0 || r.top > H) continue
     // what is covered by something else (a row scrolled under the bar) is not seen
-    const hit = document.elementFromPoint(Math.min(innerWidth - 1, Math.max(0, r.left + r.width / 2)), Math.min(H - 1, Math.max(0, r.top + r.height / 2))); if (!hit || !(e === hit || e.contains(hit) || hit.contains(e))) continue
+    const alpha = (c) => { const m = c.match(/rgba?\(([^)]+)\)/); if (!m) return c.includes('color(') ? 1 : 0; const a = m[1].split(/[,/]\s*|\s+/); return a.length > 3 ? parseFloat(a[3]) : 1 }
+    const paints = (x) => x.matches('img, canvas, video') || alpha(getComputedStyle(x).backgroundColor) >= 0.5 || ([...x.childNodes].some((c) => c.nodeType === 3 && c.textContent.trim()) && alpha(getComputedStyle(x).color) > 0)
+    let vis = false
+    for (const x of document.elementsFromPoint(Math.min(innerWidth - 1, Math.max(0, r.left + r.width / 2)), Math.min(H - 1, Math.max(0, r.top + r.height / 2)))) { if (x === e || e.contains(x) || x.contains(e)) { vis = true; break } if (x.closest('.ph-root, .ph-gate') && paints(x)) break }
+    if (!vis) continue
+    checked++
     if (r.top < TOP - 0.5 && r.bottom > 0) bad.push(`under the notch: ${e.className || e.tagName} "${(e.textContent || '').trim().slice(0, 20)}" top ${Math.round(r.top)}`)
     if (bottom && r.bottom > H - BOT + 0.5 && r.top < H) bad.push(`under the home indicator: ${e.className || e.tagName} "${(e.textContent || '').trim().slice(0, 20)}" bottom ${Math.round(r.bottom)}`)
   }
-  return { name, violations: [...new Set(bad)].slice(0, 12), count: bad.length }
+  return { name, violations: [...new Set(bad)].slice(0, 12), count: bad.length, checked }
 }, [name, TOP, BOT, bottom])
 rep.insetScans = []
 rep.insetScans.push(await insetScan('gate idle'))
