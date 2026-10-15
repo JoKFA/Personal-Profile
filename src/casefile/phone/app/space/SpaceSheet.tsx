@@ -11,6 +11,11 @@ import { STEP_AT } from './model'
 
 const pad = (n: number) => String(n).padStart(2, '0')
 
+/** P6b: reduced motion, read once and kept (asking a MediaQueryList flushes style and layout, and the paper asks at every change of the show) */
+const mqReduced = typeof matchMedia === 'function' ? matchMedia('(prefers-reduced-motion: reduce)') : null
+let reducedNow = !!mqReduced?.matches
+mqReduced?.addEventListener('change', () => { reducedNow = !!mqReduced.matches })
+
 /** what the paper shows of the show: the discrete state, replaced (not mutated) when it changes */
 export interface SheetState {
   area: number
@@ -70,7 +75,7 @@ export const SpaceSheet = memo(function SpaceSheet({ store, actions, thumbs, vis
     const el = res.current; if (!el) return
     const now = el.getBoundingClientRect().height, prev = resH.current
     resH.current = now
-    if (prev > 0 && Math.abs(prev - now) > 4 && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    if (prev > 0 && Math.abs(prev - now) > 4 && !reducedNow) {
       el.getAnimations().forEach((a) => a.cancel())
       el.animate([{ height: `${prev}px`, overflow: 'hidden' }, { height: `${now}px`, overflow: 'hidden' }], { duration: 380, easing: 'cubic-bezier(.22,1,.36,1)' })
     }

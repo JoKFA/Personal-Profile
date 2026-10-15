@@ -6,6 +6,7 @@ import type { Visitor } from '../../../visitor'
 import type { Pt, Rect, SpaceExit, SpaceManifest, Shot } from '../../manifest'
 import { damp, spring } from '../../../motion/spring'
 import { lerpFit, toScreen, type Fit } from '../fit'
+import { Slicer, idleSlot, nextTask } from '../idle'   // P6b
 import type { PageDom, PageLayer } from '../page'
 import type { PhoneManifest } from '../../manifest'
 import type { Stage } from '../stage/stage'
@@ -117,17 +118,20 @@ export class PhoneSpace {
       this.player = new ClipPlayer(stage, (key) => this.urls.get(key))
       this.chips = new ChipLayer(this.host.dom.root)
       this.layout()
-      const { mountSheet } = await import('./mount')
+      const { mountSheetAsync } = await import('./mount')
+      const sl = new Slicer(6, () => true)   // P6b: the paper is built in steps
       const thumbs: Record<number, string> = {}
       S.stations.forEach((st, i) => { thumbs[i] = this.host.url(st.thumb.file) })
       const actions: SheetActions = {
         pick: (i) => void this.pick(i), step: (n) => void this.step(n), toggle: () => this.toggle(), replay: () => void this.replay(),
         go: (id) => this.host.go(id), evidence: () => this.sheet.querySelector('#ph-sp-evidence')?.scrollIntoView({ behavior: this.host.reduced() ? 'auto' : 'smooth', block: 'start' }),
       }
-      const mounted = mountSheet(this.sheet, { store: this.store, actions, thumbs, visitor: this.host.visitor(), audit: this.host.audit })
+      await nextTask()
+      const mounted = await mountSheetAsync(this.sheet, { store: this.store, actions, thumbs, visitor: this.host.visitor(), audit: this.host.audit })
       this.unmount = mounted.unmount
       this.decrypt = new BodyDecrypt(this.sheet.querySelector<HTMLElement>('.ph-sp-body')!, this.host.reduced())
-      await this.decrypt.seal()
+      await nextTask()
+      await this.decrypt.seal(sl)
       this.trail = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); this.trail.setAttribute('class', 'ph-sp-trail'); this.trail.setAttribute('aria-hidden', 'true')
       const path = document.createElementNS('http://www.w3.org/2000/svg', 'path'); path.setAttribute('pathLength', '1'); this.trail.appendChild(path)
       this.host.dom.root.appendChild(this.trail)
@@ -139,8 +143,27 @@ export class PhoneSpace {
       addEventListener('touchstart', grab, { passive: true }); addEventListener('wheel', grab, { passive: true })
       this.sheet.addEventListener('pointerdown', rest, true); this.sheet.addEventListener('keydown', rest, true)
       this.off.push(() => removeEventListener('scroll', scroll), () => { removeEventListener('touchstart', grab); removeEventListener('wheel', grab) }, () => { this.sheet.removeEventListener('pointerdown', rest, true); this.sheet.removeEventListener('keydown', rest, true) })
+      void this.prelayout()   // P6b
     })())
   }
+
+  // ── P6b: the paper is laid out hidden, one part per idle moment, and stays laid out between visits ──
+  private prelaid = false
+  private topSet = ''
+  private async prelayout(): Promise<void> {
+    if (this.prelaid || !this.sheet.hidden) return
+    const sh = this.sheet
+    const parts = [...sh.querySelectorAll<HTMLElement>('.ph-sp > *, .ph-sp-body > .ph-fb-in > *')]
+    for (const p of parts) p.setAttribute('data-cold', '')
+    sh.classList.add('ph-pre'); sh.hidden = false
+    for (const p of parts) {
+      await idleSlot(300)
+      if (this.cut || !sh.classList.contains('ph-pre')) return   // (the door opened first: doCut shows it all)
+      p.removeAttribute('data-cold'); p.getBoundingClientRect()   // (this part is laid out now, in this task)
+    }
+    this.prelaid = true
+  }
+  private shown() { return !this.sheet.hidden && !this.sheet.classList.contains('ph-pre') }
 
   // ── geometry: the window rule (s = W / 480, top aligned); the subject's region is master y 64-536, the paper starts under it ──
   layout() {
@@ -148,7 +171,9 @@ export class PhoneSpace {
     const { w } = this.host.view(), fit = this.host.winFit(), r = this.S.region.rect
     const barB = Math.max(this.host.dom.bar.offsetHeight, 64)
     this.region = { l: 8, r: w - 8, t: Math.max(barB + BAR_GAP, r.y0 * fit.s + fit.ty + BAR_GAP), b: r.y1 * fit.s + fit.ty - BAR_GAP }
-    this.sheet.style.setProperty('--ph-sp-top', `${(r.y1 * fit.s + fit.ty).toFixed(1)}px`)
+    // (P6b: a custom property written on the paper restyles everything under it, so it is written only when it changes)
+    const top = `${(r.y1 * fit.s + fit.ty).toFixed(1)}px`
+    if (top !== this.topSet) { this.topSet = top; this.sheet.style.setProperty('--ph-sp-top', top) }
     this.redraw()
   }
   /** a resize or a rotation: the chips are laid out again for the frame that is on screen */
@@ -214,7 +239,9 @@ export class PhoneSpace {
     this.host.page.placeMarks(ridePoints(this.host.coverRest(), [], 0), this.host.coverRest(), 0)
     this.host.stage.setFit(this.host.winFit())
     this.layout()
+    this.sheet.classList.remove('ph-pre'); for (const p of this.sheet.querySelectorAll('[data-cold]')) p.removeAttribute('data-cold')   // P6b
     this.sheet.hidden = false
+    this.decrypt?.begin()   // P6b
     this.restTop = scrollY
     if (!this.host.reduced()) this.sheet.animate([{ opacity: 0, transform: 'translateY(28px)' }, { opacity: 1, transform: 'none' }], { duration: 380, easing: 'cubic-bezier(.22,1,.36,1)' })
   }
@@ -525,12 +552,13 @@ export class PhoneSpace {
   }
   private finishLeave() {
     this.mode = 'idle'; this.cut = false; this.lastArea = this.area
-    this.sheet.hidden = true
+    for (const a of this.sheet.getAnimations()) a.cancel()   // P6b
+    if (this.prelaid) this.sheet.classList.add('ph-pre'); else this.sheet.hidden = true   // (kept laid out, hidden)
     this.host.stage.setFit(this.host.coverFit())
     this.setUi({ live: false, playing: false })
   }
   private sheetOut() {
-    if (this.host.reduced() || this.sheet.hidden) return
+    if (this.host.reduced() || !this.shown()) return
     this.sheet.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 220, easing: 'linear', fill: 'forwards' })
   }
 

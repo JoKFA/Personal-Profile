@@ -60,3 +60,7 @@
 .ph-sp-cell h4 { margin: 4px 0 6px; font: 700 15px/1.25 var(--sans); }
 .ph-sp-cell .ph-sp-go { min-height: 44px; font-size: 12px; }
 .ph-sp-cell[data-kept="0"] .ph-sp-thumb span { opacity: .8; }
+
+/* P6b: the paper is laid out while it is hidden (one part per idle moment), and kept laid out between visits: when the door opens it is only shown */
+.ph-space.ph-pre { position: fixed; left: 0; top: 0; width: 100%; visibility: hidden; }
+.ph-space.ph-pre [data-cold] { content-visibility: hidden; }
