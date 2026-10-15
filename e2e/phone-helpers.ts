@@ -84,7 +84,7 @@ export const heading = (page: Page, text: string) => page.getByRole('heading').f
 export async function fileOpen(page: Page, slug: string, title: string) {
   await expect(page).toHaveURL(new RegExp(`/projects/${slug}$`), { timeout: 30_000 })
   await expect(heading(page, title)).toBeVisible({ timeout: 30_000 })
-  await expect.poll(() => page.locator('.ph-fbody').first().innerText().then((t) => t.length), { timeout: 30_000 }).toBeGreaterThan(300)
+  await expect.poll(() => page.locator('.ph-file.on .ph-fbody').first().innerText().then((t) => t.length), { timeout: 30_000 }).toBeGreaterThan(300)
 }
 export async function back(page: Page) {
   // one tap on `← All files`: while the file is still opening it stops the open, once it is open it is the normal close
