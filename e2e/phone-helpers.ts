@@ -54,8 +54,6 @@ export async function scrollScreens(page: Page, n = 1) {
     await settled(page)
     // the reel's snap is mandatory: a scroll ends on a whole screen
     await expect.poll(async () => { const at = await page.evaluate(() => scrollY / innerHeight); return Math.abs(at - Math.round(at)) }, { timeout: 5000, message: 'the scroll ends on a snap point' }).toBeLessThan(0.02)
-    // the pan clip between two stops has played out (a tap on Open is not taken while it plays)
-    await page.waitForFunction(() => !document.querySelector('.ph-stage video.on'), null, { timeout: 15_000 })
   }
 }
 
@@ -75,11 +73,11 @@ export async function holdToVerify(page: Page) {
 }
 
 /** open the file of this stop on the reel: the Open button (accessible name `Open <title>`) */
-export const openFile = (page: Page, title: string) => expect(async () => {
-  // a tap while the reel is still settling is ignored, as it should be: tap again until the file has the URL
+export async function openFile(page: Page, title: string) {
+  // one tap, however the reel is moving (a tap on the stop a pan is heading for is taken): the file has its URL at once
   await page.getByRole('button', { name: `Open ${title}`, exact: true }).click()
-  await expect(page).toHaveURL(/\/projects\//, { timeout: 3000 })
-}).toPass({ timeout: 40_000 })
+  await expect(page).toHaveURL(/\/projects\//, { timeout: 5000 })
+}
 /** a heading by its words: the text is set in pieces (the decrypting lines), so the accessible name has gaps in it; the text content does not */
 export const heading = (page: Page, text: string) => page.getByRole('heading').filter({ hasText: text }).first()
 /** the file page is up: the URL, the entry's heading, and a body of text */
@@ -88,18 +86,16 @@ export async function fileOpen(page: Page, slug: string, title: string) {
   await expect(heading(page, title)).toBeVisible({ timeout: 30_000 })
   await expect.poll(() => page.locator('.ph-fbody').first().innerText().then((t) => t.length), { timeout: 30_000 }).toBeGreaterThan(300)
 }
-export const back = (page: Page) => expect(async () => {
-  // the way back does not take a tap while the file is still opening (the open clip is playing): tap again until the URL is the reel's
-  await page.getByRole('button', { name: '← All files' }).click({ timeout: 3000 })
-  await expect(page).toHaveURL(/\/$/, { timeout: 4000 })
-}).toPass({ timeout: 40_000 })
+export async function back(page: Page) {
+  // one tap on `← All files`: while the file is still opening it stops the open, once it is open it is the normal close
+  await page.getByRole('button', { name: '← All files' }).click()
+  await expect(page).toHaveURL(/\/$/, { timeout: 20_000 })
+}
 
 export async function enterThroughDoor(page: Page) {
-  // (a tap while the page is still scrolling or settling is ignored, as it should be: tap again until the door has opened)
-  await expect(async () => {
-    await page.getByRole('button', { name: /Open the profile/ }).click({ timeout: 3000 })
-    await expect(page).toHaveURL(/\/projects\/profile$/, { timeout: 3000 })
-  }).toPass({ timeout: 40_000 })
+  // one tap on the door, wherever the reel is (a pan to the cover is taken over)
+  await page.getByRole('button', { name: /Open the profile/ }).click()
+  await expect(page).toHaveURL(/\/projects\/profile$/, { timeout: 5000 })
   await expect(page.locator('.ph-sp[data-area]')).toBeVisible({ timeout: 60_000 })
 }
 export const noOverflowX = (page: Page) => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)

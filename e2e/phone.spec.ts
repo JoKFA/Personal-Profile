@@ -172,6 +172,77 @@ test.describe('phone shell', () => {
     expect(w.errors).toEqual([])
   })
 
+  const panPlaying = (page: import('@playwright/test').Page) => page.waitForFunction(() => [...document.querySelectorAll('.ph-stage video')].some((v) => /pan-/.test(v.getAttribute('src') ?? '') && !(v as HTMLVideoElement).paused && (v as HTMLVideoElement).currentTime > 0.4), null, { timeout: 15_000, polling: 16 })
+
+  test('Open tapped while the pan to that stop is still playing is taken at once: its open clip starts within 300 ms @short', async ({ page }) => {
+    const w = await watch(page)
+    await returning(page)
+    await page.goto('/')
+    await coverReady(page)
+    await page.mouse.move(100, 300)
+    await page.mouse.wheel(0, 500)   // the reel snaps to stop 1 and the pan clip to it starts
+    await panPlaying(page)
+    await page.evaluate(() => {
+      const t = { tap: 0, frame: null as number | null }
+      ;(window as unknown as { __tap: typeof t }).__tap = t
+      addEventListener('click', (e) => { if (!t.tap && e.target instanceof Element && e.target.closest('.ph-go')) t.tap = e.timeStamp }, true)
+      const tick = () => {
+        if (t.tap && t.frame === null && location.pathname.startsWith('/projects/') && [...document.querySelectorAll('.ph-stage video')].some((v) => /open-/.test(v.getAttribute('src') ?? '') && !(v as HTMLVideoElement).paused && (v as HTMLVideoElement).currentTime > 0.001)) t.frame = performance.now()
+        requestAnimationFrame(tick)
+      }
+      requestAnimationFrame(tick)
+    })
+    const playing = await page.evaluate(() => [...document.querySelectorAll('.ph-stage video')].filter((v) => /pan-/.test(v.getAttribute('src') ?? '') && !(v as HTMLVideoElement).paused).length)
+    expect(playing, 'a pan clip is playing at the tap').toBeGreaterThan(0)
+    await openFile(page, title('X-001'))
+    await expect.poll(() => page.evaluate(() => (window as unknown as { __tap: { frame: number | null } }).__tap.frame), { timeout: 5000 }).not.toBeNull()
+    const ms = await page.evaluate(() => { const t = (window as unknown as { __tap: { tap: number; frame: number } }).__tap; return t.frame - t.tap })
+    expect(ms, 'tap to the open clip playing, ms').toBeLessThanOrEqual(300)
+    await fileOpen(page, slug('X-001'), title('X-001'))
+    expect(w.errors).toEqual([])
+  })
+
+  test('the bar Back is there within 120 ms of the Open tap, clear of everything else, and takes the mid-open path @short', async ({ page }) => {
+    const w = await watch(page)
+    await returning(page)
+    await page.goto('/')
+    await coverReady(page)
+    await scrollScreens(page, 1)
+    await page.waitForFunction(() => !document.querySelector('.ph-stage video.on'), null, { timeout: 15_000 })   // (a settled stop: the pan is the other test)
+    await page.evaluate(() => {
+      const t = { tap: 0, seen: null as number | null, overlaps: [] as string[] }
+      ;(window as unknown as { __bk: typeof t }).__bk = t
+      addEventListener('click', (e) => { if (!t.tap && e.target instanceof Element && e.target.closest('.ph-go')) t.tap = e.timeStamp }, true)
+      const hit = (a: DOMRect, b: DOMRect) => a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top
+      const tick = () => {
+        if (t.tap) {
+          const back = document.querySelector('.ph-back') as HTMLElement, cs = getComputedStyle(back), op = Number(cs.opacity), vis = cs.visibility === 'visible'
+          if (t.seen === null && vis && op > 0.02) t.seen = performance.now()
+          if (vis && op > 0.05) {
+            const r = back.getBoundingClientRect()
+            for (const s of ['.ph-tag', '.ph-brand', '.ph-nav', '.ph-barfile']) {
+              const o = document.querySelector(s) as HTMLElement | null; if (!o) continue
+              const c = getComputedStyle(o); if (c.visibility === 'hidden' || Number(c.opacity) < 0.1) continue
+              const rr = o.getBoundingClientRect(); if (rr.width && hit(r, rr)) t.overlaps.push(s)
+            }
+          }
+        }
+        requestAnimationFrame(tick)
+      }
+      requestAnimationFrame(tick)
+    })
+    await openFile(page, title('X-001'))
+    await expect.poll(() => page.evaluate(() => (window as unknown as { __bk: { seen: number | null } }).__bk.seen), { timeout: 3000 }).not.toBeNull()
+    const ms = await page.evaluate(() => { const t = (window as unknown as { __bk: { tap: number; seen: number } }).__bk; return t.seen - t.tap })
+    expect(ms, 'Open tap to `← All files` there, ms').toBeLessThanOrEqual(120)
+    await page.getByRole('button', { name: '← All files' }).click()   // in that window: the mid-open path
+    await expect(page).toHaveURL(/\/$/, { timeout: 3000 })
+    await page.waitForTimeout(500)
+    expect(await closeClipPlayed(page), 'no close clip').toBe(false)
+    expect(await page.evaluate(() => (window as unknown as { __bk: { overlaps: string[] } }).__bk.overlaps), 'the control never overlaps the tag, the name, the links or the label').toEqual([])
+    expect(w.errors).toEqual([])
+  })
+
   test('Back while an Index entry is opening: the sheet is back under the same row, and the browser Back does the same', async ({ page }) => {
     const w = await watch(page)
     await returning(page)
