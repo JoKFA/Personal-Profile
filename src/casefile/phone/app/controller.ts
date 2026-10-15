@@ -10,6 +10,7 @@ import type { EnterOptions, EntryBridge } from './gate/entry'
 import { sampleAt } from './clock'
 import { stopCopy } from './copy'
 import type { FileView } from './file/fileview'
+import { HOOKS } from '../../scene/lab'
 import type { PhoneSpace, SpaceHost } from './space/PhoneSpace'
 import type { Bridge } from './file/FileParts'
 import { BAR, COMPACT_BELOW, lerpFit, panelSpec, rectOn, stopFit, toScreen, visibleRect, windowFit, type Fit } from './fit'
@@ -45,7 +46,7 @@ const lerpRect = (a: Rect, b: Rect, k: number): Rect => ({ x0: a.x0 + (b.x0 - a.
 /** `entry`: a first visit (P4): the entry page is over the shell; once it is sealed the entrance plays under it and the shell takes over */
 export async function startPhone(host: HTMLElement, cancelled: () => boolean = () => false, entry?: EntryBridge): Promise<PhoneHandle> {
   const flags = readFlags()
-  const { m, url } = await loadManifest(flags.dev)
+  const { m, url } = await loadManifest()
   if (cancelled()) return { dispose() {} }
   const reel = m.reel, N = reel.length
   const copies = reel.map((id, i) => stopCopy(id, i))
@@ -55,8 +56,8 @@ export async function startPhone(host: HTMLElement, cancelled: () => boolean = (
   const svhProbe = document.createElement('div'); svhProbe.className = 'ph-svh'; svhProbe.setAttribute('aria-hidden', 'true'); root.appendChild(svhProbe)   // P6a
   const svh = () => { const h = svhProbe.offsetHeight; return h > 100 ? h : innerHeight }   // P6a
   const stage = new Stage(root, m.master); root.prepend(stage.box)
-  stage.record = flags.expose
-  if (flags.reject) stage.pool.play = () => Promise.reject(new DOMException('play() refused (forced by ?phone-reject)', 'NotAllowedError'))
+  stage.record = HOOKS && flags.expose
+  if (HOOKS && flags.reject) stage.pool.play = () => Promise.reject(new DOMException('play() refused (forced by ?phone-reject, a test hook)', 'NotAllowedError'))
   const page = new PageLayer(dom, copies)
   const csp: string[] = []
   const onCsp = (e: SecurityPolicyViolationEvent) => csp.push(`${e.violatedDirective} ${e.blockedURI} ${e.sourceFile}:${e.lineNumber}`)
@@ -773,7 +774,7 @@ export async function startPhone(host: HTMLElement, cancelled: () => boolean = (
     pathOf: pathOfId,
   }
   function backOrClose(play: boolean) { if (play) backButton(); else { toBrowse(); void closeFile(false) } }
-  if (flags.expose) (window as unknown as { __phone?: typeof api }).__phone = api
+  if (HOOKS && flags.expose) (window as unknown as { __phone?: typeof api }).__phone = api   // a test hook: compiled out of a production build
 
   return {
     dispose() {
@@ -787,7 +788,7 @@ export async function startPhone(host: HTMLElement, cancelled: () => boolean = (
       document.removeEventListener('visibilitychange', onVis); document.removeEventListener('securitypolicyviolation', onCsp)
       mq.removeEventListener('change', onOrient); mqR.removeEventListener('change', onReduced)   // P5
       stage.dispose(); root.remove()
-      if (flags.expose && (window as unknown as { __phone?: unknown }).__phone === api) delete (window as unknown as { __phone?: unknown }).__phone
+      if (HOOKS && flags.expose && (window as unknown as { __phone?: unknown }).__phone === api) delete (window as unknown as { __phone?: unknown }).__phone
     },
   }
 }

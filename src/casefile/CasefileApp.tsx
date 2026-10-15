@@ -5,7 +5,9 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import { entryById, entryBySlug, ENTRIES } from './data/entries'
 import { SELECTED } from './data/story'
 import type { Entry } from './data/types'
+import { hookFlags, introRequested } from './flags'
 import type { Archive, Handoff } from './scene/archive'
+import { HOOKS } from './scene/lab'
 import type { Clock } from './space/clock'
 import type { Runtime } from './space/runtime'
 import type { Space } from './space/scene'
@@ -36,7 +38,7 @@ export default function CasefileApp() {
   const reduced = useMemo(() => typeof matchMedia !== 'undefined' && matchMedia('(prefers-reduced-motion: reduce)').matches, [])
   const location = useLocation(), navigate = useNavigate()
   const [gate, setGate] = useState(() => {
-    try { return new URLSearchParams(location.search).has('intro') || localStorage.getItem('yw.entry') !== '1' } catch { return true }
+    try { return introRequested() || localStorage.getItem('yw.entry') !== '1' } catch { return true }
   })
   const [file, setFile] = useState<Entry | null>(null)
   const [sceneReady, setSceneReady] = useState(false)
@@ -99,14 +101,14 @@ export default function CasefileApp() {
     a = made
     a.veil = veilRef.current
     setArchive(a)
-    ;(window as unknown as { __cf: Archive }).__cf = a
+    if (HOOKS) (window as unknown as { __cf: Archive }).__cf = a   // for the tests and the lab (not in a production build)
     // lab (dev, and `--mode bake`; compiled out of a production build): ?bake = the phone bake's director, scene pixels only;
     // ?phone = the same director with the prototype's page over it
     // (the condition is spelled out, not imported: the bundler must see the constant to leave the lab's chunks out of a production build)
     if (import.meta.env.DEV || import.meta.env.MODE === 'bake') {
-      const q = new URLSearchParams(window.location.search)
-      if (q.has('bake')) void import('./phone/bake/director').then((m) => m.install({ master: true }))
-      else if (q.has('phone')) void import('./phone/lab').then((m) => m.install())
+      const f = hookFlags()
+      if (f.bake) void import('./phone/bake/director').then((m) => m.install({ master: true }))
+      else if (f.lab) void import('./phone/lab').then((m) => m.install())
     }
     // if the scene cannot finish preparing (context loss, driver error) fall back to the readable
     // index instead of leaving the entry waiting on its title frame
@@ -123,7 +125,7 @@ export default function CasefileApp() {
     // the open flow waits for this (briefly) rather than falling back while the interior is merely still being built
     spaceBoot.current = loadSpace().then((m) => m.bootSpace(archive, reduced)).then((s) => {
       if (dead) { s.space.dispose(); return null }
-      spaceRef.current = s; ;(window as unknown as { __space?: typeof s }).__space = s   // for the tests and the lab, like __cf
+      spaceRef.current = s; if (HOOKS) (window as unknown as { __space?: typeof s }).__space = s   // for the tests and the lab, like __cf
       setSpace(s); return s
     }).catch((err) => { console.warn('Interior unavailable; the file opens on the archive instead', err); return null })
     void import('./ui/FileView')   // the file view too, so the cut never waits on a download

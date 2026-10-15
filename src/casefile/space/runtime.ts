@@ -2,7 +2,7 @@
 // clock says, hands the frame to whoever draws words over it (the HTML layer), and captures evidence
 // thumbnails from the live scene the moment a result exists. It also owns the way out: the intro
 // played backwards, so the archive resumes from exactly the frame the cut started on.
-import { LAB } from '../scene/lab'
+import { HOOKS, LAB } from '../scene/lab'
 import type { Clock } from './clock'
 import type { Handoff, Space, SpaceFrame, SpaceLayout } from './scene'
 import { INTRO, introCompose } from './shots'
@@ -68,7 +68,7 @@ export function startRuntime(space: Space, clock: Clock, opts: { handoff: Handof
       for (const a of pending.splice(0)) thumbs[a] = space.thumbnail(a)
       space.update(f, 0, shownTime); space.render()   // thumbnailing drew another view into the canvas: put this frame back
     }
-    if (!firstShot) { firstShot = true; const w = window as unknown as { __cfCaptureCut?: boolean; __cutInterior?: string }; if (w.__cfCaptureCut) w.__cutInterior = space.canvas.toDataURL('image/png') }
+    if (!firstShot) { firstShot = true; const w = window as unknown as { __cfCaptureCut?: boolean; __cutInterior?: string }; if (HOOKS && w.__cfCaptureCut) w.__cutInterior = space.canvas.toDataURL('image/png') }
     cbs.forEach((cb) => cb(f))
   }
   raf = requestAnimationFrame(loop)

@@ -6,6 +6,12 @@ import type { Archive } from './archive'
 /** true in the dev server and in `--mode bake`; false in the production build */
 export const LAB: boolean = import.meta.env.DEV || import.meta.env.MODE === 'bake'
 
+/**
+ * Test and measuring hooks (window.__cf, __space, __phone, the frame counter; the test-only query flags in flags.ts): true in the dev server, in `--mode bake` and in a build made with
+ * VITE_HOOKS=1 (the e2e's desktop build and the phone's dev tools); false in the production build, which compiles every one of them out.
+ */
+export const HOOKS: boolean = LAB || import.meta.env.VITE_HOOKS === '1'
+
 /** what the director may override, frame by frame (window.__lab) */
 export interface LabHooks {
   lift?: number; clear?: number; tilt?: number; face?: number; sharp?: boolean; slot?: number; quiet?: number; blur?: number

@@ -1,12 +1,13 @@
 // The hand-over between the entry page (React, Gate.tsx in phone mode) and the shell's controller (plain DOM). Either side may be ready first:
 // the page can be sealed before the manifest has even arrived (the page stays on its sealed frame), and the first touch can come before the stage exists.
+import { introRequested } from '../../../flags'
 import { idFromPath } from '../route'
 
 /** A first visit to "/": no `yw.entry` yet (or ?intro). A link to a file never shows the entry page (plan §2.6). */
 export function isFirstVisit(): boolean {
   try {
     if (idFromPath(location.pathname)) return false
-    return new URLSearchParams(location.search).has('intro') || localStorage.getItem('yw.entry') !== '1'
+    return introRequested() || localStorage.getItem('yw.entry') !== '1'
   } catch { return true }
 }
 

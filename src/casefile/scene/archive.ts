@@ -16,7 +16,7 @@ import { ENTRANCE, ENTRANCE_END, SKIP_ENTRANCE, entranceCamera, entranceSlide, f
 import { BOARD_Z, CARD, LED } from './drive'
 import { DIE_ON_FACE, DOOR, doorAt, doorDistance, doorSpan } from './door'
 import { createHero, type Hero } from './hero'
-import { LAB, type LabHooks } from './lab'
+import { HOOKS, LAB, type LabHooks } from './lab'
 import { loadDriveModel } from './model'
 import { FrameBudget, initialQuality, lower, type Quality } from './quality'
 import { CIPHER_CELLS, COLS, createStage, DROWS, PLAIN, RECORD_CELL0, type Form, type Stage } from './stage'
@@ -978,8 +978,8 @@ export class Archive {
         v.style.transition = 'none'; v.style.opacity = '1'
         requestAnimationFrame(() => requestAnimationFrame(() => { v.style.transition = 'opacity .45s cubic-bezier(.4, 0, .2, 1)'; v.style.opacity = '0' }))
       }
-      const w = window as unknown as { __cfCaptureCut?: boolean; __cutExterior?: string }; if (w.__cfCaptureCut) { w.__cutExterior = this.canvas.toDataURL('image/png'); (window as unknown as { __cutHandoff?: Handoff }).__cutHandoff = this.lastHandoff } }
-    ;(window as unknown as { __frames?: number }).__frames = ((window as unknown as { __frames?: number }).__frames || 0) + 1
+      const w = window as unknown as { __cfCaptureCut?: boolean; __cutExterior?: string }; if (HOOKS && w.__cfCaptureCut) { w.__cutExterior = this.canvas.toDataURL('image/png'); (window as unknown as { __cutHandoff?: Handoff }).__cutHandoff = this.lastHandoff } }
+    if (HOOKS) (window as unknown as { __frames?: number }).__frames = ((window as unknown as { __frames?: number }).__frames || 0) + 1   // (the e2e's frame counter)
   }
   private degrade() {
     this.quality = lower(this.quality)
