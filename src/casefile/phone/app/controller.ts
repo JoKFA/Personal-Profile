@@ -141,19 +141,26 @@ export async function startPhone(host: HTMLElement, cancelled: () => boolean = (
   }
 
   // ── the picture and the reticle follow the current state (called from the clip's frame callback and from the loop) ──
+  /** reduced motion (P6a): a step is a crossfade and nothing travels: the stage's framing and the reticle's marks are the near end's until the fade's middle, the far end's after it (the far end of an open is the window, of a close the stop) */
+  const farHalf = () => (phase === 'panning' ? panK >= 0.5 : !!shot && shotIndex >= shot.quads.length / 2)   // P6a
   function currentFit(): Fit {
+    if (page.reduced && phase === 'panning') return farHalf() ? fits[to] : fits[at]   // P6a
+    if (page.reduced && (phase === 'opening' || phase === 'closing') && shot) return (phase === 'opening') === farHalf() ? winFit : fitOf(stopId())   // P6a
     if (phase === 'panning') return lerpFit(fits[at], fits[to], smooth(panK))
     if (phase === 'file') return winFit
     if ((phase === 'opening' || phase === 'closing') && shot) return lerpFit(fitOf(stopId()), winFit, sampleAt(shot.cam, shotIndex))
     return openId ? fitOf(openId) : fits[at]
   }
   function marksTarget(): { pts: Pt[]; anchor: Rect } {
-    if (phase === 'panning') { const r = lerpRect(rest(at), rest(to), smooth(panK)); return { pts: corners(r), anchor: r } }
+    if (phase === 'panning') { const r = page.reduced ? (farHalf() ? rest(to) : rest(at)) : lerpRect(rest(at), rest(to), smooth(panK)); return { pts: corners(r), anchor: r } }   // P6a
     const r = openId ? restOf(openId) : rest(at)
+    // P6a: reduced motion: the marks stay on the stop's reticle until the fade's middle (an open) or leave the window's face at it (a close); no travel
+    const atWindow = page.reduced && (phase === 'file' || ((phase === 'opening' || phase === 'closing') && (phase === 'opening') === farHalf()))
+    if (page.reduced && (phase === 'opening' || phase === 'closing') && !atWindow) return { pts: corners(r), anchor: r }
     if ((phase === 'opening' || phase === 'file' || phase === 'closing') && shot) {
       // the reticle's corners lock onto the face's corners (0.16 s), each taking the nearest free one, then ride them (overlay.ts)
-      const i = phase === 'file' ? shot.quads.length - 1 : clamp(shotIndex, 0, shot.quads.length - 1)
-      const f = currentFit(), lock = phase === 'file' ? 1 : smooth(Math.min(1, tau / 0.16))
+      const i = phase === 'file' || atWindow ? shot.quads.length - 1 : clamp(shotIndex, 0, shot.quads.length - 1)
+      const f = currentFit(), lock = phase === 'file' || atWindow ? 1 : smooth(Math.min(1, tau / 0.16))   // P6a: (atWindow: at once)
       const q = quadAt(shot.quads, i).map((p: MPt) => toScreen(f, p)), used = new Set<number>()
       const pts = corners(r).map((c) => {
         let best = 0, bd = Infinity
