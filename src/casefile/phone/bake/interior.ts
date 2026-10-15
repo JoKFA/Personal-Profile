@@ -65,6 +65,8 @@ export function createInterior() {
     },
     /** start the runtime (the interior's own loop) from the clock's state */
     start(h: Handoff) {
+      // the flights keep the trace bundle in the picture (space/scene.ts BakeHooks)
+      const lab = (window.__lab ?? (window.__lab = {})) as Record<string, unknown>; lab.flightBus = 1
       if (rt) rt.stop()
       rt = startRuntime(space!, clock!, { handoff: h, layout: SPACE_LAYOUT, reduced: false })
       off?.(); off = rt.onFrame((f) => { last = f })
@@ -74,7 +76,7 @@ export function createInterior() {
     /** the way out, as the desktop plays it: the flight to the hub, then the intro backwards */
     exit(): Promise<void> { return rt!.exit() },
     /** the desktop's whole way out: archive.close() plays the interior's exit, then the door backwards, then the drive's landing */
-    closeArchive() { closed = false; void host.close(Promise.resolve()).then(() => { closed = true }) },
+    closeArchive() { ((window.__lab ?? (window.__lab = {})) as Record<string, unknown>).introBlurRamp = 0.5; closed = false; void host.close(Promise.resolve()).then(() => { closed = true }) },
     thumbs() { return rt ? rt.thumbs() : {} },
     /** the hub as the runtime draws it at the end of the flight out (travel to −1 at k = 1) */
     showHub(retained: boolean) {

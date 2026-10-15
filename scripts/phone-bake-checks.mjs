@@ -48,20 +48,29 @@ export async function runChecks(manifest, dir, { evidence = '', work, space = nu
     if (c.first) row.firstDiff = +py(path.join(HERE, 'phone-bake-diff.py'), path.join(fr, `f-${pad(1)}.png`), c.first).trim()
     if (c.last) row.lastDiff = +py(path.join(HERE, 'phone-bake-diff.py'), path.join(fr, `f-${pad(n)}.png`), c.last).trim()
     // (ffmpeg numbers decoded frames from 1; the encoder's frame i is f-<i+1>)
+    if (c.name === 'space-exit' && space) { fs.copyFileSync(path.join(fr, `f-${pad(space.exit.doorFrame)}.png`), path.join(ends, 'exit-cutA.png')); fs.copyFileSync(path.join(fr, `f-${pad(space.exit.doorFrame + 1)}.png`), path.join(ends, 'exit-cutB.png')) }
     const en = JSON.parse(py(path.join(HERE, 'phone-bake-energy.py'), fr))
     row.energy = { median: en.median, max: en.max, needles: en.needles, top: en.top.slice(0, 3) }
-    row.energySeries = en.energy
+    row.energySeries = en.energy; row.std = en.std
     fs.rmSync(fr, { recursive: true, force: true })
     return row
   }), 4)
   rows.sort((a, b) => (a.name < b.name ? -1 : 1))
   const failures = []
+  // dead frames: a flight, the way out or the exit must never show paper alone (std of a 195 x 332 luma < 2.0) for 2 frames or more: one continuous anchor in frame
+  for (const r of rows) if (/^(fly|in|out)-/.test(r.name) || r.name === 'space-exit') {
+    let i = 0; const runs = []
+    while (i < r.std.length) { if (r.std[i] < 2.0) { let j = i; while (j + 1 < r.std.length && r.std[j + 1] < 2.0) j++; if (j - i + 1 >= 2) runs.push([i + 1, j + 1]); i = j + 1 } else i++ }
+    r.featurelessRuns = runs
+    if (runs.length) failures.push(`${r.name} has featureless runs (frames, 1-based): ${JSON.stringify(runs)}`)
+  }
   // frame-to-frame junctions of the interior: the picture must carry on across the cut between two clips
   const junctions = []
   if (space) {
     const E = (n, w) => path.join(ends, `${n}.${w}.png`), diff = (a, b) => +py(path.join(HERE, 'phone-bake-diff.py'), a, b).trim()
     const J = (name, a, b, soft = false) => { const d = diff(a, b); junctions.push({ name, diff: d, soft }); if (!soft && d >= END_TOLERANCE) failures.push(`junction ${name} differs ${d}% (>= ${END_TOLERANCE}%)`) }
     const hub = find(dir, 'hub')
+    J('exit: interior last -> exterior first (the cut)', path.join(ends, 'exit-cutA.png'), path.join(ends, 'exit-cutB.png'))
     J('door last (the cut) -> intro first (the match cut)', E('door-YW-000', 'last'), E('space-intro', 'first'), true)
     J('intro last -> space-0 first', E('space-intro', 'last'), E('space-0', 'first'))
     for (let i = 0; i < 5; i++) {

@@ -12,6 +12,7 @@ import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPa
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js'
 import { SMAAPass } from 'three/examples/jsm/postprocessing/SMAAPass.js'
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js'
+import { LAB } from '../scene/lab'
 import type { Quality } from '../scene/quality'
 import { COLOR, createKit } from './kit'
 import { AREAS, DIE, fogFor, STATION_AT, STATION_RADIUS, STATION_YAW } from './layout'
@@ -39,6 +40,14 @@ export interface SpaceFrame {
 }
 /** The canvas, and the region the subject is composed into: its centre and size as fractions of the canvas. */
 export interface SpaceLayout { width: number; height: number; cx: number; cy: number; rw: number; rh: number }
+/**
+ * Bake-only hooks (window.__lab; compiled out of a production build with LAB): the phone's pictures are baked through this very code.
+ *  flightBus: during a flight the camera and its aim are drawn toward the bus's lane (z = 0) by this weight, so the trace bundle stays in the picture
+ *             from one station's plinth to the next: no frames with nothing in them (the lane is straight; each station drifts off it).
+ *  introBlurRamp: the intro's motion blur fades in over this much of the intro, so the intro played backwards (the way out) has no blur by the cut, as the forward one has none.
+ */
+interface BakeHooks { flightBus?: number; introBlurRamp?: number }
+const bake = (): BakeHooks | undefined => (LAB ? (window.__lab as unknown as BakeHooks | undefined) : undefined)
 /** What the exterior's last frame looked like, so the interior's first frame can be the same picture. */
 const mix01 = (a: number, b: number, k: number) => a + (b - a) * k
 const smooth01 = (x: number) => { x = Math.min(1, Math.max(0, x)); return x * x * (3 - 2 * x) }
@@ -158,6 +167,8 @@ export async function createSpace(host: Host, quality: Quality, idle: () => Prom
         if (travelFrom === null || travelTo !== f.travel.to) { travelFrom = clonePose(prevPose ?? pose); travelTo = f.travel.to }
         // to < 0 is the way out: back to the hub shot the intro ends on
         pose = flightPose(travelFrom, f.travel.to < 0 ? hubPose(reg) : stationPose(f.travel.to, 0, reg), f.travel.k)
+        const fb = bake()?.flightBus
+        if (fb) { const k = f.travel.k, w = fb * smooth01(Math.min(1, k * 4)) * smooth01(Math.min(1, (1 - k) * 4)); pose.pos.z *= 1 - w; pose.target.z *= 1 - w }
       } else { pose = stationPose(f.area, f.p, reg); travelFrom = null; travelTo = -1 }
     }
     world.tick(time)
@@ -178,7 +189,10 @@ export async function createSpace(host: Host, quality: Quality, idle: () => Prom
     motion.enabled = false
     if (prevPose && dt > 0) {
       const v = pose.pos.distanceTo(prevPose.pos) / dt
-      const k = Math.min(1, Math.max(0, (v - 14) / 90)), dir = new THREE.Vector3().subVectors(pose.pos, prevPose.pos).applyQuaternion(camera.quaternion.clone().invert())
+      let k = Math.min(1, Math.max(0, (v - 14) / 90))
+      const ramp = bake()?.introBlurRamp
+      if (ramp && f.intro < INTRO.dur) k *= smooth01(f.intro / ramp)
+      const dir = new THREE.Vector3().subVectors(pose.pos, prevPose.pos).applyQuaternion(camera.quaternion.clone().invert())
       motion.enabled = k > 0.02
       motion.uniforms.uDelta.value.set(-dir.x * 0.0011 * k, dir.y * 0.0011 * k).clampLength(0, 0.04)
     }

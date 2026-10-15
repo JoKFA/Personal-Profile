@@ -6,9 +6,11 @@ import numpy as np
 from PIL import Image
 d = sys.argv[1]; fps = float(sys.argv[2]) if len(sys.argv) > 2 else 25
 fs = sorted(glob.glob(os.path.join(d, 'f-*.png')))
-prev = None; e = []
+prev = None; e = []; stds = []
 for f in fs:
-    a = np.asarray(Image.open(f).convert('L').resize((195, 422)), dtype=np.float32)
+    im = Image.open(f).convert('L')
+    stds.append(round(float(np.asarray(im.resize((195, 332)), dtype=np.float32).std()), 3))   # how much is in the picture at all (a paper-only frame is < 1.5)
+    a = np.asarray(im.resize((195, 422)), dtype=np.float32)
     if prev is not None: e.append(float(np.abs(a - prev).mean()))
     prev = a
 e = np.array(e)
@@ -17,4 +19,4 @@ needles = []
 for i in range(1, len(e) - 1):
     if e[i] > 4 and e[i] > 3 * max(e[i - 1], e[i + 1], 0.3): needles.append({'t': round((i + 1) / fps, 2), 'e': round(float(e[i]), 2)})
 top = np.argsort(e)[-6:][::-1]
-print(json.dumps({'frames': len(fs), 'median': round(med, 2), 'max': round(float(e.max()), 2), 'needles': needles, 'top': [{'t': round((int(i) + 1) / fps, 2), 'e': round(float(e[i]), 2)} for i in top], 'energy': [round(float(v), 3) for v in e]}))
+print(json.dumps({'frames': len(fs), 'median': round(med, 2), 'max': round(float(e.max()), 2), 'needles': needles, 'top': [{'t': round((int(i) + 1) / fps, 2), 'e': round(float(e[i]), 2)} for i in top], 'energy': [round(float(v), 3) for v in e], 'std': stds}))
