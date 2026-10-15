@@ -90,6 +90,11 @@
 .ph-fgame .sn-m.bot div:last-child { color: var(--ink); } .ph-fgame .sn-form label { color: #7a5f22; }
 .ph-fdemo .cc-row.na b, .ph-fdemo .cc-treat span { color: var(--label); }
 .ph-fdemo .dfd .tbl text { fill: #b3350f; }
+/* the selected threat marker (P6a): white on a deepened red (the red text rule above had beaten the .sel rule: red on red, 1.4:1), and in the fixed state the olive text and the white on deepened olive */
+.ph-fdemo .dfd .bd.sel text, .ph-fdemo .fixed .dfd .bd.sel text { fill: #fff; }
+.ph-fdemo .dfd .bd.sel circle { fill: #b3350f; }
+.ph-fdemo .fixed .dfd .bd text { fill: var(--acc-text); }
+.ph-fdemo .fixed .dfd .bd.sel circle { fill: var(--acc-text); }
 .ph-fdemo .vm-gate.fail span, .ph-fdemo .vm-merge.block, .ph-fdemo .pt pre.leak { color: #a3371a; }
 .ph-fdemo .vm-merge.block { border-color: #a3371a; }
 .ph-fdemo .vv-svc.warn span { color: #8f5410; }
