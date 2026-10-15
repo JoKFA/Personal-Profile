@@ -70,6 +70,10 @@ export class Stage {
   private pinned = new Set<string>()
   private active = new Set<HTMLVideoElement>()
   private abortStep: (() => void) | null = null
+  /** a step stopped by abortTo lands here instead of on its own target */
+  private land: { key: string; ms: number } | null = null
+  /** bumped by abortTo: a run that was still getting ready when it was called does not start */
+  private epoch = 0
   private playing: HTMLVideoElement | null = null
   private primed = false
 
@@ -119,8 +123,9 @@ export class Stage {
 
   /** run one step: a clip when there is one buffered and playable, otherwise a crossfade */
   async run(spec: StepSpec): Promise<'clip' | 'fade'> {
-    const inputAt = spec.inputAt ?? performance.now()
+    const inputAt = spec.inputAt ?? performance.now(), epoch = this.epoch
     await Promise.race([Promise.all([this.stills.ready(spec.from), this.stills.ready(spec.to)]), new Promise((r) => setTimeout(r, 1500))])
+    if (epoch !== this.epoch) return 'fade'   // (stopped by abortTo before it began)
     let v: HTMLVideoElement | undefined
     if (this.mode === 'clips' && spec.clipKey && spec.clip) {
       v = this.pool.holding(spec.clipKey)
@@ -129,6 +134,7 @@ export class Stage {
         if (v.readyState < 3) await once(v, 'canplay', BUFFER_GRACE_MS)
         if (v.currentTime > 0.001) { v.currentTime = 0; await once(v, 'seeked', 300) }
         if (v.readyState < 3) v = undefined
+        if (epoch !== this.epoch) return 'fade'
       }
     }
     if (v && this.mode === 'clips') {
@@ -152,8 +158,18 @@ export class Stage {
       const [at, len] = spec.fade
       const t0 = performance.now()
       let done = false
-      const finish = () => { if (done) return; done = true; this.abortStep = null; this.show(spec.to); resolve() }
-      this.abortStep = () => { spec.onTick(spec.duration, last, 1); finish() }
+      const finish = () => {
+        if (done) return; done = true; this.abortStep = null
+        const land = this.land
+        if (land && to && to !== from) {
+          // stopped by abortTo: the target still (partly in) goes back out over `ms`, and the landing still is the picture from now on
+          this.shownKey = land.key; this.pinned.add(land.key)
+          if (land.ms > 0) { to.style.transition = `opacity ${land.ms}ms linear`; to.style.opacity = '0' }
+          setTimeout(() => { to.style.transition = ''; if (this.shownKey === land.key) this.stills.show(land.key) }, land.ms + 20)
+        } else this.show(land ? land.key : spec.to)
+        resolve()
+      }
+      this.abortStep = () => { if (!this.land) spec.onTick(spec.duration, last, 1); finish() }
       const frame = (now: number) => {
         if (done) return
         const t = Math.min(spec.duration, (now - t0) / 1000 * (spec.rate ?? 1))
@@ -183,18 +199,19 @@ export class Stage {
       const end = () => {
         if (ended) return; ended = true; clear(); this.abortStep = null
         rec.endAt = performance.now()
-        // the target still goes under the clip's last frame (the clip is above the stills now), then the clip fades out
-        v.classList.add('on'); this.show(spec.to); rec.stillShownAt = performance.now()
-        v.classList.add('fade'); v.style.opacity = '0'
+        // the target still goes under the clip's last frame (the clip is above the stills now), then the clip fades out (a step stopped by abortTo: the landing still, over `ms`)
+        const land = this.land
+        v.classList.add('on'); this.show(land ? land.key : spec.to); rec.stillShownAt = performance.now()
+        v.classList.add('fade'); if (land) v.style.transition = `opacity ${land.ms}ms linear`; v.style.opacity = '0'
         let done = false
         const fin = () => {
           if (done) return; done = true
-          v.classList.remove('fade', 'on'); v.style.opacity = ''; v.pause(); v.playbackRate = 1; this.playing = null
+          v.classList.remove('fade', 'on'); v.style.opacity = ''; v.style.transition = ''; v.pause(); v.playbackRate = 1; this.playing = null
           try { v.currentTime = 0 } catch { /* */ }
           if (this.record) this.handoffs.push(rec)
           resolve(true)
         }
-        v.addEventListener('transitionend', fin, { once: true }); setTimeout(fin, FADE_OUT_MS + 80)
+        v.addEventListener('transitionend', fin, { once: true }); setTimeout(fin, (land ? land.ms : FADE_OUT_MS) + 80)
       }
       const onEnded = () => { spec.onTick(dur, last, 1); end() }
       const cb = (now: number, meta: VideoFrameCallbackMetadata) => {
@@ -222,7 +239,7 @@ export class Stage {
         const poll = (now: number) => { if (ended) return; if (v.currentTime !== seen) { seen = v.currentTime; cb(now, { mediaTime: seen, presentedFrames: ++polled } as VideoFrameCallbackMetadata) } else requestAnimationFrame(poll) }
         requestAnimationFrame(poll)
       }
-      this.abortStep = () => { if (started) { spec.onTick(dur, last, 1); end() } else bail() }
+      this.abortStep = () => { if (started) { if (!this.land) spec.onTick(dur, last, 1); end() } else bail() }
       this.playing = v
       v.playbackRate = spec.rate ?? 1
       v.addEventListener('ended', onEnded, { once: true })
@@ -242,6 +259,18 @@ export class Stage {
   resync() { this.abortStep?.(); this.pool.reattach(); if (this.shownKey) this.show(this.shownKey) }
   /** a running step lands on its target at once */
   finish() { this.abortStep?.() }
+  /**
+   * Stop the running step where it stands and go to `key` (the still of the stop it started from) over `ms` (0: at once): the clip's frame cross-fades into it.
+   * A step that has not begun yet never will. Resolves when the picture is `key`'s.
+   */
+  async abortTo(key: string, ms: number): Promise<void> {
+    this.epoch++
+    await this.loadStill(key)
+    this.land = { key, ms }
+    try { this.abortStep?.() } finally { this.land = null }
+    if (this.shownKey !== key) await this.run({ clipKey: null, clip: null, from: this.shownKey ?? key, to: key, duration: ms / 1000, fade: [0, ms / 1000], onTick: () => {} })
+    else if (ms > 0) await new Promise<void>((r) => setTimeout(r, ms))
+  }
 
   /** what is on top of what, for the tests: every layer with any opacity, bottom first */
   layers() {

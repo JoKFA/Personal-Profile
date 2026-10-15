@@ -99,7 +99,7 @@ export async function startPhone(host: HTMLElement, cancelled: () => boolean = (
   /** a file is open: the page is the file (document scroll), the reel is out of the flow and its snap does not act */
   let fileMode = false
   /** a close was asked for while the file was still opening */
-  let closeAfterOpen: boolean | null = null
+  let aborting = false   // a Back during an open is being carried out
   /** a file opened from the Index: where the page was, as a distance into the Index sheet (the sheet is as tall as its words, the reel's sections are as tall as the screen: a share of the screen height would not bring the page back to the same row when the toolbar has moved) (P5) */
   let ixBack: number | null = null
   const fitCache = new Map<string, Fit>()
@@ -402,7 +402,6 @@ export async function startPhone(host: HTMLElement, cancelled: () => boolean = (
     phase = 'file'; tau = Math.max(tau, OPEN_END); shotIndex = sh.quads.length - 1; busy = false
     v.update(OPEN_END, 'file'); v.settle(); lockScroll(false); syncDom(); kick()   // the file scrolls with the document from here
     v.focusHeading()
-    if (closeAfterOpen !== null) { const play = closeAfterOpen; closeAfterOpen = null; void closeFile(play) }
   }
 
   /** open an entry from where the visitor is (the reel's stop, the Index, a link): its stop picture first when it is not already on screen */
@@ -445,10 +444,37 @@ export async function startPhone(host: HTMLElement, cancelled: () => boolean = (
     return my === flow && !disposed
   }
   async function closeFile(play: boolean) {
-    if (phase === 'opening') { closeAfterOpen = play; return }
+    if (phase === 'opening') { void abortOpen(play); return }
     if (phase !== 'file' || !openId) return
     const id = openId
     if (!(await closeCore(id, { play }))) return
+    await finishFile(id)
+  }
+  /**
+   * Back (the bar's, Esc, the browser's, a swipe) while the open clip is still playing: the open stops where it stands. The picture goes to the reel's stop still over 180 ms
+   * (the related-file grammar), the page layer goes back to the stop in step with it (the open's own animation, run backwards: the marks ride the open's quads back to the stop's,
+   * the panel returns), and no close clip plays: there is nothing to re-encrypt yet. A history gesture (`play` false: iOS has already animated it) swaps at once; so does reduced motion.
+   * The open reached its window? Then it is the normal close. From the Index the Index sheet is back under the same row; after a related-file jump this lands on the reel's stop, not on the file it came from.
+   */
+  async function abortOpen(play: boolean) {
+    const id = openId
+    if (phase !== 'opening' || !id || aborting) return
+    aborting = true
+    ++flow   // the open's own continuation is void from here
+    const ms = play && !bridge.reduced ? 180 : 0
+    const v = curView, tau0 = tau, i0 = shotIndex, t0 = performance.now()
+    const pageBack = new Promise<void>((res) => {
+      const f = (now: number) => {
+        const k = ms ? Math.min(1, (now - t0) / ms) : 1
+        tau = tau0 * (1 - k); shotIndex = i0 * (1 - k)
+        syncDom(); v?.update(tau, 'opening')
+        if (k < 1 && !disposed) requestAnimationFrame(f); else res()
+      }
+      requestAnimationFrame(f)
+    })
+    await Promise.all([stage.abortTo(stillKey(reel[at]), ms), pageBack])
+    aborting = false
+    if (disposed) return
     await finishFile(id)
   }
   /** back on the reel: the stop the visitor came from is under the page again, the focus is where it was */
@@ -563,11 +589,11 @@ export async function startPhone(host: HTMLElement, cancelled: () => boolean = (
 
   /** the in-page "← All files": through history when this shell pushed the entry (so Back and the button agree), plain otherwise */
   function backButton() {
-    if (phase !== 'file' && phase !== 'space') return
+    if (phase !== 'file' && phase !== 'space' && phase !== 'opening') return
     if (pushedByUs()) {
       buttonClose = true
       history.back()
-      setTimeout(() => { if (buttonClose && (phase === 'file' || phase === 'space')) { buttonClose = false; toBrowse(); void closeCurrent(true) } }, 500)
+      setTimeout(() => { if (buttonClose && (phase === 'file' || phase === 'space' || phase === 'opening')) { buttonClose = false; toBrowse(); void closeCurrent(true) } }, 500)
     } else { toBrowse(); void closeCurrent(true) }
   }
   function onPop() {
@@ -656,7 +682,7 @@ export async function startPhone(host: HTMLElement, cancelled: () => boolean = (
   }
   const onVis = () => { if (document.hidden) { stage.suspend(); space?.suspend() } else { stage.resume(); space?.wake(); kick() } }
   const onShow = (e: PageTransitionEvent) => { if (e.persisted) { stage.resync(); if (phase === 'space') void space?.resync(); layout(); preload(); kick() } }
-  const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape' && (phase === 'file' || phase === 'space')) backButton() }
+  const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape' && (phase === 'file' || phase === 'space' || phase === 'opening')) backButton() }
   const mq = matchMedia('(orientation: landscape)')
   // P5: in landscape the notice covers a page that does not scroll; turning upright puts the page back exactly where it was (the same size gives the same pixel, another size the same share)
   let landSaved: { y: number; w: number; h: number } | null = null, portraitY = 0, portraitW = innerWidth, portraitH = innerHeight
