@@ -491,7 +491,9 @@ export async function startPhone(host: HTMLElement, cancelled: () => boolean = (
     cut: () => spaceCut(), go: (id) => void spaceGo(id),
     warmFile: (id) => { if (!m.open[id]) return; void warm(id); void stage.loadStill(windowKey(id)); stage.loadClip(openKey(id)) },
   }
-  async function loadSpace() { if (!space) { const mod = await import('./space/PhoneSpace'); space = new mod.PhoneSpace(spaceHost) } return space }
+  // (one instance, however many callers ask before the chunk has arrived: the cover's warm-up and the door's entry may overlap)
+  let spaceLoad: Promise<PhoneSpace> | null = null
+  const loadSpace = () => (spaceLoad ??= import('./space/PhoneSpace').then((mod) => (space = new mod.PhoneSpace(spaceHost))))
   /** the interior's data and paper are made while the cover is on screen, so the door does not wait for them */
   async function warmSpace() { try { await (await loadSpace()).init() } catch { /* the door will say so */ } }
   async function enterSpace(o: { push: boolean; inputAt?: number }) {
