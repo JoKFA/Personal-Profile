@@ -46,7 +46,7 @@ export interface SpaceLayout { width: number; height: number; cx: number; cy: nu
  *             from one station's plinth to the next: no frames with nothing in them (the lane is straight; each station drifts off it).
  *  introBlurRamp: the intro's motion blur fades in over this much of the intro, so the intro played backwards (the way out) has no blur by the cut, as the forward one has none.
  */
-interface BakeHooks { flightBus?: number; introBlurRamp?: number }
+interface BakeHooks { flightBus?: number; flightBusRamp?: number; flightBusEnd?: number; introBlurRamp?: number }
 const bake = (): BakeHooks | undefined => (LAB ? (window.__lab as unknown as BakeHooks | undefined) : undefined)
 /** What the exterior's last frame looked like, so the interior's first frame can be the same picture. */
 const mix01 = (a: number, b: number, k: number) => a + (b - a) * k
@@ -120,6 +120,8 @@ export async function createSpace(host: Host, quality: Quality, idle: () => Prom
 
   let layout: SpaceLayout = { width: 2, height: 2, cx: 0.29, cy: 0.5, rw: 0.58, rh: 1 }
   let pose: Pose = hubPose({ aspect: 1, rh: 1 }), prevPose: Pose | null = null
+  /** the flight's own pose without the bake's bus bias, for the motion blur (the engine's blur is the flight's, not the bias's) */
+  let blurPose: Pose | null = null, prevBlurPose: Pose | null = null
   let travelFrom: Pose | null = null, travelTo = -1, handoff: Handoff = { glow: 0.28, fov: 24.5, dieFrac: 0.7 }
   let last: SpaceFrame | null = null
   const tuned = { aperture: -1 }
@@ -160,7 +162,7 @@ export async function createSpace(host: Host, quality: Quality, idle: () => Prom
       world.settle(Math.min(1, f.intro / (INTRO.dur * 0.9)))
       world.tint(1 - Math.min(1, f.intro / 1.3)); grade = mix01(introExposure, 1, Math.min(1, f.intro / 1.3))
       world.etch(handoff.glow * (1 - Math.min(1, f.intro / 1.0)) + 0.12, time)
-      travelFrom = null
+      travelFrom = null; blurPose = null
     } else {
       world.extrude(1); world.settle(1); world.tint(0); world.etch(0.12, time); grade = 1
       if (f.travel) {
@@ -168,8 +170,9 @@ export async function createSpace(host: Host, quality: Quality, idle: () => Prom
         // to < 0 is the way out: back to the hub shot the intro ends on
         pose = flightPose(travelFrom, f.travel.to < 0 ? hubPose(reg) : stationPose(f.travel.to, 0, reg), f.travel.k)
         const fb = bake()?.flightBus
-        if (fb) { const k = f.travel.k, w = fb * smooth01(Math.min(1, k * 4)) * smooth01(Math.min(1, (1 - k) * 4)); pose.pos.z *= 1 - w; pose.target.z *= 1 - w }
-      } else { pose = stationPose(f.area, f.p, reg); travelFrom = null; travelTo = -1 }
+        blurPose = clonePose(pose)
+        if (fb) { const k = f.travel.k, r = bake()?.flightBusRamp ?? 3, end = bake()?.flightBusEnd ?? 0.94, w = fb * smooth01(Math.min(1, k * r)) * smooth01(Math.min(1, Math.max(0, (end - k) / (end - 0.74)))); pose.pos.z *= 1 - w; pose.target.z *= 1 - w }
+      } else { pose = stationPose(f.area, f.p, reg); travelFrom = null; travelTo = -1; blurPose = null }
     }
     world.tick(time)
     const fog = fogFor(pose.pos.distanceTo(pose.target)), haze = scene.fog as THREE.Fog
@@ -188,15 +191,17 @@ export async function createSpace(host: Host, quality: Quality, idle: () => Prom
     // the flight blurs along its motion; a held shot is sharp, the floor and the far haze soft
     motion.enabled = false
     if (prevPose && dt > 0) {
-      const v = pose.pos.distanceTo(prevPose.pos) / dt
+      // (the bake's bias moves the camera sideways a little; the blur follows the flight itself)
+      const nowP = blurPose ?? pose, thenP = blurPose && prevBlurPose ? prevBlurPose : prevPose
+      const v = nowP.pos.distanceTo(thenP.pos) / dt
       let k = Math.min(1, Math.max(0, (v - 14) / 90))
       const ramp = bake()?.introBlurRamp
       if (ramp && f.intro < INTRO.dur) k *= smooth01(f.intro / ramp)
-      const dir = new THREE.Vector3().subVectors(pose.pos, prevPose.pos).applyQuaternion(camera.quaternion.clone().invert())
+      const dir = new THREE.Vector3().subVectors(nowP.pos, thenP.pos).applyQuaternion(camera.quaternion.clone().invert())
       motion.enabled = k > 0.02
       motion.uniforms.uDelta.value.set(-dir.x * 0.0011 * k, dir.y * 0.0011 * k).clampLength(0, 0.04)
     }
-    prevPose = clonePose(pose)
+    prevPose = clonePose(pose); prevBlurPose = blurPose ? clonePose(blurPose) : null
     apply(pose, f.compose)
     if (dof) { const u = (dof as unknown as { uniforms: Record<string, { value: number }> }).uniforms; u.focus.value = pose.pos.distanceTo(pose.target); u.aperture.value = tuned.aperture >= 0 ? tuned.aperture : f.intro < INTRO.dur ? 0.00008 + 0.00006 * (f.into >= 0 ? introBlend(f.intro) : 0) : 0.00014; u.maxblur.value = 0.006 }
   }

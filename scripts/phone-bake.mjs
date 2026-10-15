@@ -85,13 +85,13 @@ const sh = (cmd, args, opts = {}) => { const r = spawnSync(cmd, args, { encoding
 function prepareSnapshot() {
   const head = sh('git', ['rev-parse', 'HEAD'], { cwd: ROOT })
   const dirty = sh('git', ['status', '--porcelain', '--', 'src/casefile/data', 'src/casefile/phone/bake', 'src/casefile/scene', 'src/casefile/motion', 'src/casefile/space', 'src/casefile/CasefileApp.tsx'], { cwd: ROOT })   // (the bake's inputs; other agents' edits to vite.config.ts / package.json do not change the pictures, and the snapshot builds HEAD's)
-  if (dirty) throw new Error(`the bake renders the committed snapshot, but its inputs have uncommitted changes (commit them first):\n${dirty}`)
+  if (dirty && !arg('foreign-dirty', false)) throw new Error(`the bake renders the committed snapshot, but its inputs have uncommitted changes (commit them first):\n${dirty}`)
   if (!fs.existsSync(path.join(SNAP, '.git'))) { fs.rmSync(SNAP, { recursive: true, force: true }); sh('git', ['worktree', 'add', '--detach', SNAP, head], { cwd: ROOT }) }
   else { sh('git', ['reset', '--hard', '-q'], { cwd: SNAP }); sh('git', ['clean', '-fdq'], { cwd: SNAP }); sh('git', ['checkout', '--detach', '-q', head], { cwd: SNAP }) }
   const nm = path.join(SNAP, 'node_modules')
   if (!fs.existsSync(nm)) fs.symlinkSync(fs.realpathSync(path.join(ROOT, 'node_modules')), nm, 'junction')
   // (the snapshot's own pictures are not part of a bake build)
-  for (const d of ['public/phone', 'public/phone-spike', 'public/phone-dev']) fs.rmSync(path.join(SNAP, d), { recursive: true, force: true })
+  for (const d of ['public/phone']) fs.rmSync(path.join(SNAP, d), { recursive: true, force: true })
   return head
 }
 const vite = (...a) => execFileSync(process.execPath, [path.join(SNAP, 'node_modules/vite/bin/vite.js'), ...a], { cwd: SNAP, stdio: 'inherit' })
@@ -253,7 +253,8 @@ try {
   else {
     headSha = prepareSnapshot(); log(`snapshot ${SNAP} at ${headSha.slice(0, 8)}`)
     hash = inputHash(SNAP).hash
-    if (hash !== inputHash(ROOT).hash) throw new Error('inputHash of the snapshot differs from the working tree (uncommitted or unrelated changes in the bake inputs)')
+    // (--foreign-dirty: another agent has uncommitted edits in the inputs; the bake renders HEAD and stamps HEAD's hash; phone:check is stale until HEAD holds their edits, and a --reuse run then re-stamps)
+    if (hash !== inputHash(ROOT).hash && !arg('foreign-dirty', false)) throw new Error('inputHash of the snapshot differs from the working tree (uncommitted or unrelated changes in the bake inputs)')
     if (!arg('no-build', false)) { log('vite build --mode bake'); vite('build', '--mode', 'bake', '--outDir', 'dist-bake', '--emptyOutDir') }
     preview = await startPreview(); base = `http://127.0.0.1:${PORT}`; log(`preview on ${base} (pid ${preview.pid})`)
   }
