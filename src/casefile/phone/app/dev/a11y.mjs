@@ -6,7 +6,7 @@ import { launch, until } from './lib.mjs'
 
 const [OUT, ...rest] = process.argv.slice(2)
 const flag = (n, d) => { const a = rest.find((x) => x.startsWith(`--${n}=`)); return a ? a.slice(n.length + 3) : d }
-const PHQ = (process.env.PHQ ?? '&phone-expose').slice(1)   // the bake's manifest by default; PHQ='&phone-dev' selects the temporary P0 one
+const PHQ = (process.env.PHQ ?? '&phone-expose').slice(1)   // the test hooks the build exposes (a build made with VITE_HOOKS=1: see lib.mjs)
 const BASE = flag('base', 'http://127.0.0.1:5194')
 fs.mkdirSync(OUT, { recursive: true })
 const { b, p, cdp, errs } = await launch(390, 664)

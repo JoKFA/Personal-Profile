@@ -1,4 +1,4 @@
-// P2 handoff / sync measurement on the production phone shell (?phone-app&phone-dev). Real time, Chrome, mobile emulation, DPR 3.
+// P2 handoff / sync measurement on the production phone shell (?phone-app&phone-expose, in a VITE_HOOKS=1 build). Real time, Chrome, mobile emulation, DPR 3.
 //   node src/casefile/phone/app/dev/measure.mjs <outDir> [--size=390x664] [--query=&phone-reject] [--tag=name] [--base=http://127.0.0.1:5194]
 // In-page: on every animation frame the visible stage layers are composited on a small canvas over a magenta sentinel (a hole, a black or
 // a white frame is caught); the stage records every presented video frame (index, DOM index) and every handoff.

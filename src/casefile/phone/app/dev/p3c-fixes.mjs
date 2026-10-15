@@ -45,7 +45,7 @@ if (ONLY.includes('scroll')) {
     await p.waitForTimeout(600)
     await toGrid(p); await p.waitForTimeout(250)
     const y0 = await p.evaluate(() => scrollY), mode0 = await p.evaluate(() => window.__phone.space.mode), playing0 = await p.evaluate(() => window.__phone.space.state.playing)
-    const t = Date.now(); await act()
+    await act()
     const s = await sampleScroll(p, 900)
     const to0 = s.find((r) => r[1] <= 1)
     const state = await p.evaluate(() => ({ mode: window.__phone.space.mode, ...window.__phone.space.state }))

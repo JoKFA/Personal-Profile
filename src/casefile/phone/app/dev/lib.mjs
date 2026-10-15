@@ -1,4 +1,8 @@
-// shared by the P2 verification scripts (Playwright, Chrome channel, mobile emulation)
+// shared by the phone shell's verification scripts (Playwright, Chrome channel, mobile emulation)
+// The scripts drive the shell through its test hooks (window.__phone, ?phone-app, ?phone-expose, ?phone-reject), which exist only in the dev server and in a build made with VITE_HOOKS=1.
+// A production build has none of them (src/casefile/flags.ts). Start the target by hand:
+//   dev server:            npx vite --port 5194
+//   a build with hooks:    node scripts/e2e-hooks-server.mjs 4199 dist-hooks        (builds into dist-hooks and serves it with the real CSP on 127.0.0.1:4199)
 import { chromium } from '@playwright/test'
 const GPU = ['--use-angle=d3d11', '--enable-gpu', '--ignore-gpu-blocklist']
 

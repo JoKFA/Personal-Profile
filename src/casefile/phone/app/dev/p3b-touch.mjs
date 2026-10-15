@@ -12,7 +12,7 @@ R.before = await p.evaluate(() => ({ y: scrollY, at: window.__phone.at, stage: w
 await p.screenshot({ path: `${OUT}/restore-before.png` })
 const bb = await p.locator('.ph-go[data-id="X-001"]').boundingBox(); await p.touchscreen.tap(bb.x + bb.width / 2, bb.y + bb.height / 2)
 await until(p, () => window.__phone.phase === 'file'); await p.waitForTimeout(800)
-const st = () => p.evaluate(() => { const f = document.querySelector('.ph-file.on'); const lab = document.querySelector('.ph-barfile'); return { top: Math.round(scrollY), max: document.documentElement.scrollHeight - innerHeight, reelPos: getComputedStyle(document.querySelector('.ph-reel')).position, snap: getComputedStyle(document.documentElement).scrollSnapType, stageHidden: getComputedStyle(document.querySelector('.ph-stagebox')).visibility, label: getComputedStyle(lab).opacity, labelText: lab.textContent, focus: document.activeElement?.className } })
+const st = () => p.evaluate(() => { const lab = document.querySelector('.ph-barfile'); return { top: Math.round(scrollY), max: document.documentElement.scrollHeight - innerHeight, reelPos: getComputedStyle(document.querySelector('.ph-reel')).position, snap: getComputedStyle(document.documentElement).scrollSnapType, stageHidden: getComputedStyle(document.querySelector('.ph-stagebox')).visibility, label: getComputedStyle(lab).opacity, labelText: lab.textContent, focus: document.activeElement?.className } })
 R.atOpen = await st()
 for (let i = 0; i < 3; i++) { await swipe(cdp, W, H, 'down', 0.7); await p.waitForTimeout(500) }
 R.afterThreeSwipes = await st()

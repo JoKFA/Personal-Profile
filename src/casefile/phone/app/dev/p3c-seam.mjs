@@ -1,11 +1,11 @@
 // Debug: what is on screen, frame by frame, at one clip-to-clip seam of the interior (state of every video element and still, per animation frame).
-//   node p3c-seam.mjs [--base=http://127.0.0.1:4199] [--from=intro] [--to=station]
+//   node p3c-seam.mjs [--base=http://127.0.0.1:4199] [--out=dir]
 import fs from 'node:fs'
 import { chromium } from '@playwright/test'
 import { until } from './lib.mjs'
 const rest = process.argv.slice(2)
 const flag = (n, d) => { const a = rest.find((x) => x.startsWith(`--${n}=`)); return a ? a.slice(n.length + 3) : d }
-const BASE = flag('base', 'http://127.0.0.1:4199'), FROM = flag('from', 'intro'), TO = flag('to', 'station')
+const BASE = flag('base', 'http://127.0.0.1:4199')
 const W = 390, H = 664
 const b = await chromium.launch({ channel: 'chrome', args: ['--use-angle=d3d11', '--enable-gpu', '--ignore-gpu-blocklist'] })
 const ctx = await b.newContext({ viewport: { width: W, height: H }, deviceScaleFactor: 2, isMobile: true, hasTouch: true })
@@ -16,7 +16,6 @@ await until(p, () => window.__phone && window.__phone.ready); await p.waitForTim
 await p.touchscreen.tap(W / 2, H * 0.3)
 await p.evaluate(() => {
   window.__log = []; let last = ''
-  const stage = document.querySelector('.ph-stage') || document.body
   const tick = () => {
     const vs = [...document.querySelectorAll('video.ph-vid')].map((v, i) => `${i}:${(v.dataset.key || '').slice(0, 9)}|${v.className.replace('ph-vid', '').trim()}|op${getComputedStyle(v).opacity}|vis${getComputedStyle(v).visibility[0]}|t${v.currentTime.toFixed(2)}`)
     const ims = [...document.querySelectorAll('.ph-still, img.ph-img, .ph-stage img')].filter((e) => +getComputedStyle(e).opacity > 0.01).map((e) => `${(e.dataset.key || e.alt || e.className).toString().slice(0, 14)}@${(+getComputedStyle(e).opacity).toFixed(2)}`)

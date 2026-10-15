@@ -1,4 +1,4 @@
-// P2 handoff / sync measurement on the production phone shell (?phone-app&phone-dev). Real time, Chrome, mobile emulation, DPR 3.
+// P2 handoff / sync measurement on the production phone shell (?phone-app&phone-expose, in a VITE_HOOKS=1 build). Real time, Chrome, mobile emulation, DPR 3.
 //   node src/casefile/phone/app/dev/measure.mjs <outDir> [--size=390x664] [--query=&phone-reject] [--tag=name] [--base=http://127.0.0.1:5194]
 // In-page: on every animation frame the visible stage layers are composited on a small canvas over a magenta sentinel (a hole, a black or
 // a white frame is caught); the stage records every presented video frame (index, DOM index) and every handoff.
@@ -9,7 +9,7 @@ import { launch, swipe, until } from './lib.mjs'
 
 const [OUT, ...rest] = process.argv.slice(2)
 const flag = (n, d) => { const a = rest.find((x) => x.startsWith(`--${n}=`)); return a ? a.slice(n.length + 3) : d }
-const BASE = flag('base', 'http://127.0.0.1:5194'), QUERY = flag('query', ''), TAG = flag('tag', 'run'), STAGE_ONLY = rest.includes('--stageonly'), MARKS_ONLY = rest.includes('--marksonly'), RUNS = Number(flag('runs', 2))
+const BASE = flag('base', 'http://127.0.0.1:5194'), QUERY = flag('query', ''), TAG = flag('tag', 'run'), MARKS_ONLY = rest.includes('--marksonly'), RUNS = Number(flag('runs', 2))
 const PHQ = (process.env.PHQ ?? '&phone-expose').slice(1)
 const [W, H] = flag('size', '390x664').split('x').map(Number)
 fs.mkdirSync(OUT, { recursive: true })
@@ -53,7 +53,6 @@ await until(p, () => window.__phone && window.__phone.ready)
 await p.waitForTimeout(1500)
 // the first touch primes the pool (a real tap on the page, away from any button)
 await p.touchscreen.tap(W / 2, H * 0.4); await p.waitForTimeout(300)
-const API = false
 const rec = []
 // --marksonly: only the four ink marks stay visible (domsync.py reads them); the scenario is then two plain open/close cycles of X-001 through the API
 if (MARKS_ONLY) await p.addStyleTag({ content: '.ph-reel, .ph-bar, .ph-tag, .ph-rule, .ph-file { opacity: 0 !important }' })

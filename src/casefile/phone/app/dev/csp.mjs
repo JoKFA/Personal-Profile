@@ -10,7 +10,7 @@ const [OUT, ...rest] = process.argv.slice(2)
 const flag = (n, d) => { const a = rest.find((x) => x.startsWith(`--${n}=`)); return a ? a.slice(n.length + 3) : d }
 const BASE = flag('base', 'http://127.0.0.1:4197'), QUERY = flag('query', '')
 const W = 390, H = 664
-const PHQ = (process.env.PHQ ?? '&phone-expose').slice(1)   // the bake's manifest by default; PHQ='&phone-dev' selects the temporary P0 one
+const PHQ = (process.env.PHQ ?? '&phone-expose').slice(1)   // the test hooks the build exposes (a build made with VITE_HOOKS=1: see lib.mjs)
 fs.mkdirSync(OUT, { recursive: true })
 const { b, ctx, p, cdp, errs } = await launch(W, H)
 await ctx.addInitScript(() => {

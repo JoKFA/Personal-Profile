@@ -43,7 +43,6 @@ const GPU = ['--use-angle=d3d11', '--enable-gpu', '--ignore-gpu-blocklist']
   await swipe(cdp, W, H); await until(p, () => window.__phone.at === 1 && window.__phone.phase === 'settled'); await p.waitForTimeout(800)
   rep.reduced.afterSwipe = await p.evaluate(() => ({ fades: window.__phone.stage.fades, handoffs: window.__phone.stage.handoffs.map((h) => h.via), mode: window.__phone.mode, videosPlaying: [...document.querySelectorAll('video')].filter((v) => !v.paused).length }))
   await p.locator('.ph-navb[data-go="index"]').tap(); await until(p, (h) => Math.abs(scrollY - 5 * h) < 4, H); await p.waitForTimeout(500)
-  const row = await p.locator('.ph-ix[data-id="ED-02"]').boundingBox().catch(() => null)
   await p.evaluate(() => { const r = document.querySelector('.ph-ix[data-id="ED-02"]').getBoundingClientRect(); scrollBy(0, r.top - innerHeight / 2) }); await p.waitForTimeout(500)
   const bb = await p.locator('.ph-ix[data-id="ED-02"]').boundingBox(); await p.touchscreen.tap(bb.x + bb.width / 2, bb.y + bb.height / 2)
   await until(p, () => window.__phone.phase === 'file', undefined, 30000); await p.waitForTimeout(600)

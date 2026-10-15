@@ -13,7 +13,7 @@ const [W, H] = flag('size', '390x664').split('x').map(Number), TAG = flag('tag',
 fs.mkdirSync(OUT, { recursive: true })
 
 const { b, ctx, p, cdp, errs } = await launch(W, H, { gate: true })
-const shots = [], frames = []
+const frames = []
 cdp.on('Page.screencastFrame', (f) => { frames.push({ ts: f.metadata.timestamp, data: f.data }); void cdp.send('Page.screencastFrameAck', { sessionId: f.sessionId }).catch(() => {}) })
 const csp = []; p.on('console', (m) => { if (/Content Security Policy|securitypolicy/i.test(m.text())) csp.push(m.text().slice(0, 200)) })
 const requests = []; ctx.on('request', (r) => requests.push({ url: r.url().slice(0, 140), type: r.resourceType() }))
@@ -100,7 +100,7 @@ await swipe(cdp, W, H, 'down', 0.5); await p.waitForTimeout(700)
 await p.evaluate((id) => { const r = document.querySelector(`.ph-ix[data-id="${id}"]`).getBoundingClientRect(); scrollBy(0, r.top - innerHeight / 2 + r.height / 2) }, FILE); await p.waitForTimeout(700)
 const beforeY = (await phone()).y, rowTopBefore = await p.evaluate((id) => Math.round(document.querySelector(`.ph-ix[data-id="${id}"]`).getBoundingClientRect().top), FILE)
 const row = await center(`.ph-ix[data-id="${FILE}"]`)
-const slide = []; await p.evaluate(() => { window.__sl = []; const f = () => { window.__sl.push([Math.round(performance.now()), +window.__phone.page.indexSlide.toFixed(3), window.__phone.phase]); if (window.__sl.length < 600) requestAnimationFrame(f) }; requestAnimationFrame(f) })
+await p.evaluate(() => { window.__sl = []; const f = () => { window.__sl.push([Math.round(performance.now()), +window.__phone.page.indexSlide.toFixed(3), window.__phone.phase]); if (window.__sl.length < 600) requestAnimationFrame(f) }; requestAnimationFrame(f) })
 rep.steps.tapRowAt = at(); rep.tapPoint = await p.evaluate(([x, y]) => { const e = document.elementFromPoint(x, y); return { x, y, hit: e ? `${e.className || e.tagName} ${e.closest('[data-id]')?.dataset.id ?? ''}` : null, y0: Math.round(scrollY) } }, [row.x, row.y])
 await tapAt(row.x, row.y)
 try { await until(p, () => window.__phone.phase === 'file', undefined, 20000) } catch (e) { rep.tapFailed = { state: await phone(), hitNow: await p.evaluate(([x, y]) => { const e = document.elementFromPoint(x, y); return e ? `${e.className || e.tagName}` : null }, [row.x, row.y]) }; fs.writeFileSync(path.join(OUT, `e1-${TAG}-FAILED.json`), JSON.stringify(rep, null, 1)); throw e }

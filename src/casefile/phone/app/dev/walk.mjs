@@ -7,7 +7,7 @@ import path from 'node:path'
 
 const [OUT, ...rest] = process.argv.slice(2)
 const flag = (n, d) => { const a = rest.find((x) => x.startsWith(`--${n}=`)); return a ? a.slice(n.length + 3) : d }
-const BASE = flag('base', 'http://127.0.0.1:5194'), QUERY = flag('query', ''), TAGN = flag('tag', ''), REAL = !rest.includes('--dev')   // the bake's public/phone/manifest.json by default; --dev: the temporary P0 manifest
+const BASE = flag('base', 'http://127.0.0.1:5194'), QUERY = flag('query', ''), TAGN = flag('tag', '')
 const SIZES = flag('sizes', '375x548,390x664,390x750,430x740,360x640,412x780,412x860').split(',').map((s) => s.split('x').map(Number))
 fs.mkdirSync(OUT, { recursive: true })
 
@@ -21,7 +21,7 @@ if (import.meta.url === `file:///${process.argv[1].replace(/\\/g, '/')}` || proc
     const log = []
     const shot = async (name) => { await p.screenshot({ path: path.join(dir, `${name}.png`) }); log.push(name) }
     try {
-      await p.goto(`${BASE}/?phone-app${REAL ? '&phone-expose' : '&phone-dev'}${QUERY}`, { waitUntil: 'load' })
+      await p.goto(`${BASE}/?phone-app&phone-expose${QUERY}`, { waitUntil: 'load' })
       await until(p, () => window.__phone && window.__phone.ready)
       await p.waitForTimeout(1300)
       const R = { size: tag, steps: {} }

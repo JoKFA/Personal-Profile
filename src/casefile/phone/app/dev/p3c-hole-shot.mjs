@@ -6,7 +6,7 @@ import { until } from './lib.mjs'
 const OUT = process.argv[2], BASE = 'http://127.0.0.1:4199'
 fs.mkdirSync(OUT, { recursive: true })
 const b = await chromium.launch({ channel: 'chrome', args: ['--use-angle=d3d11', '--enable-gpu', '--ignore-gpu-blocklist'] })
-for (const [W, H] of [[390, 664], [375, 548]]) {
+for (const W of [390, 375]) {
   const ctx = await b.newContext({ viewport: { width: W, height: 1000 }, deviceScaleFactor: 1.5, isMobile: true, hasTouch: true, bypassCSP: true })
   const p = await ctx.newPage(); p.setDefaultTimeout(60000)
   await p.goto(`${BASE}/?phone-app`, { waitUntil: 'load' }); await p.evaluate(() => localStorage.setItem('yw.entry', '1'))
