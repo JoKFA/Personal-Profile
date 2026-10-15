@@ -47,7 +47,9 @@ export class ClipPlayer {
     if (this.stage.mode !== 'clips') return null
     const u = this.urlOf(key); if (!u) return null
     const v = this.stage.pool.assign(key, u, this.busy)
-    if (v) { v.style.visibility = ''; v.style.opacity = '' }
+    // a clip that is loaded to be played later stays hidden until it plays: an element that is not on top still shows its first frame (z-index 1), which a fading
+    // still or a crossfade would let through (the hub's ghost of the next station)
+    if (v && !v.classList.contains('on') && !this.busy.has(v) && this.cur?.v !== v) { v.style.visibility = 'hidden'; v.style.opacity = '' }
     return v
   }
   isReady(key: string) { const v = this.stage.pool.holding(key); return !!v && v.readyState >= 3 }
@@ -157,14 +159,14 @@ export class ClipPlayer {
   }
 
   /** a still goes under the held video, which then fades out: the picture is the still's from here on */
-  async land(key: string): Promise<void> {
+  async land(key: string, ms = FADE_OUT_MS): Promise<void> {
     const st = this.stage
     await st.loadStill(key)
     st.show(key)
     const h = this.held; this.held = null
     if (!h) return
-    h.classList.add('on', 'fade'); h.style.opacity = '0'
-    await new Promise<void>((res) => setTimeout(res, FADE_OUT_MS + 40))
+    h.classList.add('on', 'fade'); if (ms !== FADE_OUT_MS) h.style.transition = `opacity ${ms}ms linear`; h.style.opacity = '0'
+    await new Promise<void>((res) => setTimeout(res, ms + 40))
     this.release(h)
   }
 

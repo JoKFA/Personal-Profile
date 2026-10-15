@@ -2,7 +2,7 @@
 // line; the result and the link to its file; the six areas; the controls and the evidence count; the profile's own body (the shared FileHead and
 // FileBody, stacked); the evidence list with the baked thumbnails. Every word is the desktop's (space/content.ts); this file adds no copy.
 // It reads the show's state from a store (the show writes it only when something the paper shows changes, not every frame).
-import { memo, useSyncExternalStore } from 'react'
+import { memo, useLayoutEffect, useRef, useSyncExternalStore } from 'react'
 import { AREA_CONTENT } from '../../../space/content'
 import { entryById } from '../../../data/entries'
 import { FileBody, FileHead } from '../../../ui/file/FileBody'
@@ -63,6 +63,18 @@ const ProfileBody = memo(function ProfileBody({ actions, visitor, audit }: { act
 export const SpaceSheet = memo(function SpaceSheet({ store, actions, thumbs, visitor, audit }: SheetProps) {
   const k = useSyncExternalStore(store.subscribe, store.get, store.get)
   const A = AREA_CONTENT[k.area]
+  // The result block holds a short reserve until the result is reached (a long blank under the step line reads as a broken page); when the result comes, the block grows
+  // to its words' own height once, and everything under it moves with it on the app's spring (WAAPI: nothing inline for the CSP to mind). The same when it goes back.
+  const res = useRef<HTMLElement>(null), resH = useRef(0)
+  useLayoutEffect(() => {
+    const el = res.current; if (!el) return
+    const now = el.getBoundingClientRect().height, prev = resH.current
+    resH.current = now
+    if (prev > 0 && Math.abs(prev - now) > 4 && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      el.getAnimations().forEach((a) => a.cancel())
+      el.animate([{ height: `${prev}px`, overflow: 'hidden' }, { height: `${now}px`, overflow: 'hidden' }], { duration: 380, easing: 'cubic-bezier(.22,1,.36,1)' })
+    }
+  }, [k.result, A.key])
   return (
     <div className="ph-sp" data-area={A.key} data-playing={k.playing ? '1' : '0'} data-result={k.result ? '1' : '0'}>
       <section className="ph-sp-head" aria-label="This area" key={A.key}>
@@ -77,10 +89,14 @@ export const SpaceSheet = memo(function SpaceSheet({ store, actions, thumbs, vis
             </li>
           ))}
         </ol>
-        <p className="ph-sp-cap" aria-live="polite"><span>{pad(k.step + 1)}</span>{A.steps[k.step]}</p>
+        <p className="ph-sp-cap" aria-live="polite">
+          <span className="ph-sp-capv"><span>{pad(k.step + 1)}</span>{A.steps[k.step]}</span>
+          {/* the four lines stacked unseen in the same cell: the block is as tall as the area's longest line at this width, whichever step is on */}
+          {A.steps.map((t, i) => <span key={i} className="ph-sp-caph" aria-hidden="true"><span>{pad(i + 1)}</span>{t}</span>)}
+        </p>
       </section>
 
-      <section className="ph-sp-result" aria-live="polite" data-on={k.result ? '1' : '0'} key={`r${A.key}`}>
+      <section className="ph-sp-result" ref={res} aria-live="polite" data-on={k.result ? '1' : '0'} key={`r${A.key}`}>
         <p>{A.result}</p>
         <button type="button" className="ph-sp-go" onClick={() => actions.go(A.entry)}><b>{A.link}</b><span aria-hidden="true">→</span></button>
         <span className="ph-sp-kept">✓ Evidence · {A.evidence}</span>

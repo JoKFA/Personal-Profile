@@ -69,10 +69,20 @@ for f in files:
         D = np.linalg.norm(A[:, None, :] - P[None, :, :], axis=2)
         r_, c_ = linear_sum_assignment(D)          # every pip to its own anchor (pips are a subset of the anchors that are on)
         return float(D[r_, c_].mean())
+    def fit_drop1(j):
+        # the same with the one worst pip left out: a picture's own dark mark can look like a pip, and a pip whose anchor is past the screen edge is cut by it
+        if len(P) < 2: return fit(j)
+        best_ = 1e9
+        for d in range(len(P)):
+            Q = np.delete(P, d, axis=0); A = anchors(j)
+            if len(A) < len(Q): continue
+            D = np.linalg.norm(A[:, None, :] - Q[None, :, :], axis=2); r_, c_ = linear_sum_assignment(D)
+            best_ = min(best_, float(D[r_, c_].mean()))
+        return best_
     JS = np.arange(max(0, i - 4), min(st['clip']['frames'] - 1, i + 4) + 1e-9, 0.25)
-    cost = [fit(j) for j in JS]
+    cost = [fit(j) for j in JS]; cost2 = [fit_drop1(j) for j in JS]
     sharp = float(min(curve[max(0, i - 3)], curve[min(len(curve) - 1, i + 3)]) - curve[i])
-    res.append({'k': k, 'i': i, 'js': [float(x) for x in JS], 'cost': [min(c, 99.0) for c in cost], 'pips': len(P), 'match': best[0], 'sharp': sharp, 'f': os.path.basename(f)})
+    res.append({'k': k, 'i': i, 'js': [float(x) for x in JS], 'cost': [min(c, 99.0) for c in cost], 'cost2': [min(c, 99.0) for c in cost2], 'pips': len(P), 'match': best[0], 'sharp': sharp, 'f': os.path.basename(f)})
 import json as _j
 _j.dump(res, open(out + '.samples.json', 'w'))
 print(len(res), 'samples written to', out + '.samples.json')

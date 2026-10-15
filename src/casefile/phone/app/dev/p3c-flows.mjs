@@ -59,6 +59,9 @@ const tapNav = (i) => tapAt(p.locator('.ph-sp-nav button').nth(i))
 const tapStep = (n) => tapAt(p.locator('.ph-sp-steps button').nth(n))
 const tapBtn = (sel, text) => tapAt(p.locator(sel, { hasText: text }).first())
 const top = () => sp(() => scrollTo(0, 0))
+// the visitor has scrolled down to the six areas (a smooth scroll, not a jump); the page itself brings the picture back when a control is used
+const grid = async () => { await sp(() => scrollTo({ top: 420, behavior: 'smooth' })); await p.waitForTimeout(700) }
+const press = (sel, text) => p.locator(sel, text ? { hasText: text } : undefined).first().evaluate((e) => e.click())
 
 // 1. the first visit: the cover's panel, the door, the intro, the tour, stopping on station 6's result
 note('start', await state())
@@ -75,7 +78,7 @@ if (should('tour')) {
 
 // 2. a pick from the result: out + in + station, stopping on its result; then a pick in the middle of a sequence
 if (should('pick')) {
-  await top(); await tapNav(1); note('pick 2 (from the result)')
+  await grid(); await tapNav(1); note('pick 2 (from the result)')
   await waitMode('hub', undefined, 8000); note('hub', await state()); await shot('05-hub')
   await waitMode('station', 1, 12000); note('station 2 (picked)', await state())
   await p.waitForTimeout(1800)
@@ -84,12 +87,12 @@ if (should('pick')) {
 }
 // 3. a step dot seeks and holds; reading pauses; Resume goes on
 if (should('seek')) {
-  await top(); await tapStep(2); await p.waitForFunction(() => window.__phone.space.mode === 'held', null, { timeout: 6000 }); await p.waitForTimeout(500); note('step 3 held', await state()); await shot('06-step3')
+  await grid(); await p.locator('.ph-sp-steps button').nth(2).evaluate((e) => e.click()); await p.waitForFunction(() => window.__phone.space.mode === 'held', null, { timeout: 6000 }); await p.waitForTimeout(500); note('step 3 held', await state()); await shot('06-step3')
   await tapStep(3); await p.waitForTimeout(800); note('step 4 held', await state())
   await tapBtn('.ph-sp-ctl button', 'Replay'); await p.waitForTimeout(1500); note('replay running', await state())
   await sp(() => scrollTo(0, 360)); await p.waitForTimeout(700); note('reading', await state()); await shot('07-reading')
-  await top(); await p.waitForTimeout(300)
-  await tapBtn('.ph-sp-ctl button', 'Resume'); await p.waitForTimeout(900); note('resumed', await state())
+  await p.waitForTimeout(300)
+  await press('.ph-sp-ctl button', 'Resume'); await p.waitForTimeout(900); note('resumed', await state())
 }
 // 4. the exit: back to the cover
 if (should('exit')) {

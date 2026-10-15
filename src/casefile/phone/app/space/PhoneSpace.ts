@@ -4,6 +4,7 @@
 // show's state (which station, which step, what has been produced). No three.js: the words and the pace are space/content.ts and space/station.ts.
 import type { Visitor } from '../../../visitor'
 import type { Pt, Rect, SpaceExit, SpaceManifest, Shot } from '../../manifest'
+import { damp, spring } from '../../../motion/spring'
 import { lerpFit, toScreen, type Fit } from '../fit'
 import type { PageDom, PageLayer } from '../page'
 import type { PhoneManifest } from '../../manifest'
@@ -11,6 +12,7 @@ import type { Stage } from '../stage/stage'
 import { BodyDecrypt } from './decrypt'
 import { ChipLayer } from './chips'
 import { ClipPlayer } from './player'
+import { AREA_CONTENT } from '../../../space/content'
 import { AREAS, K, RESULT_AT, at as tableAt, marksOpacity, pAt, pickSegs, stepOf, tourSegs, quadAt, ridePoints, type Box, type Seg } from './model'
 import type { SheetActions, SheetState, SheetStore } from './SpaceSheet'
 
@@ -33,6 +35,8 @@ export interface SpaceHost {
   cut(): void
   /** `Open X-…`: leave the interior (the exit at 1.5x) and open that file */
   go(id: string): void
+  /** the file a result links to is fetched now (its open clip and window picture), so `Open X-…` does not wait for it */
+  warmFile(id: string): void
 }
 export type Mode = 'idle' | 'door' | 'intro' | 'station' | 'fly' | 'out' | 'in' | 'hub' | 'rest' | 'held' | 'exit'
 
@@ -71,6 +75,10 @@ export class PhoneSpace {
   private trail: SVGSVGElement | null = null
   private off: (() => void)[] = []
   private resultSeen = new Set<number>()
+  /** the app is scrolling the page itself (bringIn): the reading pause is not for that */
+  private autoScroll = 0
+  private barBack = false
+  private cancelScroll: (() => void) | null = null
 
   constructor(host: SpaceHost) {
     this.host = host
@@ -124,11 +132,13 @@ export class PhoneSpace {
       const path = document.createElementNS('http://www.w3.org/2000/svg', 'path'); path.setAttribute('pathLength', '1'); this.trail.appendChild(path)
       this.host.dom.root.appendChild(this.trail)
       // reading the profile pauses the show (as on the desktop): a scroll well away from where the last command left the page
-      const scroll = () => { if (this.cut && Math.abs(scrollY - this.restTop) > 40) this.pauseFor('reading') }
+      const scroll = () => { if (this.cut && !this.autoScroll && Math.abs(scrollY - this.restTop) > 40) this.pauseFor('reading') }
       const rest = () => { this.restTop = scrollY }
       addEventListener('scroll', scroll, { passive: true })
+      const grab = () => this.cancelScroll?.()   // a finger or a wheel takes the page back from the app's own scroll
+      addEventListener('touchstart', grab, { passive: true }); addEventListener('wheel', grab, { passive: true })
       this.sheet.addEventListener('pointerdown', rest, true); this.sheet.addEventListener('keydown', rest, true)
-      this.off.push(() => removeEventListener('scroll', scroll), () => { this.sheet.removeEventListener('pointerdown', rest, true); this.sheet.removeEventListener('keydown', rest, true) })
+      this.off.push(() => removeEventListener('scroll', scroll), () => { removeEventListener('touchstart', grab); removeEventListener('wheel', grab) }, () => { this.sheet.removeEventListener('pointerdown', rest, true); this.sheet.removeEventListener('keydown', rest, true) })
     })())
   }
 
@@ -271,6 +281,7 @@ export class PhoneSpace {
     this.last = { i, pos: this.S.stations[i].clip.frames - 1, end: true, live: true }
     this.chips.update(this.last.pos, true, this.host.winFit(), this.region, true)
     this.retain(i)
+    this.host.warmFile(AREA_CONTENT[i].entry)
     this.setUi({ area: i, step: 3, result: true, playing: false, reason: 'done', tour: false, travelling: false, live: true })
   }
 
@@ -299,6 +310,32 @@ export class PhoneSpace {
   }
 
   // ── the visitor's commands ──
+  /**
+   * Every command that starts motion in the picture (a pick, a step, Replay, Resume) first brings the picture into view: the page scrolls to the top on the app's
+   * spring (about 0.35 s; at once under reduced motion), in parallel with the command's own first move. Skipped when the picture is already 90% in view.
+   * Scrolling down to read (the reading pause) is not touched by this.
+   */
+  private bringIn() {
+    if (!this.cut || scrollY <= 1) return
+    const paper = this.sheet.querySelector<HTMLElement>('.ph-sp')
+    const reg = this.region, h = Math.max(1, reg.b + BAR_GAP - reg.t)
+    const seen = paper ? Math.max(0, Math.min(h, paper.getBoundingClientRect().top - reg.t)) / h : 1
+    if (seen >= 0.9) return
+    this.cancelScroll?.()
+    if (this.host.reduced()) { scrollTo(0, 0); this.restTop = 0; return }
+    const s = spring(scrollY); let last = performance.now(), raf = 0, live = true
+    this.autoScroll++
+    const done = () => { if (!live) return; live = false; cancelAnimationFrame(raf); this.autoScroll--; this.cancelScroll = null; this.restTop = scrollY }
+    this.cancelScroll = done
+    const tick = (now: number) => {
+      if (!live) return
+      damp(s, 0, 14, Math.min(0.05, (now - last) / 1000)); last = now
+      if (s.value < 0.5) { scrollTo(0, 0); done(); return }
+      scrollTo(0, s.value); raf = requestAnimationFrame(tick)
+    }
+    raf = requestAnimationFrame(tick)
+  }
+
   private clipsOk() { return !this.host.reduced() && this.host.stage.mode === 'clips' }
   /** which station the picture is in (for the way out), and how it is on screen */
   private whereNow(): { i: number | null; video: boolean; still: string | null } {
@@ -318,6 +355,7 @@ export class PhoneSpace {
     if (this.mode === 'idle' || this.mode === 'door' || this.mode === 'exit') return
     const token = ++this.token
     const where = this.whereNow()
+    this.bringIn()
     this.player.abort()
     this.setUi({ tour: false, travelling: true, playing: true, reason: '', result: false })
     this.chips.hide(); this.last = null
@@ -339,6 +377,7 @@ export class PhoneSpace {
     const token = ++this.token
     const i = this.area, st = this.S.stations[i]
     const frame = frameOverride ?? st.stepFrames[n]
+    if (frameOverride === undefined) this.bringIn()
     this.player.abort()
     const p = pAt(st, frame)
     this.setUi({ tour: false, playing: false, reason: 'user', step: stepOf(p), result: p >= RESULT_AT })
@@ -362,6 +401,7 @@ export class PhoneSpace {
     const i = this.mode === 'fly' || this.mode === 'in' || this.mode === 'out' || this.mode === 'hub' ? this.area : this.area
     const token = ++this.token
     const fromStill = this.mode === 'rest' ? K.rest(i) : undefined
+    this.bringIn()
     this.player.abort()
     this.setUi({ tour: false, playing: true, reason: '', step: 0, result: false, travelling: false })
     if (!this.clipsOk()) return void this.stillsTo(i, token)
@@ -371,6 +411,7 @@ export class PhoneSpace {
   toggle() {
     const u = this.ui
     if (u.playing) { this.pauseFor('user'); return }
+    this.bringIn()
     if (this.player.playing) { this.player.resume(); this.setUi({ playing: true, reason: '' }); return }
     if (this.mode === 'held' && this.clipsOk()) { void this.resumeHeld(); return }
     void this.replay()
@@ -418,7 +459,7 @@ export class PhoneSpace {
       if (token !== this.token || r === 'aborted') return
       if (r === 'failed') { await this.stillsLeave(token); return }
     } else if (where.video) { await this.player.land(K.hub) }
-    this.mode = 'exit'
+    this.mode = 'exit'; this.barBack = false
     this.chips.hide()
     stage.pin([this.host.coverStill, K.hub])
     await stage.loadStill(this.host.coverStill)
@@ -426,6 +467,42 @@ export class PhoneSpace {
     if (token !== this.token) return
     if (r === 'failed') { await this.stillsLeave(token); return }
     await this.player.land(this.host.coverStill)
+    this.finishLeave()
+  }
+  /**
+   * `Open X-…`: the way out is only out-i (at 1.5x), then a 180 ms crossfade to the target's stop picture, the stage's fit going from the window's to the stop's
+   * with it. No exit to the cover: the related-file path (a file closing into another file) is the grammar, and it is the quicker one.
+   */
+  async leaveToFile(to: string, o: { rate?: number } = {}): Promise<void> {
+    if (this.mode === 'idle') return
+    const token = ++this.token
+    const rate = o.rate ?? 1.5, { stage } = this.host
+    const where = this.whereNow()
+    this.bringIn()
+    this.player.abort()
+    this.chips.hide(); this.last = null
+    this.sheetOut()
+    this.host.page.ownLabel(null, this.host.reduced() ? 0 : 120)
+    this.setUi({ playing: false, reason: '', tour: false })
+    stage.pin([to, this.host.coverStill])
+    const loaded = stage.loadStill(to)
+    if (this.clipsOk() && where.i !== null && this.mode !== 'door') {
+      this.preload(K.out(where.i))
+      const out = pickSegs(this.S, where.i, where.i)[0]
+      const r = await this.runChain([out], token, { land: 'none', from: where.still ?? undefined, crossMs: where.video ? 180 : undefined, rate })
+      if (token !== this.token || r === 'aborted') return
+    }
+    await loaded
+    if (token !== this.token) return
+    this.mode = 'exit'
+    // the fit eases from the window's to the stops' while the picture crossfades (both the video and the stills sit under the one transform)
+    const a = this.host.winFit(), b = this.host.coverFit()
+    const t0 = performance.now(), MS = 180
+    const ease = (now: number) => { const k = Math.min(1, (now - t0) / MS); stage.setFit(lerpFit(a, b, k * k * (3 - 2 * k))); if (k < 1 && token === this.token) requestAnimationFrame(ease) }
+    if (!this.host.reduced()) requestAnimationFrame(ease); else stage.setFit(b)
+    if (this.player.held) await this.player.land(to, MS); else await this.cross(to, MS)
+    if (token !== this.token) return
+    this.host.page.placeMarks(ridePoints(this.host.coverRest(), [], 0), this.host.coverRest(), 0)
     this.finishLeave()
   }
   /** the browser has already animated the way back (a swipe-back, the Back key): no clip, the cover is simply there */
@@ -443,6 +520,7 @@ export class PhoneSpace {
     const cam = tableAt(e.cam, pos)
     this.log('exit', pos)
     if (pos < e.doorFrame) { this.host.stage.setFit(this.host.winFit()); return }
+    if (!this.barBack) { this.barBack = true; this.host.page.setFileBar(false) }   // the bar's words go back at the picture's cut, on the same spring as they came (a crossfade of about 0.2 s)
     this.rideFace(e.quads, pos, cam)
   }
   private finishLeave() {

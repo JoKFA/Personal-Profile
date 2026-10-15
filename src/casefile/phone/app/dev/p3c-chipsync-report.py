@@ -25,6 +25,8 @@ vals, cnt = np.unique(np.round(d * 4) / 4, return_counts=True)
 P('where the best fit lies, j - i to the quarter frame (' + str(len(d)) + ' samples): ' + str(dict(zip(map(float, vals), map(int, cnt)))))
 P(f'  mean {d.mean():+.2f} median {np.median(d):+.2f}   (the page layer leads by half a frame on purpose)')
 P(f'  residual at the designed j = i + 0.5: median {np.median([min(r["cost"][int(np.argmin(abs(np.array(r["js"]) - r["i"] - 0.5)))], 99) for r in sel]):.2f} px')
+ok2 = [r for r in sel if 'cost2' in r and (lambda js, c, i: c[(js >= i - 0.5 - 1e-9) & (js <= i + 1.5 + 1e-9)].min() <= TOL)(np.array(r['js']), np.array(r['cost2']), r['i'])]
+P(f'with the one worst pip left out of the fit (a picture mark taken for a pip, or a pip cut by the screen edge): {len(ok2)} of {len(sel)} within one frame; still no fit: {len(sel) - len(ok2)}')
 byst = collections.Counter(r['k'] for r in bad)
 P(f'failures by station: {dict(byst)}; by pips drawn: {dict(collections.Counter(r["pips"] for r in bad))}')
 if bad:

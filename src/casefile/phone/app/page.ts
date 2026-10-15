@@ -221,10 +221,14 @@ export class PageLayer {
   get slide() { return this.slideS.value }
   setFileBar(on: boolean) { this.barTarget = on ? 1 : 0 }
   /** the bar's label (`<ID>`) is this layer's to show while the interior is open; null gives it back to the file page */
-  ownLabel(text: string | null) {
+  ownLabel(text: string | null, fadeMs = 0) {
     const d = this.dom
     this.ownsLabel = text !== null
-    if (text === null) { d.fileLabel.style.opacity = '0'; d.fileLabel.style.visibility = 'hidden' }
+    if (text === null && fadeMs > 0 && d.fileLabel.style.visibility !== 'hidden') {
+      // the words go out on a short fade (a jump to another file: the next file's label comes in with its own open), not in one frame
+      const a = d.fileLabel.animate([{ opacity: Number(d.fileLabel.style.opacity || 1) }, { opacity: 0 }], { duration: fadeMs, easing: 'linear' })
+      a.onfinish = () => { d.fileLabel.style.opacity = '0'; d.fileLabel.style.visibility = 'hidden' }
+    } else if (text === null) { d.fileLabel.style.opacity = '0'; d.fileLabel.style.visibility = 'hidden' }
     if (text !== null) { d.fileLabel.textContent = ''; const b = document.createElement('b'); b.textContent = text; d.fileLabel.appendChild(b) }
   }
 

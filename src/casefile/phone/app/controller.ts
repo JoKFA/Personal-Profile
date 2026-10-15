@@ -489,6 +489,7 @@ export async function startPhone(host: HTMLElement, cancelled: () => boolean = (
     view: () => view, winFit: () => winFit, coverFit: () => fits[0], coverRest: () => rest(0), coverStill: stillKey('YW-000'),
     reduced: reducedNow, visitor: () => bridge.visitor, audit,
     cut: () => spaceCut(), go: (id) => void spaceGo(id),
+    warmFile: (id) => { if (!m.open[id]) return; void warm(id); void stage.loadStill(windowKey(id)); stage.loadClip(openKey(id)) },
   }
   async function loadSpace() { if (!space) { const mod = await import('./space/PhoneSpace'); space = new mod.PhoneSpace(spaceHost) } return space }
   /** the interior's data and paper are made while the cover is on screen, so the door does not wait for them */
@@ -517,11 +518,11 @@ export async function startPhone(host: HTMLElement, cancelled: () => boolean = (
     space?.sheet.querySelector<HTMLElement>('.ph-sp-title')?.focus({ preventScroll: true })
   }
   /** back to the cover: the way out plays (or, for a back gesture the browser has already animated, the cover is simply there) */
-  async function closeSpace(play: boolean, o: { rate?: number; keep?: boolean } = {}) {
+  async function closeSpace(play: boolean, o: { rate?: number; keep?: boolean; to?: string } = {}) {
     if (phase !== 'space' || !space) return
     busy = true; lockScroll(true)
-    if (scrollY > 0) scrollTo(0, 0)
-    if (play) await space.leave({ rate: o.rate }); else await space.leaveNow()
+    if (scrollY > 0 && !o.to) scrollTo(0, 0)
+    if (play) await (o.to ? space.leaveToFile(o.to, { rate: o.rate }) : space.leave({ rate: o.rate })); else await space.leaveNow()
     if (disposed) return
     finishSpace(!!o.keep)
   }
@@ -540,10 +541,15 @@ export async function startPhone(host: HTMLElement, cancelled: () => boolean = (
   /** `Open X-…` from the interior: the way out at 1.5x, the target's stop picture for 120 ms, then its file (the related-file path) */
   async function spaceGo(id: string) {
     if (phase !== 'space' || !m.open[id]) return
-    void warm(id); void stage.loadStill(windowKey(id)); stage.loadClip(openKey(id))
-    await closeSpace(true, { rate: JUMP_RATE, keep: true })
+    void warm(id); void stage.loadStill(windowKey(id)); stage.loadClip(openKey(id)); stage.loadClip(closeKey(id))
+    // out-i at 1.5x, a 180 ms crossfade to the target's stop picture, then its open clip (no exit to the cover on the way)
+    page.setPlain(id, 1)
+    await closeSpace(true, { rate: JUMP_RATE, keep: true, to: stillKey(id) })
     if (disposed) return
-    openId = id; page.setPlain(id, 1)
+    openId = id
+    // the target's paper comes in with its stop picture (180 ms), not in one frame
+    const pe = dom.panels.get(id)?.el
+    if (pe && !reducedNow()) pe.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 180, easing: 'linear' })
     await crossTo(stillKey(id))
     await Promise.all([stage.buffered(openKey(id), BUFFER_WAIT_MS), stage.stills.ready(windowKey(id))])
     if (disposed) return
