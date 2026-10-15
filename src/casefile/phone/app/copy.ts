@@ -1,5 +1,5 @@
 // Every string the phone shell shows that is not already on the site (plan §8). One table, so a copy change is one edit.
-// 'pending' = shown but awaiting the owner's approval; 'existing' = the site's own words (entries.ts, story.ts).
+// 'approved' = new words the owner approved; 'existing' = the site's own words (entries.ts, story.ts, the desktop file view).
 import { entryById } from '../../data/entries'
 import { DRAWERS } from '../../data/roles'
 import { SELECTED, THESIS } from '../../data/story'
@@ -15,15 +15,15 @@ export const COPY = {
   open: 'Open →', back: '← All files', index: 'Index', contact: 'Contact',
   // approved (plan §8, 10-12)
   hold: 'Hold to verify',
-  // pending (plan §8)
+  // approved (plan §8, 10-14)
   landscape: 'Turn your phone upright to open the archive.',
   keyIssued: (id: string) => `KEY ISSUED · ${id}`,
   /** `FILE <ID> · DRAWER nn · NAME` is the prototype's wording for the open file's eyebrow */
   fileEyebrow: (id: string) => { const lane = entryById.get(id)?.slot.lane ?? 0; return `FILE ${id} · DRAWER ${pad(lane + 1)} · ${DRAWERS[lane].name.toUpperCase()}` },
-  verify: (blocks: number, ok: boolean) => `AES-256-GCM · ${blocks} BLOCKS · TAG ${ok ? 'VERIFIED' : 'MISMATCH'}`,
+  verify: (blocks: number, ok: boolean) => ok ? `AES-256-GCM · ${blocks} BLOCKS · TAG VERIFIED` : 'AES-256-GCM · TAG CHECK FAILED',
 } as const
 
-/** the reticle's tag and the panel's eyebrow, per stop (pending approval) */
+/** the reticle's tag and the panel's eyebrow, per stop (approved 10-14) */
 const TAGS: Record<string, string> = {
   'YW-000': 'FILE YW-000 · PROFILE', 'X-001': '01 / 04 · FILE X-001', 'SR-01': '02 / 04 · RECORD SR-01', 'SR-02': '03 / 04 · RECORD SR-02', 'X-009': '04 / 04 · FILE X-009',
 }

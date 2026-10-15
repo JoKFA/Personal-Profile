@@ -324,8 +324,8 @@ P0 探路 ──▶ 真机检查 ──▶ PM 定数值
 | 状态 | 文案 |
 |---|---|
 | ✅ 已批（10-12） | `Hold to verify` |
-| ⏳ 待批 | 准星标签：`FILE YW-000 · PROFILE`、`01 / 04 · FILE X-001`、`02 / 04 · RECORD SR-01`、`03 / 04 · RECORD SR-02`、`04 / 04 · FILE X-009` |
-| ⏳ 待批 | 开档：`KEY ISSUED · <ID>` |
-| ⏳ 待批 | 眉题：`PROJECT · AI SECURITY · 2025`、`CO-OP · FINANCIAL SERVICES · 2026`、`INTERNSHIP · STARTUP CLOUD · 2025`、`PROJECT · IOT EXPOSURE · 2026`、`PROFILE & EDUCATION` |
+| ✅ 已批（10-14） | 准星标签：`FILE YW-000 · PROFILE`、`01 / 04 · FILE X-001`、`02 / 04 · RECORD SR-01`、`03 / 04 · RECORD SR-02`、`04 / 04 · FILE X-009` |
+| ✅ 已批（10-14） | 开档：`KEY ISSUED · <ID>` |
+| ✅ 已批（10-14） | 眉题：`PROJECT · AI SECURITY · 2025`、`CO-OP · FINANCIAL SERVICES · 2026`、`INTERNSHIP · STARTUP CLOUD · 2025`、`PROJECT · IOT EXPOSURE · 2026`、`PROFILE & EDUCATION` |
 | ✅ 已批（10-12） | 横屏：`Turn your phone upright to open the archive.` |
-| 已有 | `Inside my drive: six areas`、`Enter the archive`、Index 和联系里的全部文字 |
+| 已有 | 档案页眉题 `FILE <ID> · DRAWER nn · <抽屉名>` 和校验行 `AES-256-GCM · n BLOCKS · TAG VERIFIED`（桌面原有；失败时 `TAG CHECK FAILED`）；`Inside my drive: six areas`、`Enter the archive`、Index 和联系里的全部文字 |
