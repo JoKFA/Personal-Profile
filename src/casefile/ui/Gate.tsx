@@ -55,7 +55,7 @@ interface Layout {
   print: { cx: number; cy: number; w: number; h: number }; labelX: number; labelTop: number; capBottom: number
   lat: { cx: number; cy: number; size: number }
 }
-function layout(hold = false, below?: number, tightRow = false): Layout {
+function layout(hold = false, below?: number, tightRow = false, sat = 0, sab = 0): Layout {   // sat, sab: the phone's safe-area insets, top and bottom (P6a)
   const W = innerWidth, H = innerHeight, phone = W < 760, g = Math.max(16, Math.min(56, W * 0.033)), top = Math.max(22, Math.min(48, H * 0.046))
   let print: Layout['print'] = { cx: 0, cy: 0, w: 0, h: 0 }, labelX = 0, labelTop = 0, capBottom = 0, stack = phone, layoutCols = 2, squeezed = false
   if (!phone) {
@@ -71,11 +71,11 @@ function layout(hold = false, below?: number, tightRow = false): Layout {
   if (stack) {
     // top to bottom: name, print, the four readings, the sentence, the way out
     // (the phone's hold line sits between the print's brackets and the readings: 18 px more under the print; `below` is what the page then measures it needs under the print)
-    let y0 = top + 92, cb = H - 84
+    let y0 = sat > 0 ? Math.max(top + 92, sat + 115) : top + 92, cb = H - 84 - sab   // (a notch: the name is 49 px tall under it and the exhibit line 40 px over the print)
     const cols = !phone && W >= 960 ? 4 : 2, rows = cols === 4 ? 112 : 2 * 80, extra = hold ? 18 : 0
     // (a short phone: the head and the foot give up room before the print does: the name is 49 px tall, the exhibit line sits 40 px over the print, the way out is 44 px)
     // (and when even that leaves the print under its usual size, the way out joins the small line's row: the sentence stands on the bottom margin)
-    if (hold && below !== undefined && (tightRow || cb - y0 - below < 170)) { y0 = 97; cb = tightRow ? H - 22 : H - 76; squeezed = true }
+    if (hold && below !== undefined && (tightRow || cb - y0 - below < 170)) { y0 = 97 + sat; cb = (tightRow ? H - 22 : H - 76) - sab; squeezed = true }
     // (a short window may shrink the print below a phone's floor: the readings must stay off the sentence)
     const phFit = clamp(cb - 108 - 16 - rows - 20 - extra - y0, phone ? 170 : 120, Math.min(H * 0.42, W * 1.05))
     // (a phone that cannot hold all of it at the print's usual size gives the print what is left, down to 100 px: nothing may touch the sentence)
@@ -167,8 +167,10 @@ export function Gate({ visitor, reduced, sceneReady, onBuild, onReveal, onStrike
     }
     function rebuild() {
       const dpr = Math.min(2, devicePixelRatio || 1)
-      L = layout(!!PH)
-      if (PH && L.stack) { L = layout(true, below(false)); if (L.tight) L = layout(true, below(true), true) }
+      // the phone's safe areas: the gate's own padding (gate.phone.css), 0 on the desktop
+      const cs = PH ? getComputedStyle(r) : null, sat = cs ? parseFloat(cs.paddingTop) || 0 : 0, sab = cs ? parseFloat(cs.paddingBottom) || 0 : 0
+      L = layout(!!PH, undefined, false, sat, sab)
+      if (PH && L.stack) { L = layout(true, below(false), false, sat, sab); if (L.tight) L = layout(true, below(true), true, sat, sab) }
       cv.width = Math.round(L.W * dpr); cv.height = Math.round(L.H * dpr)
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
       P = buildPrint(hex, L.print); ink = paintPrint(P, dpr, INK); morph = buildMorph(P, L.lat)
@@ -235,7 +237,7 @@ export function Gate({ visitor, reduced, sceneReady, onBuild, onReveal, onStrike
 
     /** The marks' numbers, each on the side of its square where nothing else is: not on another number, a square or one of the brackets' marks (a small print puts the squares close). */
     function placeNumbers() {
-      const NW = 11, NH = 9, plate = 7
+      const NW = 14, NH = 11, plate = 7   // (the numbers are 11 px: nothing on the phone is set smaller)
       const [bx0, by0, bx1, by1] = r.dataset.bracket!.split(',').map(Number)
       const hair = [[bx0 - 3, by0 - 3, bx0 + 17, by0 + 17], [bx1 - 17, by0 - 3, bx1 + 3, by0 + 17], [bx0 - 3, by1 - 17, bx0 + 17, by1 + 3], [bx1 - 17, by1 - 17, bx1 + 3, by1 + 3]]
       const hit = (a: number[], c: number[]) => a[0] < c[2] && a[2] > c[0] && a[1] < c[3] && a[3] > c[1]
@@ -244,16 +246,16 @@ export function Gate({ visitor, reduced, sceneReady, onBuild, onReveal, onStrike
       numPos = P.minutiae.map((m, i) => {
         let best: number[] | null = null
         outer: for (let st = 0; st <= 24; st += 4) {
-          for (const [dx, dy] of [[8 + st, -16 - st], [-19 - st, -16 - st], [8 + st, 7 + st], [-19 - st, 7 + st], [-5.5, -17 - st], [-5.5, 8 + st], [8 + st, -4.5], [-19 - st, -4.5]]) {
+          for (const [dx, dy] of [[8 + st, -(7 + NH) - st], [-(8 + NW) - st, -(7 + NH) - st], [8 + st, 7 + st], [-(8 + NW) - st, 7 + st], [-NW / 2, -(8 + NH) - st], [-NW / 2, 8 + st], [8 + st, -NH / 2], [-(8 + NW) - st, -NH / 2]]) {
             const c = [m.x + dx, m.y + dy, m.x + dx + NW, m.y + dy + NH]
             if (c[0] < 2 || c[2] > L.W - 2 || c[1] < 2) continue
             if (plates.some((q2) => hit(c, q2)) || placed.some((q2) => hit(c, [q2[0] - 1, q2[1] - 1, q2[2] + 1, q2[3] + 1])) || hair.some((q2) => hit(c, q2))) continue
             best = c; break outer
           }
         }
-        best ??= [m.x + 8, m.y - 16, m.x + 8 + NW, m.y - 16 + NH]
+        best ??= [m.x + 8, m.y - 7 - NH, m.x + 8 + NW, m.y - 7]
         placed[i] = best
-        return { x: best[0], y: best[1] + 8 }
+        return { x: best[0], y: best[1] + NH - 1 }
       })
       // (for the tests: each square's centre and each number's box)
       r.dataset.marks = JSON.stringify(P.minutiae.map((m, i) => [m.x, m.y, placed[i][0], placed[i][1], placed[i][2], placed[i][3]].map((v) => Math.round(v * 10) / 10)))
@@ -391,7 +393,7 @@ export function Gate({ visitor, reduced, sceneReady, onBuild, onReveal, onStrike
         ctx.fillStyle = 'rgba(231,228,221,.95)'; ctx.fillRect(m.x - s / 2 - 2, m.y - s / 2 - 2, s + 4, s + 4)
         ctx.strokeStyle = ok > 0 ? (L.stack ? OLIVE : col) : red > 0 ? THREAT : INK; ctx.lineWidth = 1.3; ctx.strokeRect(m.x - s / 2, m.y - s / 2, s, s)
         ctx.fillStyle = ctx.strokeStyle
-        if (L.stack) { ctx.font = '500 9px "JetBrains Mono", monospace'; ctx.fillText(String(i + 1).padStart(2, '0'), PH && numPos[i] ? numPos[i].x : m.x + 7, PH && numPos[i] ? numPos[i].y : m.y - 6) }
+        if (L.stack) { ctx.font = `500 ${PH ? 11 : 9}px "JetBrains Mono", monospace`; ctx.fillText(String(i + 1).padStart(2, '0'), PH && numPos[i] ? numPos[i].x : m.x + 7, PH && numPos[i] ? numPos[i].y : m.y - 6) }
         else ctx.fillRect(m.x - 1, m.y - 1, 2, 2)
         if (!L.phone && red > 0 && ok <= 0) { const rr = 9 + 14 * eout(seg(tt, T.prof + i * 0.14, T.prof + i * 0.14 + 0.7)); ctx.globalAlpha = chrome * (1 - seg(tt, T.prof + i * 0.14, T.prof + i * 0.14 + 0.7)); ctx.strokeStyle = THREAT; ctx.lineWidth = 1; ctx.strokeRect(m.x - rr / 2, m.y - rr / 2, rr, rr) }
         ctx.restore()
