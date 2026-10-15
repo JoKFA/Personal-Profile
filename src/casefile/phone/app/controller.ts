@@ -10,6 +10,7 @@ import type { EnterOptions, EntryBridge } from './gate/entry'
 import { sampleAt } from './clock'
 import { stopCopy } from './copy'
 import type { FileView } from './file/fileview'
+import type { PhoneSpace, SpaceHost } from './space/PhoneSpace'
 import type { Bridge } from './file/FileParts'
 import { BAR, COMPACT_BELOW, lerpFit, panelSpec, rectOn, stopFit, toScreen, visibleRect, windowFit, type Fit } from './fit'
 import { OPEN_END, CLOSE_SPEED, PageLayer, buildPage, makePanel, prepareFile, type PageFrame, type Panel, type Phase, type Pt } from './page'
@@ -129,6 +130,7 @@ export async function startPhone(host: HTMLElement, cancelled: () => boolean = (
     fits = reel.map((id, i) => stopFit(view, m.master, m.stops[id].reticle, tops[i], panels[i]))
     winFit = windowFit(view, m.master)
     fitCache.clear()
+    space?.onResize()
     for (const v of views.values()) void v.then((x) => x.relayout(view, winFit, heightsOf(x.id)))
     syncDom()
   }
@@ -160,6 +162,7 @@ export async function startPhone(host: HTMLElement, cancelled: () => boolean = (
   }
   function syncDom() {
     if (!fits.length) return
+    if (phase === 'space') return   // the interior's own frames place the stage and the reticle
     stage.setFit(currentFit())
     const { pts, anchor } = marksTarget()
     // the reticle belongs to the stops: it leaves with the last one when the Index comes up
@@ -191,6 +194,7 @@ export async function startPhone(host: HTMLElement, cancelled: () => boolean = (
 
   // ── preloading around the current stop ──
   function preload() {
+    if (at === 0 && spaceReady()) void warmSpace()
     const near = [at - 1, at, at + 1].filter((i) => i >= 0 && i < N)
     const keep: string[] = near.map((i) => stillKey(reel[i]))
     const id = reel[at]
@@ -367,6 +371,7 @@ export async function startPhone(host: HTMLElement, cancelled: () => boolean = (
 
   /** open an entry from where the visitor is (the reel's stop, the Index, a link): its stop picture first when it is not already on screen */
   async function enterFile(id: string, o: { push: boolean; inputAt?: number }) {
+    if (id === 'YW-000' && spaceReady()) return enterSpace(o)
     if (!m.open[id] || phase !== 'settled' || busy) return
     busy = true
     origin = { sec: scrollY / view.h, opener: document.activeElement instanceof HTMLElement && document.activeElement !== document.body ? document.activeElement : null }
@@ -439,22 +444,95 @@ export async function startPhone(host: HTMLElement, cancelled: () => boolean = (
     if (disposed) return
     await openCore(id, { push: false, replace: true })
   }
+
+  // ── the profile drive's door and interior (P3c): YW-000 has no open clip; it goes through the door ──
+  let space: PhoneSpace | null = null
+  const reducedNow = () => matchMedia('(prefers-reduced-motion: reduce)').matches
+  const spaceReady = () => !!m.space && !!m.door?.['YW-000']
+  const spaceHost: SpaceHost = {
+    m, stage, page, dom, url,
+    view: () => view, winFit: () => winFit, coverFit: () => fits[0], coverRest: () => rest(0), coverStill: stillKey('YW-000'),
+    reduced: reducedNow, visitor: () => bridge.visitor, audit,
+    cut: () => spaceCut(), go: (id) => void spaceGo(id),
+  }
+  async function loadSpace() { if (!space) { const mod = await import('./space/PhoneSpace'); space = new mod.PhoneSpace(spaceHost) } return space }
+  /** the interior's data and paper are made while the cover is on screen, so the door does not wait for them */
+  async function warmSpace() { try { await (await loadSpace()).init() } catch { /* the door will say so */ } }
+  async function enterSpace(o: { push: boolean; inputAt?: number }) {
+    if (!spaceReady() || phase !== 'settled' || busy) return
+    busy = true
+    origin = { sec: scrollY / view.h, opener: document.activeElement instanceof HTMLElement && document.activeElement !== document.body ? document.activeElement : null }
+    lockScroll(true)
+    const sp = await loadSpace()
+    // the cover's picture first (a cold link, the Index): the door starts from it
+    if (stage.current !== stillKey('YW-000')) await crossTo(stillKey('YW-000'))
+    if (disposed) return
+    openId = 'YW-000'; phase = 'space'; tau = 0; shot = null
+    if (o.push) pushFile('YW-000')
+    page.slideTo(1); kick()
+    record(`${bridge.visitor.id} opened YW-000`)
+    sp.enter().catch((err: unknown) => { console.error('the interior could not be shown', err); void closeSpace(false) })
+  }
+  /** the door has played: the page is the interior's page from here (the reel is out of the flow, the bar is the file bar, the page scrolls) */
+  function spaceCut() {
+    enterFileMode()
+    page.setFileBar(true); page.ownLabel('YW-000')
+    lockScroll(false)
+    busy = false
+    space?.sheet.querySelector<HTMLElement>('.ph-sp-title')?.focus({ preventScroll: true })
+  }
+  /** back to the cover: the way out plays (or, for a back gesture the browser has already animated, the cover is simply there) */
+  async function closeSpace(play: boolean, o: { rate?: number; keep?: boolean } = {}) {
+    if (phase !== 'space' || !space) return
+    busy = true; lockScroll(true)
+    if (scrollY > 0) scrollTo(0, 0)
+    if (play) await space.leave({ rate: o.rate }); else await space.leaveNow()
+    if (disposed) return
+    finishSpace(!!o.keep)
+  }
+  function finishSpace(keep: boolean) {
+    const opener = origin.opener
+    phase = 'settled'; busy = false; openId = null; tau = 0; shot = null
+    page.ownLabel(null)
+    if (keep) return   // a jump to a file: the page stays the file's, the cover's paper stays out until that file is closed
+    leaveFileMode(); page.setFileBar(false); page.slideTo(0)
+    lockScroll(false)
+    syncDom(); preload(); kick()
+    const cp = dom.panels.get(reel[0])
+    goPanelFocus(opener && document.contains(opener) ? opener : cp?.el.querySelector<HTMLElement>('.ph-door') ?? null)
+    pump()
+  }
+  /** `Open X-…` from the interior: the way out at 1.5x, the target's stop picture for 120 ms, then its file (the related-file path) */
+  async function spaceGo(id: string) {
+    if (phase !== 'space' || !m.open[id]) return
+    void warm(id); void stage.loadStill(windowKey(id)); stage.loadClip(openKey(id))
+    await closeSpace(true, { rate: JUMP_RATE, keep: true })
+    if (disposed) return
+    openId = id; page.setPlain(id, 1)
+    await crossTo(stillKey(id))
+    await Promise.all([stage.buffered(openKey(id), BUFFER_WAIT_MS), stage.stills.ready(windowKey(id))])
+    if (disposed) return
+    await openCore(id, { push: false, replace: true })
+  }
+  /** whatever is open, closed: the interior or a file */
+  const closeCurrent = (play: boolean) => (phase === 'space' ? closeSpace(play) : closeFile(play))
+
   /** the in-page "← All files": through history when this shell pushed the entry (so Back and the button agree), plain otherwise */
   function backButton() {
-    if (phase !== 'file') return
+    if (phase !== 'file' && phase !== 'space') return
     if (pushedByUs()) {
       buttonClose = true
       history.back()
-      setTimeout(() => { if (buttonClose && phase === 'file') { buttonClose = false; toBrowse(); void closeFile(true) } }, 500)
-    } else { toBrowse(); void closeFile(true) }
+      setTimeout(() => { if (buttonClose && (phase === 'file' || phase === 'space')) { buttonClose = false; toBrowse(); void closeCurrent(true) } }, 500)
+    } else { toBrowse(); void closeCurrent(true) }
   }
   function onPop() {
     const id = idFromPath(location.pathname)
-    if (!id || !m.open[id]) {
-      if (phase === 'file' || phase === 'opening') { const play = buttonClose; buttonClose = false; void closeFile(play) }
+    if (!id || (!m.open[id] && !(id === 'YW-000' && spaceReady()))) {
+      if (phase === 'file' || phase === 'opening' || phase === 'space') { const play = buttonClose; buttonClose = false; void closeCurrent(play) }
       return
     }
-    if (phase === 'file' || phase === 'opening' || busy) return
+    if (phase === 'file' || phase === 'opening' || phase === 'space' || busy) return
     const ix = reel.indexOf(id)
     if (ix >= 0 && ix !== at) { stage.show(stillKey(id)); at = ix; to = ix; want = ix; scrollTo({ top: ix * view.h, behavior: 'auto' }); syncDom(); preload() }
     void enterFile(id, { push: false })
@@ -530,14 +608,24 @@ export async function startPhone(host: HTMLElement, cancelled: () => boolean = (
     if (fileMode && phase === 'file' && Math.abs(innerWidth - view.w) < 1) return   // Safari's toolbar sliding while a file is read: only the height moves, the page stays as it is
     layout(); kick()
   }
-  const onVis = () => { if (document.hidden) stage.suspend(); else { stage.resume(); kick() } }
-  const onShow = (e: PageTransitionEvent) => { if (e.persisted) { stage.resync(); layout(); preload(); kick() } }
-  const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape' && phase === 'file') backButton() }
+  const onVis = () => { if (document.hidden) { stage.suspend(); space?.suspend() } else { stage.resume(); space?.wake(); kick() } }
+  const onShow = (e: PageTransitionEvent) => { if (e.persisted) { stage.resync(); if (phase === 'space') void space?.resync(); layout(); preload(); kick() } }
+  const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape' && (phase === 'file' || phase === 'space')) backButton() }
   const mq = matchMedia('(orientation: landscape)')
   const onOrient = () => { if (mq.matches) root.setAttribute('data-land', ''); else root.removeAttribute('data-land'); layout() }
   const onClick = (e: MouseEvent) => {
-    const t = (e.target as HTMLElement).closest('button'); if (!t) return
-    if (t.classList.contains('ph-go')) { void enterFile(t.dataset.id!, { push: true, inputAt: e.timeStamp }) }
+    const t = (e.target as HTMLElement).closest('button')
+    if (!t) {
+      // a tap on the cover's drive (inside its reticle, not on the paper or the bar) opens the profile
+      const el = e.target as HTMLElement
+      if (phase === 'settled' && at === 0 && !busy && spaceReady() && !el.closest('a, .ph-sheet, .ph-panel, .ph-bar')) {
+        const r = rest(0)
+        if (e.clientX >= r.x0 && e.clientX <= r.x1 && e.clientY >= r.y0 && e.clientY <= r.y1) void enterSpace({ push: true, inputAt: e.timeStamp })
+      }
+      return
+    }
+    if (t.classList.contains('ph-door')) void enterSpace({ push: true, inputAt: e.timeStamp })
+    else if (t.classList.contains('ph-go')) { void enterFile(t.dataset.id!, { push: true, inputAt: e.timeStamp }) }
     else if (t.classList.contains('ph-tick')) goTo(Number(t.dataset.stop))
     else if (t.dataset.go === 'index' || t.dataset.go === 'contact') goTo(dom.sections.length - 1)
     else if (t.classList.contains('ph-back')) backButton()
@@ -556,7 +644,9 @@ export async function startPhone(host: HTMLElement, cancelled: () => boolean = (
   /** a cold link to a file: every entry that has an open clip opens (on the reel, or from the Index when it is not on the reel) */
   const coldId = route && m.open[route] ? route : null
   const coldIx = coldId ? reel.indexOf(coldId) : -1
-  if (route && !coldId) toBrowse()
+  /** a cold link to the profile goes through the door (it shows the cover first; no entry page, no entrance) */
+  const coldSpace = route === 'YW-000' && spaceReady()
+  if (route && !coldId && !coldSpace) toBrowse()
   at = to = want = coldIx >= 0 ? coldIx : coldId ? N - 1 : 0
   onOrient()
   layout()
@@ -572,7 +662,7 @@ export async function startPhone(host: HTMLElement, cancelled: () => boolean = (
   scrollP = scrollY / view.h; prevY = scrollY
   // a return visit: the paper rises over 0.4 s; a cold link to a file: its panel is already there; a first visit: it waits for the entrance
   if (entry) { rise = 0; riseOn = false } else stage.show(stillKey(first))
-  if (coldId) { page.setPlain(first, 1); rise = 1 } else if (!entry) { rise = 0; riseOn = true }
+  if (coldId || coldSpace) { page.setPlain(first, 1); rise = 1 } else if (!entry) { rise = 0; riseOn = true }
   syncDom()
   root.setAttribute('data-ready', '')
   if (entry) {
@@ -589,7 +679,22 @@ export async function startPhone(host: HTMLElement, cancelled: () => boolean = (
     if (!disposed) void enterFile(coldId, { push: false })
   }
 
+  if (coldSpace) {
+    await warmSpace()
+    if (!disposed) void enterSpace({ push: false })
+  }
+
+  // the cover's panel is a button too (the whole panel opens the profile)
+  const coverPanel = dom.panels.get('YW-000')
+  if (coverPanel && spaceReady()) {
+    const b = document.createElement('button'); b.type = 'button'; b.className = 'ph-door'; b.dataset.id = 'YW-000'
+    b.setAttribute('aria-label', 'Open the profile: six areas of work')
+    Object.assign(b.style, { position: 'absolute', left: '0', top: '0', width: '100%', height: '100%', zIndex: '2', background: 'transparent' })
+    coverPanel.el.appendChild(b)
+  }
+
   const api = {
+    get space() { return space },
     get phase() { return phase }, get at() { return at }, get want() { return want }, get busy() { return busy },
     get mode() { return stage.mode }, get ready() { return root.hasAttribute('data-ready') },
     stage, page, dom, manifest: m, csp, entry: entry?.log, layout: L, get fits() { return fits }, get winFit() { return winFit }, get view() { return view },
@@ -606,7 +711,7 @@ export async function startPhone(host: HTMLElement, cancelled: () => boolean = (
     dispose() {
       disposed = true
       cancelAnimationFrame(raf); clearTimeout(scrollTimer)
-      lockScroll(false); html.classList.remove('ph-filemode')
+      lockScroll(false); html.classList.remove('ph-filemode'); space?.dispose()
       root.removeEventListener('click', onClick)
       for (const t of ['touchend', 'pointerup', 'click']) document.removeEventListener(t, prime)
       removeEventListener('scroll', onScroll); removeEventListener('resize', onResize); visualViewport?.removeEventListener('resize', onResize)

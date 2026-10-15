@@ -1,0 +1,59 @@
+/* The interior on the phone (P3c): the chips over the picture, the trace to the Evidence button, and the paper under the picture. Plain paper and
+   hairlines: no blur, no fade of the paper, no soft shadow (the owner's clarity rule). Text is >= 11 px; ink on paper >= 4.5:1. */
+.ph-sp-chips { position: fixed; inset: 0; z-index: 2; pointer-events: none; overflow: hidden; }
+.ph-sp-leaders { position: absolute; left: 0; top: 0; width: 100%; height: 100%; overflow: visible; }
+.ph-sp-leader { stroke: var(--ink); stroke-width: 1; stroke-opacity: .6; fill: none; }
+.ph-sp-pip { fill: var(--ink); }
+.ph-sp-chip { position: absolute; left: 0; top: 0; width: max-content; max-width: min(236px, calc(100vw - 28px)); padding: 6px 9px 7px; background: var(--bg); box-shadow: inset 0 0 0 1px var(--hair2); color: var(--ink); font: 500 12.5px/1.35 var(--sans); visibility: hidden; opacity: 0; }
+.ph-sp-chip-l { display: block; font: 500 11px/1.3 var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--label); }
+.ph-sp-chip b { display: block; margin-top: 2px; font-weight: 600; }
+.ph-sp-chip[data-tone="alert"] .ph-sp-chip-l { color: #b3350f; }
+.ph-sp-chip[data-tone="ok"] .ph-sp-chip-l { color: var(--acc-text); }
+.ph-sp-trail { position: fixed; inset: 0; width: 100%; height: 100%; z-index: 5; pointer-events: none; overflow: visible; }
+.ph-sp-trail path { fill: none; stroke: var(--glow); stroke-width: 1.5; stroke-dasharray: 1; stroke-dashoffset: 1; opacity: 0; }
+
+/* the paper: starts at the region's bottom (--ph-sp-top), the picture stays behind it, fixed */
+.ph-space { position: relative; z-index: 3; padding-top: var(--ph-sp-top, 435px); pointer-events: none; }
+.ph-space[hidden] { display: none; }
+.ph-space *, .ph-space *::before, .ph-space *::after { box-sizing: border-box; }
+.ph-sp { pointer-events: auto; background: var(--bg); border-top: 1px solid var(--hair); padding: 18px 20px calc(24px + env(safe-area-inset-bottom)); color: var(--ink); font-family: var(--sans); }
+.ph-sp button { font: inherit; color: inherit; background: none; border: 0; padding: 0; margin: 0; cursor: pointer; text-align: inherit; touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+.ph-sp button:focus-visible, .ph-sp a:focus-visible { outline: 1.5px solid var(--acc); outline-offset: 3px; }
+.ph-sp h2, .ph-sp h3, .ph-sp h4, .ph-sp p, .ph-sp ol { margin: 0; padding: 0; }
+.ph-sp-ref { font: 500 11px/1.35 var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--label); }
+.ph-sp-title { margin-top: 8px; font: 780 24px/1.17 var(--sans); letter-spacing: -.015em; outline: none; }
+.ph-sp-steps { list-style: none; display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 16px; }
+.ph-sp-steps button { display: grid; gap: 6px; width: 100%; min-height: 44px; align-content: end; padding-bottom: 4px; font: 500 11px/1 var(--mono); color: var(--label); }
+.ph-sp-steps i { display: block; height: 2px; background: var(--hair2); }
+.ph-sp-steps button[data-state="done"] { color: var(--acc-text); }
+.ph-sp-steps button[data-state="done"] i { background: var(--acc); }
+.ph-sp-steps button[data-state="on"] { color: var(--ink); font-weight: 700; }
+.ph-sp-steps button[data-state="on"] i { background: var(--ink); height: 3px; margin-top: -1px; }
+.ph-sp-cap { margin-top: 10px; font: 400 15px/1.45 var(--sans); color: var(--ink); min-height: 4.4em; }
+.ph-sp-cap span { margin-right: 10px; font: 500 11px/1 var(--mono); letter-spacing: .1em; color: var(--label); }
+.ph-sp-result { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--hair2); display: grid; gap: 10px; }
+.ph-sp-result p { font: 400 15px/1.45 var(--sans); color: var(--ink2); }
+.ph-sp-result[data-on="0"] > * { visibility: hidden; }
+.ph-sp-go { display: flex; justify-content: space-between; align-items: center; gap: 10px; min-height: 48px; padding: 0 14px !important; border: 1px solid var(--hair2) !important; font: 700 12.5px/1.2 var(--sans); letter-spacing: .02em; }
+.ph-sp-go b { font-weight: 700; }
+.ph-sp-kept { font: 500 11px/1.3 var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--acc-text); }
+.ph-sp-nav { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 18px; }
+.ph-sp-nav button { position: relative; display: flex; align-items: baseline; gap: 10px; min-height: 48px; padding: 0 12px !important; border: 1px solid var(--hair2) !important; font: 600 13.5px/1.2 var(--sans); color: var(--ink2); }
+.ph-sp-nav button span { font: 500 11px/1 var(--mono); color: var(--label); }
+.ph-sp-nav button i { position: absolute; right: 10px; top: 50%; width: 7px; height: 7px; margin-top: -3.5px; border: 1.5px solid var(--hair2); border-radius: 50%; }
+.ph-sp-nav button[data-kept="1"] i { background: var(--acc); border-color: var(--acc); }
+.ph-sp-nav button[aria-pressed="true"] { color: var(--ink); border-color: var(--ink) !important; }
+.ph-sp-ctl { display: flex; flex-wrap: wrap; gap: 6px 18px; align-items: center; margin-top: 12px; }
+.ph-sp-ctl button { min-height: 44px; display: inline-flex; align-items: center; gap: 8px; font: 500 11px/1 var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--label); }
+.ph-sp-ev b { color: var(--ink); font-weight: 700; }
+.ph-sp-body.ph-fbody { min-height: 0; margin: 22px -20px 0; padding-top: 22px; border-top: 1px solid var(--hair2); }
+.ph-sp-evidence { margin-top: 28px; padding-top: 18px; border-top: 1px solid var(--hair2); }
+.ph-sp-evh { font: 500 11px/1.3 var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--label); }
+.ph-sp-grid { display: grid; gap: 14px; margin-top: 14px; }
+.ph-sp-cell { display: grid; grid-template-columns: 112px 1fr; gap: 14px; align-items: start; }
+.ph-sp-thumb { width: 112px; min-height: 76px; display: grid; place-items: center; background: var(--bg2); box-shadow: inset 0 0 0 1px var(--hair); font: 200 28px/1 var(--sans); color: var(--label); overflow: hidden; }
+.ph-sp-thumb img { display: block; width: 100%; height: auto; }
+.ph-sp-celll { font: 500 11px/1.3 var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--label); }
+.ph-sp-cell h4 { margin: 4px 0 6px; font: 700 15px/1.25 var(--sans); }
+.ph-sp-cell .ph-sp-go { min-height: 44px; font-size: 12px; }
+.ph-sp-cell[data-kept="0"] .ph-sp-thumb span { opacity: .8; }

@@ -27,7 +27,7 @@ export class VideoPool {
     let pick: HTMLVideoElement | null = null, at = Infinity
     for (const v of this.els) if (!busy.has(v) && (this.used.get(v) ?? 0) < at) { at = this.used.get(v) ?? 0; pick = v }
     if (!pick) return null
-    pick.dataset.key = key; pick.src = url; pick.load(); this.touch(pick)
+    pick.dataset.key = key; pick.src = url; pick.style.visibility = ''; pick.load(); this.touch(pick)   // (the interior's player hides an element it has released: a new clip on it shows)
     return pick
   }
   /** keep these keys, free the elements holding anything else (their buffers go with the source) */

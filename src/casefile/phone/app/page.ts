@@ -4,13 +4,14 @@
 // decrypts when its drive settles and seals again when it leaves; the open file re-keys the same panel.
 import { entryById } from '../../data/entries'
 import { smooth } from '../../motion/waves'
+import { damp, spring } from '../../motion/spring'
 import { Line, blocksOf, canSeal, seal } from '../cipherLine'
 import { COPY, type StopCopy } from './copy'
 import type { Rect } from '../manifest'
 
 /** the open timeline's length (s): closing plays it backwards, 2.2x faster (overlay.ts) */
 export const OPEN_END = 2.0, CLOSE_SPEED = 2.2
-export type Phase = 'settled' | 'panning' | 'opening' | 'file' | 'closing'
+export type Phase = 'settled' | 'panning' | 'opening' | 'file' | 'closing' | 'space'
 
 const el = <K extends keyof HTMLElementTagNameMap>(parent: HTMLElement, tag: K, cls: string, text?: string) => {
   const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; parent.appendChild(e); return e
@@ -154,6 +155,13 @@ export class PageLayer {
   private tagKey: Line
   private placed = false
   private lastKey = ''
+  /** the cover's paper (the thesis sheet above, the one-line panel below) slides out of the door's way: 0 in place, 1 gone; sprung, about 0.35 s */
+  private slideS = spring(0)
+  private slideTarget = 0
+  /** the top bar becomes the file bar (0 = the name and the links, 1 = `← All files`), sprung */
+  private barS = spring(0)
+  private barTarget = 0
+  private ownsLabel = false
   private dom: PageDom
   private ids: string[]
   private keyId = ''
@@ -193,6 +201,17 @@ export class PageLayer {
     d.rule.style.transform = `translate(${anchor.x0 + 10 + 190}px, ${anchor.y1 - 20}px)`
     d.reticle.style.opacity = String(opacity)
     this.placed = true
+  }
+
+  slideTo(t: 0 | 1) { this.slideTarget = t }
+  get slide() { return this.slideS.value }
+  setFileBar(on: boolean) { this.barTarget = on ? 1 : 0 }
+  /** the bar's label (`<ID>`) is this layer's to show while the interior is open; null gives it back to the file page */
+  ownLabel(text: string | null) {
+    const d = this.dom
+    this.ownsLabel = text !== null
+    if (text === null) { d.fileLabel.style.opacity = '0'; d.fileLabel.style.visibility = 'hidden' }
+    if (text !== null) { d.fileLabel.textContent = ''; const b = document.createElement('b'); b.textContent = text; d.fileLabel.appendChild(b) }
   }
 
   update(f: PageFrame): boolean {
@@ -253,11 +272,22 @@ export class PageLayer {
     // the cover's sheet folds away when the profile file is asked for
     if (f.rise >= 1 && (opening || closing)) d.sheet.style.opacity = String(1 - (f.stop === this.ids[0] ? into(0, 0.25) : 0))
     else if (f.rise >= 1 && d.sheet.style.opacity) d.sheet.style.opacity = ''
+    // the cover's paper slides out of the door's way (translate, a property of its own: the rise above uses transform)
+    damp(this.slideS, this.slideTarget, 14, f.dt); damp(this.barS, this.barTarget, 18, f.dt)
+    if (Math.abs(this.slideS.value - this.slideTarget) > 0.002 || Math.abs(this.barS.value - this.barTarget) > 0.002) moving = true
+    else { this.slideS.value = this.slideTarget; this.slideS.velocity = 0; this.barS.value = this.barTarget; this.barS.velocity = 0 }
+    const cp = d.panels.get(this.ids[0])
+    if (this.slideS.value > 0.001) {
+      const sk = this.slideS.value
+      d.sheet.style.translate = `0 ${(-sk * (d.sheet.offsetHeight + 48)).toFixed(1)}px`
+      if (cp) cp.el.style.translate = `0 ${(sk * (cp.el.offsetHeight + 48)).toFixed(1)}px`
+    } else if (d.sheet.style.translate) { d.sheet.style.translate = ''; if (cp) cp.el.style.translate = '' }
     // the bar's name and links make room for the file's own bar
-    const barK = 1 - into(0.02, 0.3)
+    const barK = 1 - Math.max(into(0.02, 0.3), this.barS.value)
     d.brand.style.opacity = d.nav.style.opacity = String(barK)
     d.brand.style.visibility = d.nav.style.visibility = barK < 0.02 ? 'hidden' : 'visible'
-    const backK = into(1.4, 0.3)
+    const backK = Math.max(into(1.4, 0.3), this.barS.value)
+    if (this.ownsLabel) { d.fileLabel.style.opacity = String(this.barS.value); d.fileLabel.style.visibility = this.barS.value < 0.02 ? 'hidden' : 'visible' }
     d.back.style.opacity = String(backK); d.back.style.visibility = backK < 0.02 ? 'hidden' : 'visible'
     return moving
   }
