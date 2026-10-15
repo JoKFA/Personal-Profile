@@ -8,7 +8,7 @@
 // Everything animated is a function of tau or of the app clock; no CSS transition drives anything that must stay in step with the picture.
 import { smooth } from '../../../motion/waves'
 import type { Entry } from '../../../data/types'
-import { Line, blocksOf, canSeal, seal } from '../../cipherLine'
+import { Armer, Line, blocksOf, canSeal, seal } from '../../cipherLine'
 import type { OpenShot } from '../../manifest'
 import type { Fit } from '../fit'
 import { COPY } from '../copy'
@@ -16,6 +16,7 @@ import type { PageDom, Panel } from '../page'
 import type { Stage } from '../stage/stage'
 import type { Bridge } from './FileParts'
 import type { Mounted } from './mount'
+import { Slicer, idleSlot } from '../idle'   // P6b
 
 const ramp = (k: number, a: number, d: number) => smooth((k - a) / d)
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t
@@ -61,6 +62,7 @@ export class FileView {
   private env: FileEnv
   private groups: Group[] = []
   private io: IntersectionObserver | null = null
+  private armer: Armer | null = null   // P6b: the body's strips are made when its groups come near the screen
   private bodyLines: Line[] = []
   private pathLen = 1
   private coreRel = { x: 0.5, y: 0.5 }
@@ -103,16 +105,23 @@ export class FileView {
     this.bodyEl = d('ph-fbody', this.scroller)
     this.bodyEl.classList.toggle('ph-fb--dupsum', e.kind !== 'subject')
     this.bodyEl.classList.toggle('ph-fb--dupnums', (e.numbers?.length ?? 0) <= 3)
+    d('ph-fshield', this.scroller)   // P6b: the tap shield while the page opens or closes
   }
 
   /** Build a file view: the body is mounted and its text sealed, the demo's core is measured. Nothing is visible yet. */
-  static async create(env: FileEnv): Promise<FileView> {
+  static async create(env: FileEnv, sl: Slicer = new Slicer()): Promise<FileView> {   // P6b: built in steps (no task longer than a few frames), the demo's core measured before the body is there
     const v = new FileView(env)
     env.dom.root.appendChild(v.scroller)
     v.layout()
-    v.body = env.mod.mountBody(v.bodyEl, env.entry, env.bridge)
-    await v.sealBody()
-    v.measureCore()
+    await sl.yield()
+    await v.measureCore(sl)
+    v.body = await env.mod.mountBodyAsync(v.bodyEl, env.entry, env.bridge)
+    // the body's parts are cold (not laid out) until sealed; then one part is laid out per step, so that the first frame that draws this page does not do all of it at once
+    const parts = [...v.bodyEl.querySelectorAll<HTMLElement>('.ph-fb-in > *')]
+    for (const p of parts) p.setAttribute('data-cold', '')
+    await sl.yield()
+    await v.sealBody(sl)
+    for (const p of parts) { await sl.yield(); p.removeAttribute('data-cold'); p.getBoundingClientRect() }
     return v
   }
 
@@ -160,22 +169,26 @@ export class FileView {
   }
 
   /** mount the demo once, hidden, to find where its core element sits (as a share of the demo's box), then take it away again */
-  private measureCore() {
+  private async measureCore(sl: Slicer) {
     if (!this.hasDemo) return
     this.demoBox.style.visibility = 'hidden'
-    const m = this.env.mod.mountDemo(this.demoBox, this.env.entry, this.env.bridge)
+    const m = await this.env.mod.mountDemoAsync(this.demoBox, this.env.entry, this.env.bridge)   // P6b: in slices, and the reading of its layout is a step of its own
+    await sl.yield()
     const core = this.demoBox.querySelector<HTMLElement | SVGElement>('[data-core]'), bx = this.demoBox.getBoundingClientRect()
     { const h = Math.ceil((this.demoBox.firstElementChild as HTMLElement | null)?.getBoundingClientRect().height ?? 0); if (h > (parseFloat(this.demoBox.style.minHeight) || 0) + 1) this.demoNeed = Math.max(this.demoNeed, h) }
     if (core && bx.width) { const r = core.getBoundingClientRect(); this.coreRel = { x: clamp((r.left + r.width / 2 - bx.left) / bx.width, 0, 1), y: clamp((r.top + r.height / 2 - bx.top) / bx.height, 0, 1) } }
+    await sl.yield()
     m.unmount(); this.demoBox.style.visibility = ''
     this.layout()
   }
 
   /** the body's lines are made into decrypting lines, sealed under the session key; the verify line is made from what was sealed */
-  private async sealBody() {
+  private async sealBody(sl: Slicer) {
     const { entry: e, panel, dom } = this.env
-    const els = [...this.bodyEl.querySelectorAll<HTMLElement>('[data-redact]')].filter((x) => x.children.length === 0 && x.textContent && getComputedStyle(x).display !== 'none' && !(x.closest('.ph-fb--dupsum') && x.classList.contains('file-sum')))
-    this.bodyLines = els.map((x) => Line.adopt(x))
+    // (the only leaves that are display:none by their own rule are the .file-sum under .ph-fb--dupsum: no style is read here, so the page is not restyled in one go)
+    const els = [...this.bodyEl.querySelectorAll<HTMLElement>('[data-redact]')].filter((x) => x.children.length === 0 && x.textContent && !(x.closest('.ph-fb--dupsum') && x.classList.contains('file-sum')))
+    this.bodyLines = []
+    for (const x of els) { this.bodyLines.push(Line.adopt(x, true)); await sl.tick() }   // (lazy: P6b)
     const unit = (el: HTMLElement) => el.closest<HTMLElement>('.file-tab--stacked, .file-act') ?? el
     const byEl = new Map<HTMLElement, Line[]>()
     els.forEach((x, i) => { const k = unit(x); (byEl.get(k) ?? byEl.set(k, []).get(k)!).push(this.bodyLines[i]) })
@@ -195,7 +208,7 @@ export class FileView {
       await f.verify.ready
     }
     await Promise.all(this.bodyLines.map((l) => l.ready))
-    for (const l of this.bodyLines) l.set(0, 1)
+    for (const l of this.bodyLines) { l.set(0, 1); await sl.tick() }
   }
 
   /** a title that wraps pushes the verify line (and the summary, in the page layer) down by what it adds */
@@ -250,7 +263,7 @@ export class FileView {
     if (!this.settled) return
     this.settled = false
     removeEventListener('scroll', this.onScroll)
-    this.io?.disconnect()
+    this.io?.disconnect(); this.armer?.stop()
     const { dom, stage } = this.env
     if (scrollY > 1) await this.scrollTop(reduced ? 0 : 240)
     stage.box.style.visibility = ''
@@ -293,7 +306,7 @@ export class FileView {
       this.path.setAttribute('stroke-opacity', String(tk > 0 ? 0.9 * (1 - out) : 0))
       const dk = settled(phase) ? 1 : into(BEAT.demo)
       if (tau >= BEAT.demoMount && !this.demo && !this.disposed) this.mountDemo()
-      if (tau < BEAT.demoMount - 0.05 && this.demo && phase === 'closing') this.unmountDemo()
+      // (P6b: the demo is no longer taken down in the middle of the close, which was a task of its own; dispose() does it when the page is gone)
       this.demoBox.style.opacity = String(dk)
       this.demoReady = dk >= 1
     }
@@ -308,7 +321,6 @@ export class FileView {
       this.ro.observe(first)
     }
   }
-  private unmountDemo() { this.ro?.disconnect(); this.ro = null; this.demo?.unmount(); this.demo = null; this.demoReady = false }
 
   // ── the scroll: the sticky label, and the text that decrypts as it first comes into view ──
   private onScroll = () => {
@@ -325,12 +337,19 @@ export class FileView {
   private observe() {
     if (this.io) this.io.disconnect()
     const reduced = this.env.bridge.reduced
+    // P6b: the strips of the groups on the screen now are made at once, the rest of those within a screen below it as they come, between frames
+    this.armer?.stop()
+    if (!reduced) {
+      for (const g of this.groups) if (g.el.getBoundingClientRect().top < innerHeight) for (const l of g.lines) l.arm()
+      this.armer = new Armer(this.groups.filter((g) => !g.started)); this.armer.start()
+    }
     this.io = new IntersectionObserver((list) => {
       for (const it of list) {
         if (!it.isIntersecting) continue
         const g = this.groups.find((x) => x.el === it.target); if (!g || g.started) continue
         g.started = true; this.io?.unobserve(it.target)
         if (reduced) { for (const l of g.lines) l.set(1); continue }
+        for (const l of g.lines) l.arm()   // P6b (a no-op where the strips are already made)
         this.active.push({ g, t0: performance.now() }); this.run()
       }
     }, { rootMargin: '0px 0px -8% 0px', threshold: 0 })
@@ -372,7 +391,7 @@ export class FileView {
     if (this.disposed) return
     this.disposed = true
     cancelAnimationFrame(this.raf); clearTimeout(this.statusTimer)
-    this.io?.disconnect()
+    this.io?.disconnect(); this.armer?.stop()
     removeEventListener('scroll', this.onScroll)
     const { dom, panel, stage } = this.env
     if (this.shown) {
@@ -383,10 +402,12 @@ export class FileView {
       stage.box.style.visibility = ''
     }
     this.setLabel(0); if (this.shown) this.env.dom.fileLabel.textContent = ''
-    this.unmountDemo()
-    this.body?.unmount(); this.body = null
     this.img.removeAttribute('src')
-    this.scroller.remove()
+    // P6b: the page is out of sight at once (it was laid out already: hiding it costs nothing); its DOM and its React trees are taken down in idle moments
+    this.scroller.classList.remove('on', 'opening')
+    const body = this.body, demo = this.demo; this.body = null; this.demo = null; this.demoReady = false
+    this.ro?.disconnect(); this.ro = null
+    void idleSlot(500).then(() => { this.scroller.remove(); return idleSlot(500) }).then(() => { demo?.unmount(); return idleSlot(500) }).then(() => { body?.unmount() })
   }
 }
 

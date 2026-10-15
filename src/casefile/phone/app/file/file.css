@@ -2,10 +2,13 @@
    desktop's rules for the same names (archive.css) are not loaded in the phone shell. Text is >= 11 px; ink on paper is >= 4.5:1. */
 .ph-file { position: fixed; left: 0; top: 0; width: 100%; z-index: 3; overflow-x: clip; visibility: hidden; pointer-events: none; }
 .ph-file.on { position: relative; visibility: visible; }
-.ph-file.on:not(.opening) { pointer-events: auto; }
+.ph-file.on { pointer-events: auto; }
+/* while the file opens or closes nothing in it takes a tap: a shield over it (not `pointer-events` on the page, which is inherited: every element under the page was restyled each time the class changed, 30 to 60 ms on a slow phone) */
+.ph-fshield { position: absolute; left: 0; top: 0; right: 0; bottom: 0; z-index: 20; display: none; }
+.ph-file.opening .ph-fshield { display: block; }
 /* a file is open: the reel is out of the flow (the page is the file, from the top) and its snap does not act */
 html.ph-filemode { scroll-snap-type: none; }
-html.ph-filemode .ph-reel { position: absolute; left: 0; right: 0; top: 0; visibility: hidden; pointer-events: none; }
+html.ph-filemode .ph-reel { position: absolute; left: 0; right: 0; top: 0; content-visibility: hidden; pointer-events: none; }   /* P6b: hidden from sight, focus and readers like display:none, but not laid out again when it comes back */
 .ph-file *, .ph-file *::before, .ph-file *::after { box-sizing: border-box; }
 .ph-fwin { position: relative; width: 100%; overflow: hidden; pointer-events: none; }
 .ph-fwin-img { position: absolute; left: 0; top: 0; display: block; max-width: none; visibility: hidden; -webkit-user-drag: none; user-select: none; }
@@ -13,7 +16,6 @@ html.ph-filemode .ph-reel { position: absolute; left: 0; right: 0; top: 0; visib
 .ph-fwash { position: absolute; left: 0; top: 0; right: 0; background: var(--bg); opacity: 0; }
 .ph-ftrace { position: absolute; left: 0; top: 0; overflow: visible; pointer-events: none; }
 .ph-fdemo { position: absolute; opacity: 0; pointer-events: auto; }
-.ph-file.opening .ph-fdemo { pointer-events: none; }
 .ph-fwin .ph-mk { z-index: 6; }
 .ph-fstatus { position: absolute; left: 20px; right: 20px; bottom: 8px; font: 500 11.5px/1.3 var(--mono); color: var(--ink); opacity: 0; pointer-events: none; z-index: 5; }
 .ph-fstatus.on { opacity: 1; }
@@ -110,3 +112,8 @@ html.ph-filemode .ph-reel { position: absolute; left: 0; right: 0; top: 0; visib
 
 .ph-file .ph-title:focus, .ph-file [tabindex="-1"]:focus { outline: none; }
 .fnd .lbl { display: block; }
+
+/* P6b: the body's sections below the fold are not laid out or painted until they are near the screen (the file's view is built before the tap; its layout is the long part) */
+.ph-fbody .file-tab--stacked, .ph-fbody .file-act { content-visibility: auto; contain-intrinsic-size: auto 420px; }
+/* a part of a page that is built before it is needed is laid out one part at a time: [data-cold] is not laid out until the shell takes the mark off */
+[data-cold] { content-visibility: hidden; }

@@ -8,6 +8,7 @@ import type { OpenShot, Pt as MPt, Rect, Shot } from '../manifest'
 import { closeKey, entranceKey, loadManifest, openKey, panKey, readFlags, stillKey, windowKey } from './assets'
 import type { EnterOptions, EntryBridge } from './gate/entry'
 import { sampleAt } from './clock'
+import { Slicer } from './idle'   // P6b
 import { stopCopy } from './copy'
 import type { FileView } from './file/fileview'
 import { HOOKS } from '../../scene/lab'
@@ -341,15 +342,15 @@ export async function startPhone(host: HTMLElement, cancelled: () => boolean = (
   function enterFileMode() {
     if (fileMode) return
     fileMode = true
-    html.classList.add('ph-filemode'); dom.main.inert = true
+    html.classList.add('ph-filemode')   // P6b: the reel is hidden by `content-visibility` (not inert + visibility: both restyle every element under it, 50 to 70 ms on a slow phone, twice per file)
     scrollTo(0, 0)
   }
   /** back to the reel, in the same task as the picture's last frame: the reel is in the flow again and the page is where it was (at the same share of the screen) */
   function leaveFileMode() {
     if (!fileMode) return
     fileMode = false
-    html.classList.remove('ph-filemode'); dom.main.inert = false
-    layout()
+    html.classList.remove('ph-filemode')
+    if (innerWidth !== view.w || svh() !== view.h) layout()   // P6b: only if the screen changed while the file was read (the same screen gives the same layout)
     const y = ixBack !== null ? Math.max(0, Math.round(dom.ix.sec.offsetTop + ixBack)) : Math.round(origin.sec * view.h); ixBack = null   // P5
     scrollTo(0, y)
     scrollP = y / view.h; prevY = scrollY; dir = 0
@@ -381,6 +382,8 @@ export async function startPhone(host: HTMLElement, cancelled: () => boolean = (
     dom.panels.set(id, p); page.ensure(copy)
     return p
   }
+  /** P6b: the views somebody is waiting for (a tap on Open): their steps follow each other without waiting for idle moments */
+  const hurry = new Set<string>()
   function warm(id: string): Promise<FileView> {
     let v = views.get(id)
     if (!v) {
@@ -388,7 +391,7 @@ export async function startPhone(host: HTMLElement, cancelled: () => boolean = (
         const mods = await loadFile()
         const panel = panelOf(id)
         await prepareFile(dom, id)
-        return mods.fv.FileView.create({ dom, stage, entry: entryById.get(id)!, panel, shot: m.open[id], url, winFit, view, heights: heightsOf(id), bridge, mod: mods.mount })
+        return mods.fv.FileView.create({ dom, stage, entry: entryById.get(id)!, panel, shot: m.open[id], url, winFit, view, heights: heightsOf(id), bridge, mod: mods.mount }, new Slicer(6, () => hurry.has(id)))   // P6b: in steps
       })()
       views.set(id, v)
     }
@@ -419,7 +422,9 @@ export async function startPhone(host: HTMLElement, cancelled: () => boolean = (
     // two frames first: building the file's view and taking the page out of the reel are one long task, and `← All files` must already be coming in (and tappable) when it starts
     await new Promise<void>((res) => { const t = setTimeout(res, 90); requestAnimationFrame(() => requestAnimationFrame(() => { clearTimeout(t); res() })) })
     if (my !== flow || disposed) return
+    hurry.add(id)   // P6b
     const v = await warm(id)
+    hurry.delete(id)   // P6b
     if (my !== flow || disposed) return
     curView = v; enterFileMode(); v.show()
     record(`${bridge.visitor.id} opened ${id}`)
