@@ -90,6 +90,11 @@ export async function startPhone(host: HTMLElement, cancelled: () => boolean = (
   let tops: number[] = [], panels: number[] = []
   const L = { barH: BAR, coverTop: BAR, panelC: 80, panelS: 252, natC: 0, natS: 0, specC: 80, specS: 252 }
   let progTo: number | null = null
+  // P6b: the two media queries the shell asks all the time are read once and kept (asking a MediaQueryList costs a style and layout flush: 50 ms inside one scroll event on a slow phone)
+  const mqLand = matchMedia('(orientation: landscape)'), mqRed = matchMedia('(prefers-reduced-motion: reduce)')
+  let landscapeNow = mqLand.matches, reducedMotion = mqRed.matches
+  const onMq = () => { landscapeNow = mqLand.matches; reducedMotion = mqRed.matches }
+  mqLand.addEventListener('change', onMq); mqRed.addEventListener('change', onMq)
   let buttonClose = false
   let flow = 0
   const views = new Map<string, Promise<FileView>>()
@@ -121,18 +126,23 @@ export async function startPhone(host: HTMLElement, cancelled: () => boolean = (
     if (ixD !== null) { const y = Math.round(dom.ix.sec.offsetTop + ixD); if (Math.abs(y - scrollY) > 1) { scrollTo(0, y); scrollP = y / view.h; prevY = y } }   // P5
     // a short viewport: the panels keep the eyebrow, the title and the Open row (150 px); the summary and the small line are hidden
     if (view.h < COMPACT_BELOW) root.setAttribute('data-compact', ''); else root.removeAttribute('data-compact')
+    page.staleMetrics()   // P6b
     L.barH = Math.max(BAR, dom.bar.offsetHeight)
     L.coverTop = Math.max(L.barH, dom.sheet.offsetHeight)
     L.specC = panelSpec(view.h, true); L.specS = panelSpec(view.h, false)
     // each panel's natural height with no minimum: the fit's panel height is the spec or the tallest content, whichever is more
     let natC = 0, natS = 0
+    // P6b: all the minimums off, all the heights read, all the minimums back (one layout in the middle, not one per panel)
+    const measured: [string, Panel][] = []
     for (const [id, p] of dom.panels) {
       if (p.el.classList.contains('ph-infile')) continue   // (a panel that is the head of an open file is not a stop's)
-      p.el.style.minHeight = '0px'
-      const h = p.el.offsetHeight
-      p.el.style.minHeight = ''
-      if (id === reel[0]) natC = h; else natS = Math.max(natS, h)
+      p.el.style.minHeight = '0px'; measured.push([id, p])
     }
+    const hs = measured.map(([, p]) => p.el.offsetHeight)
+    measured.forEach(([id, p], i) => {
+      p.el.style.minHeight = ''
+      if (id === reel[0]) natC = hs[i]; else natS = Math.max(natS, hs[i])
+    })
     L.natC = natC; L.natS = natS
     L.panelC = Math.max(L.specC, natC); L.panelS = Math.max(L.specS, natS)
     root.style.setProperty('--ph-pc', `${L.panelC}px`); root.style.setProperty('--ph-ps', `${L.panelS}px`)
@@ -189,6 +199,20 @@ export async function startPhone(host: HTMLElement, cancelled: () => boolean = (
 
   // ── the loop: runs only while something moves ──
   let raf = 0, last = 0, scrolling = false
+  /** P6b: runs `fn` once nothing has moved for `ms` (the loop is not running, no pan, no scroll), checked every 150 ms */
+  let quietWait = false
+  function whenQuiet(fn: () => void, ms = 600) {
+    if (quietWait) return
+    quietWait = true
+    let since = 0
+    const tick = () => {
+      if (disposed) return
+      const q = !raf && !busy && phase === 'settled' && !scrolling && !root.hasAttribute('data-entering'), now = performance.now()
+      if (!q) since = 0; else if (!since) since = now
+      if (since && now - since >= ms) { quietWait = false; fn() } else setTimeout(tick, 150)
+    }
+    setTimeout(tick, 150)
+  }
   function frame(now: number) {
     raf = 0
     if (disposed) return
@@ -198,8 +222,8 @@ export async function startPhone(host: HTMLElement, cancelled: () => boolean = (
     // while panning the stop being left seals; once a pan has landed `at` is the new stop and it decrypts
     const moving = page.update(f)
     if (entering && riseOn && root.hasAttribute('data-barwait')) {
-      root.style.setProperty('--ph-bar-a', String(smooth(rise)))
-      if (rise >= 1) { root.removeAttribute('data-barwait'); root.style.removeProperty('--ph-bar-a') }
+      dom.bar.style.setProperty('--ph-bar-a', String(smooth(rise)))   // P6b: on the bar, not the root (a custom property written on the root restyles the whole shell every frame of the rise)
+      if (rise >= 1) { root.removeAttribute('data-barwait'); dom.bar.style.removeProperty('--ph-bar-a') }   // P6b
     }
     syncDom()
     // (waiting for the entrance: nothing moves, so the loop is not run)
@@ -211,7 +235,7 @@ export async function startPhone(host: HTMLElement, cancelled: () => boolean = (
 
   // ── preloading around the current stop ──
   function preload() {
-    if (at === 0 && spaceReady()) void warmSpace()
+    if (at === 0 && spaceReady()) whenQuiet(() => { if (at === 0) void warmSpace() })   // P6b: not while the paper rises or a pan lands
     const near = [at - 1, at, at + 1].filter((i) => i >= 0 && i < N)
     const keep: string[] = near.map((i) => stillKey(reel[i]))
     const id = reel[at]
@@ -308,8 +332,7 @@ export async function startPhone(host: HTMLElement, cancelled: () => boolean = (
     const from = Math.round(scrollP)
     progTo = Math.abs(section - from) > 1 ? section : null
     if (progTo !== null) want = clamp(at, 0, N - 1)
-    const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches
-    scrollTo({ top: y ?? section * view.h, behavior: reduce ? 'auto' : 'smooth' })
+    scrollTo({ top: y ?? section * view.h, behavior: reducedMotion ? 'auto' : 'smooth' })   // P6b
   }
   /** the top bar's Contact: the Index sheet's Contact block, under the bar (P5) */
   function goContact() {
@@ -366,7 +389,7 @@ export async function startPhone(host: HTMLElement, cancelled: () => boolean = (
   let curView: FileView | null = null
   const bridge: Bridge = {
     get visitor() { return (visitor ??= reconVisitor()) },
-    get reduced() { return matchMedia('(prefers-reduced-motion: reduce)').matches },
+    get reduced() { return reducedMotion },   // P6b
     status: (html, ms) => curView?.say(html, ms), record, audit,
     onCapture: () => record(`${(visitor ??= reconVisitor()).id} breached SENTINEL-1`),
     jump: (id) => void jumpTo(id),
@@ -463,7 +486,7 @@ export async function startPhone(host: HTMLElement, cancelled: () => boolean = (
     const my = ++flow
     await v?.beginClose(bridge.reduced)
     if (my !== flow || disposed) return false
-    lockScroll(true); layout()   // (the toolbar may have moved while it was read: the stage is fitted to the screen as it is now)
+    lockScroll(true); if (innerWidth !== view.w || svh() !== view.h) layout()   // (the toolbar may have moved while it was read: the stage is fitted to the screen as it is now; P6b: only if it did)
     if (!o.play || !sh) {
       // a back gesture (iOS already animated it) or no close clip: land on the end state at once
       stage.finish(); stage.show(stillKey(id)); phase = 'closing'; tau = 0
@@ -525,7 +548,8 @@ export async function startPhone(host: HTMLElement, cancelled: () => boolean = (
     dropViews([])
     leaveFileMode(); page.showBack(false); page.setFileBar(false); page.slideTo(0); page.slideIndex(0)   // P5: (the Index sheet, if the file came from it, slides back in)
     lockScroll(false)
-    syncDom(); preload(); kick()
+    syncDom(); kick()
+    requestAnimationFrame(() => requestAnimationFrame(() => { if (!disposed) preload() }))   // P6b: the stills and clips for this stop are asked for two frames later (the close's last frame is already heavy)
     const back = opener && document.contains(opener) ? opener : dom.panels.get(reel[at])?.open ?? null
     goPanelFocus(back)
     pump()
@@ -546,7 +570,7 @@ export async function startPhone(host: HTMLElement, cancelled: () => boolean = (
 
   // ── the profile drive's door and interior (P3c): YW-000 has no open clip; it goes through the door ──
   let space: PhoneSpace | null = null
-  const reducedNow = () => matchMedia('(prefers-reduced-motion: reduce)').matches
+  const reducedNow = () => reducedMotion   // P6b
   const spaceReady = () => !!m.space && !!m.door?.['YW-000']
   const spaceHost: SpaceHost = {
     m, stage, page, dom, url,
@@ -713,7 +737,7 @@ export async function startPhone(host: HTMLElement, cancelled: () => boolean = (
   const prime = () => stage.prime()
   const onResize = () => {
     if (innerWidth === view.w && svh() === view.h) return   // P6a: only the toolbar moved: the layout is the small viewport's and stays
-    if (mq.matches) return   // P5: in landscape the page is not laid out again (the notice covers it; turning back finds it as it was)
+    if (landscapeNow) return   // P5: in landscape the page is not laid out again (the notice covers it; turning back finds it as it was)
     if (visualViewport && visualViewport.scale > 1.01) return
     if (fileMode && phase === 'file' && Math.abs(innerWidth - view.w) < 1) return   // Safari's toolbar sliding while a file is read: only the height moves, the page stays as it is
     layout(); kick()
@@ -724,9 +748,10 @@ export async function startPhone(host: HTMLElement, cancelled: () => boolean = (
   const mq = matchMedia('(orientation: landscape)')
   // P5: in landscape the notice covers a page that does not scroll; turning upright puts the page back exactly where it was (the same size gives the same pixel, another size the same share)
   let landSaved: { y: number; w: number; h: number } | null = null, portraitY = 0, portraitW = innerWidth, portraitH = innerHeight
-  const trackY = () => { if (!mq.matches) { portraitY = scrollY; portraitW = view.w; portraitH = view.h } }
+  const trackY = () => { if (!landscapeNow) { portraitY = scrollY; portraitW = view.w; portraitH = view.h } }
   addEventListener('scroll', trackY, { passive: true })
   const onOrient = () => {
+    landscapeNow = mq.matches
     if (mq.matches) {
       landSaved ??= { y: portraitY, w: portraitW, h: portraitH }
       root.setAttribute('data-land', ''); html.classList.add('ph-landscape')

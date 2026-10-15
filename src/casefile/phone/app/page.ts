@@ -171,7 +171,12 @@ export class PageLayer {
   private ixTarget = 0
   private mqReduced = typeof matchMedia === 'function' ? matchMedia('(prefers-reduced-motion: reduce)') : null
   /** reduced motion: nothing slides, nothing is scrambled on the way in (P5) */
-  get reduced() { return !!this.mqReduced?.matches }
+  /** P6b: the cover's sheet and panel heights while the cover slides away (null: to be read) */
+  private slideH: [number, number] | null = null
+  /** the screen changed: the heights are read again */
+  staleMetrics() { this.slideH = null }
+  private reducedNow = !!this.mqReduced?.matches   // P6b: kept (a MediaQueryList read flushes style and layout)
+  get reduced() { return this.reducedNow }
   private dom: PageDom
   private ids: string[]
   private keyId = ''
@@ -179,6 +184,7 @@ export class PageLayer {
   constructor(dom: PageDom, stops: StopCopy[]) {
     this.dom = dom
     this.ids = stops.map((s) => s.id)
+    this.mqReduced?.addEventListener('change', () => { this.reducedNow = !!this.mqReduced?.matches })   // P6b
     for (const s of stops) { this.plain[s.id] = 0; const l = new Line(dom.tag, '', s.tag); dom.lines.push(l); this.tags.set(s.id, l) }
     this.tagKey = new Line(dom.tag, '', COPY.keyIssued('X-001')); dom.lines.push(this.tagKey)
   }
@@ -316,9 +322,11 @@ export class PageLayer {
     const cp = d.panels.get(this.ids[0])
     if (this.slideS.value > 0.001) {
       const sk = this.slideS.value
-      d.sheet.style.translate = `0 ${(-sk * (d.sheet.offsetHeight + 48)).toFixed(1)}px`
-      if (cp) cp.el.style.translate = `0 ${(sk * (cp.el.offsetHeight + 48)).toFixed(1)}px`
-    } else if (d.sheet.style.translate) { d.sheet.style.translate = ''; if (cp) cp.el.style.translate = '' }
+      // P6b: the two heights are read once per slide, not every frame (while a file or the interior is up the reel is not rendered: a read in it forces its layout again and again)
+      if (this.slideH === null) this.slideH = [d.sheet.offsetHeight, cp ? cp.el.offsetHeight : 0]
+      d.sheet.style.translate = `0 ${(-sk * (this.slideH[0] + 48)).toFixed(1)}px`
+      if (cp) cp.el.style.translate = `0 ${(sk * (this.slideH[1] + 48)).toFixed(1)}px`
+    } else { this.slideH = null; if (d.sheet.style.translate) { d.sheet.style.translate = ''; if (cp) cp.el.style.translate = '' } }
     // the bar's name and links make room for the file's own bar
     const backIn = Math.min(1, this.backS.value * 2), backOut = Math.max(0, (this.backS.value - 0.5) * 2)   // (the name and links are gone by the time the control starts to come in)
     const barK = 1 - Math.max(into(0.02, 0.3), this.barS.value, backIn)
