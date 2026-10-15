@@ -114,6 +114,8 @@ export class Stage {
     }
   }
   private refused() { this.mode = 'stills'; this.rejects++ }
+  /** reduced motion: stills and crossfades only (no clip is fetched or played); back to clips if it is turned off and play() was never refused (P5) */
+  setReduced(on: boolean) { if (on) this.mode = 'stills'; else if (!this.rejects) this.mode = 'clips' }
 
   /** run one step: a clip when there is one buffered and playable, otherwise a crossfade */
   async run(spec: StepSpec): Promise<'clip' | 'fade'> {

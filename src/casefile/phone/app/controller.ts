@@ -96,6 +96,8 @@ export async function startPhone(host: HTMLElement, cancelled: () => boolean = (
   let fileMode = false
   /** a close was asked for while the file was still opening */
   let closeAfterOpen: boolean | null = null
+  /** a file opened from the Index: where the page was, as a distance into the Index sheet (the sheet is as tall as its words, the reel's sections are as tall as the screen: a share of the screen height would not bring the page back to the same row when the toolbar has moved) (P5) */
+  let ixBack: number | null = null
   const fitCache = new Map<string, Fit>()
 
   const stopOf = (i: number) => m.stops[reel[i]]
@@ -108,7 +110,10 @@ export async function startPhone(host: HTMLElement, cancelled: () => boolean = (
   // ── layout: the fit for every stop on this screen (plan §2.1) ──
   function layout() {
     view = { w: innerWidth, h: innerHeight }
+    // P5: the Index sheet starts after five screens, so a change of the screen's height (the toolbar sliding) moves it: the page keeps its distance into the sheet
+    const ixD = !fileMode && dom.ix.sec.offsetTop > 0 && scrollY >= dom.ix.sec.offsetTop - 1 ? scrollY - dom.ix.sec.offsetTop : null
     root.style.setProperty('--ph-h', `${view.h}px`)
+    if (ixD !== null) { const y = Math.round(dom.ix.sec.offsetTop + ixD); if (Math.abs(y - scrollY) > 1) { scrollTo(0, y); scrollP = y / view.h; prevY = y } }   // P5
     // a short viewport: the panels keep the eyebrow, the title and the Open row (150 px); the summary and the small line are hidden
     if (view.h < COMPACT_BELOW) root.setAttribute('data-compact', ''); else root.removeAttribute('data-compact')
     L.barH = Math.max(BAR, dom.bar.offsetHeight)
@@ -247,6 +252,7 @@ export async function startPhone(host: HTMLElement, cancelled: () => boolean = (
   }
   function onScrollEnd() {
     scrolling = false; dir = 0
+    html.classList.remove('ph-nosnap')   // P5
     scrollP = scrollY / view.h
     if (phase === 'settled' || phase === 'panning') {
       // the scroll has stopped (no event for 140 ms): a programmatic one has arrived, or was cut short by the finger
@@ -258,14 +264,33 @@ export async function startPhone(host: HTMLElement, cancelled: () => boolean = (
     kick()
   }
   /** a tick, or Index/Contact: scroll to a section. Further than one section away, the stage cross-fades once to the end (not a pan per section). */
-  function goTo(section: number) {
+  function goTo(section: number, y?: number) {   // P5: `y`: a place inside the section (Contact, in the Index sheet)
     section = clamp(section, 0, dom.sections.length - 1)
     if (phase !== 'settled' && phase !== 'panning') return
     const from = Math.round(scrollP)
     progTo = Math.abs(section - from) > 1 ? section : null
     if (progTo !== null) want = clamp(at, 0, N - 1)
     const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches
-    scrollTo({ top: section * view.h, behavior: reduce ? 'auto' : 'smooth' })
+    scrollTo({ top: y ?? section * view.h, behavior: reduce ? 'auto' : 'smooth' })
+  }
+  /** the top bar's Contact: the Index sheet's Contact block, under the bar (P5) */
+  function goContact() {
+    const y = Math.max(0, dom.ix.contact.getBoundingClientRect().top + scrollY - L.barH - 12)
+    // (the Index's start is a snap stop that a programmatic scroll from far above would end at: snapping is off until it has arrived)
+    html.classList.add('ph-nosnap'); setTimeout(() => html.classList.remove('ph-nosnap'), 2500)
+    goTo(dom.sections.length - 1, y)
+  }
+  /** a row of the Index: the sheet slides down out of the way on the page's spring (~0.3 s), the entry's stop picture is shown (120 ms), its open clip plays (enterFile); the profile goes through the door (P5) */
+  function openFromIndex(btn: HTMLButtonElement, e: MouseEvent) {
+    const id = btn.dataset.id!
+    // a tap while the stage is still finishing a step (a pan that was cut short by the scroll) waits for it, up to 1.5 s, rather than being lost
+    if (phase !== 'settled' || busy) { const t0 = performance.now(); const again = () => { if (disposed || performance.now() - t0 > 1500) return; if (phase === 'settled' && !busy) openFromIndex(btn, e); else requestAnimationFrame(again) }; if (phase === 'settled' || phase === 'panning' || phase === 'opening') requestAnimationFrame(again); return }
+    if (id === 'YW-000' ? !spaceReady() : !m.open[id]) return
+    btn.focus({ preventScroll: true })   // (iOS does not focus a tapped button: the close hands the focus back to this row)
+    ixBack = scrollY - dom.ix.sec.offsetTop
+    page.slideIndex(1); kick()
+    void enterFile(id, { push: true, inputAt: e.timeStamp })
+    if (!busy) { ixBack = null; page.slideIndex(0) }   // (it did not start)
   }
 
   // ── open / close ──
@@ -288,7 +313,7 @@ export async function startPhone(host: HTMLElement, cancelled: () => boolean = (
     fileMode = false
     html.classList.remove('ph-filemode'); dom.main.inert = false
     layout()
-    const y = Math.round(origin.sec * view.h)
+    const y = ixBack !== null ? Math.max(0, Math.round(dom.ix.sec.offsetTop + ixBack)) : Math.round(origin.sec * view.h); ixBack = null   // P5
     scrollTo(0, y)
     scrollP = y / view.h; prevY = scrollY; dir = 0
   }
@@ -427,7 +452,7 @@ export async function startPhone(host: HTMLElement, cancelled: () => boolean = (
     lockScroll(false)
     syncDom(); preload(); kick()
     const back = opener && document.contains(opener) ? opener : dom.panels.get(reel[at])?.open ?? null
-    leaveFileMode()
+    leaveFileMode(); page.slideIndex(0)   // P5: (the Index sheet, if the file came from it, slides back in)
     goPanelFocus(back)
     pump()
   }
@@ -495,7 +520,7 @@ export async function startPhone(host: HTMLElement, cancelled: () => boolean = (
     phase = 'settled'; busy = false; openId = null; tau = 0; shot = null
     page.ownLabel(null)
     if (keep) return   // a jump to a file: the page stays the file's, the cover's paper stays out until that file is closed
-    leaveFileMode(); page.setFileBar(false); page.slideTo(0)
+    leaveFileMode(); page.setFileBar(false); page.slideTo(0); page.slideIndex(0)   // P5: (the Index sheet, if the file came from it, slides back in)
     lockScroll(false)
     syncDom(); preload(); kick()
     const cp = dom.panels.get(reel[0])
@@ -595,7 +620,7 @@ export async function startPhone(host: HTMLElement, cancelled: () => boolean = (
       if (disposed) return
       lg.coverAt = performance.now()
       stage.show(cover)
-      root.removeAttribute('data-entering'); riseOn = true; document.documentElement.classList.remove('ph-entry'); kick()
+      root.removeAttribute('data-entering'); root.inert = false; riseOn = true; document.documentElement.classList.remove('ph-entry'); kick()   // P5: the page is reachable again
       if (via === 'fade') stage.pool.release(new Set())   // (the entrance was given up on: stop fetching it)
       preload()
     })
@@ -604,6 +629,7 @@ export async function startPhone(host: HTMLElement, cancelled: () => boolean = (
   // ── listeners ──
   const prime = () => stage.prime()
   const onResize = () => {
+    if (mq.matches) return   // P5: in landscape the page is not laid out again (the notice covers it; turning back finds it as it was)
     if (visualViewport && visualViewport.scale > 1.01) return
     if (fileMode && phase === 'file' && Math.abs(innerWidth - view.w) < 1) return   // Safari's toolbar sliding while a file is read: only the height moves, the page stays as it is
     layout(); kick()
@@ -612,7 +638,24 @@ export async function startPhone(host: HTMLElement, cancelled: () => boolean = (
   const onShow = (e: PageTransitionEvent) => { if (e.persisted) { stage.resync(); if (phase === 'space') void space?.resync(); layout(); preload(); kick() } }
   const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape' && (phase === 'file' || phase === 'space')) backButton() }
   const mq = matchMedia('(orientation: landscape)')
-  const onOrient = () => { if (mq.matches) root.setAttribute('data-land', ''); else root.removeAttribute('data-land'); layout() }
+  // P5: in landscape the notice covers a page that does not scroll; turning upright puts the page back exactly where it was (the same size gives the same pixel, another size the same share)
+  let landSaved: { y: number; w: number; h: number } | null = null, portraitY = 0, portraitW = innerWidth, portraitH = innerHeight
+  const trackY = () => { if (!mq.matches) { portraitY = scrollY; portraitW = view.w; portraitH = view.h } }
+  addEventListener('scroll', trackY, { passive: true })
+  const onOrient = () => {
+    if (mq.matches) {
+      landSaved ??= { y: portraitY, w: portraitW, h: portraitH }
+      root.setAttribute('data-land', ''); html.classList.add('ph-landscape')
+    } else {
+      root.removeAttribute('data-land'); html.classList.remove('ph-landscape')
+    }
+    layout()
+    if (!mq.matches && landSaved) {
+      const s = landSaved; landSaved = null
+      const back = () => { const y = Math.abs(view.w - s.w) < 2 && Math.abs(view.h - s.h) < 2 ? s.y : s.y / s.h * view.h; scrollTo(0, Math.round(y)); scrollP = scrollY / view.h; prevY = scrollY }
+      back(); setTimeout(() => { if (!mq.matches && !disposed) { layout(); back() } }, 160)
+    }
+  }
   const onClick = (e: MouseEvent) => {
     const t = (e.target as HTMLElement).closest('button')
     if (!t) {
@@ -627,7 +670,9 @@ export async function startPhone(host: HTMLElement, cancelled: () => boolean = (
     if (t.classList.contains('ph-door')) void enterSpace({ push: true, inputAt: e.timeStamp })
     else if (t.classList.contains('ph-go')) { void enterFile(t.dataset.id!, { push: true, inputAt: e.timeStamp }) }
     else if (t.classList.contains('ph-tick')) goTo(Number(t.dataset.stop))
-    else if (t.dataset.go === 'index' || t.dataset.go === 'contact') goTo(dom.sections.length - 1)
+    else if (t.dataset.go === 'index') goTo(dom.sections.length - 1)
+    else if (t.dataset.go === 'contact') goContact()   // P5
+    else if (t.classList.contains('ph-ix')) openFromIndex(t as HTMLButtonElement, e)   // P5
     else if (t.classList.contains('ph-back')) backButton()
   }
   root.addEventListener('click', onClick)
@@ -637,6 +682,9 @@ export async function startPhone(host: HTMLElement, cancelled: () => boolean = (
   addEventListener('popstate', onPop); addEventListener('pageshow', onShow); addEventListener('keydown', onKey)
   document.addEventListener('visibilitychange', onVis)
   mq.addEventListener('change', onOrient)
+  const mqR = matchMedia('(prefers-reduced-motion: reduce)')   // P5: reduced motion is stills and crossfades everywhere
+  const onReduced = () => { stage.setReduced(mqR.matches); kick() }
+  mqR.addEventListener('change', onReduced); stage.setReduced(mqR.matches)
   if ('scrollRestoration' in history) history.scrollRestoration = 'manual'
 
   // ── start ──
@@ -652,7 +700,7 @@ export async function startPhone(host: HTMLElement, cancelled: () => boolean = (
   layout()
   void document.fonts?.ready.then(() => { if (!disposed) { layout(); kick() } })
   const first = coldId ?? reel[at]
-  if (entry) { root.setAttribute('data-entering', ''); root.setAttribute('data-barwait', ''); entry.attach({ prime, enter }) }   // (the first touch may come before the cover is in)
+  if (entry) { root.setAttribute('data-entering', ''); root.setAttribute('data-barwait', ''); root.inert = true; entry.attach({ prime, enter }) }   // (the first touch may come before the cover is in); P5: nothing behind the entry page is reachable by keyboard or reader
   stage.pin([stillKey(first)])
   await stage.loadStill(stillKey(first))
   await Promise.all(dom.lines.map((l) => l.ready))
@@ -695,6 +743,7 @@ export async function startPhone(host: HTMLElement, cancelled: () => boolean = (
 
   const api = {
     get space() { return space },
+    land: () => ({ landSaved, portraitY, ixBack }),   // P5 (for the tests)
     get phase() { return phase }, get at() { return at }, get want() { return want }, get busy() { return busy },
     get mode() { return stage.mode }, get ready() { return root.hasAttribute('data-ready') },
     stage, page, dom, manifest: m, csp, entry: entry?.log, layout: L, get fits() { return fits }, get winFit() { return winFit }, get view() { return view },
@@ -714,10 +763,10 @@ export async function startPhone(host: HTMLElement, cancelled: () => boolean = (
       lockScroll(false); html.classList.remove('ph-filemode'); space?.dispose()
       root.removeEventListener('click', onClick)
       for (const t of ['touchend', 'pointerup', 'click']) document.removeEventListener(t, prime)
-      removeEventListener('scroll', onScroll); removeEventListener('resize', onResize); visualViewport?.removeEventListener('resize', onResize)
+      removeEventListener('scroll', trackY); removeEventListener('scroll', onScroll); removeEventListener('resize', onResize); visualViewport?.removeEventListener('resize', onResize)   // P5
       removeEventListener('popstate', onPop); removeEventListener('pageshow', onShow); removeEventListener('keydown', onKey)
       document.removeEventListener('visibilitychange', onVis); document.removeEventListener('securitypolicyviolation', onCsp)
-      mq.removeEventListener('change', onOrient)
+      mq.removeEventListener('change', onOrient); mqR.removeEventListener('change', onReduced)   // P5
       stage.dispose(); root.remove()
       if (flags.expose && (window as unknown as { __phone?: unknown }).__phone === api) delete (window as unknown as { __phone?: unknown }).__phone
     },

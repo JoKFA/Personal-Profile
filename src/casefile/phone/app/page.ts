@@ -8,6 +8,7 @@ import { damp, spring } from '../../motion/spring'
 import { Line, blocksOf, canSeal, seal } from '../cipherLine'
 import { COPY, type StopCopy } from './copy'
 import type { Rect } from '../manifest'
+import { buildIndex, type IndexDom } from './indexpage'   // P5
 
 /** the open timeline's length (s): closing plays it backwards, 2.2x faster (overlay.ts) */
 export const OPEN_END = 2.0, CLOSE_SPEED = 2.2
@@ -45,6 +46,8 @@ export interface PageDom {
   lines: Line[]
   /** the cover sheet's three lines */
   sheetLines: Line[]
+  /** the Index and Contact sheet, the last section (P5) */
+  ix: IndexDom   // P5
 }
 
 
@@ -104,13 +107,11 @@ export function buildPage(host: HTMLElement, stops: StopCopy[], canOpen: (id: st
     }
     panels.set(s.id, makePanel(sec, s, i, canOpen, line))
   })
-  // Index and Contact: a placeholder section (P5 fills it)
-  const idx = el(main, 'section', 'ph-sec ph-index'); idx.id = `ph-s${stops.length}`; sections.push(idx)
-  const hi = el(idx, 'h2', 'ph-h', COPY.index); hi.id = `ph-t${stops.length}`; idx.setAttribute('aria-labelledby', hi.id)
-  el(idx, 'h2', 'ph-h', COPY.contact)
+  // Index and Contact: one paper sheet, the last section (indexpage.ts)
+  const ix = buildIndex(main, stops.length); sections.push(ix.sec)   // P5
 
   const land = el(root, 'div', 'ph-land'); land.setAttribute('role', 'status'); el(land, 'p', '', COPY.landscape)
-  return { root, html: document.documentElement, fileLabel, bar, brand, nav, back, indexBtn, contactBtn, main, sections, sheet, panels, reticle, marks, tag, rule, land, lines, sheetLines }
+  return { root, html: document.documentElement, fileLabel, bar, brand, nav, back, indexBtn, contactBtn, main, sections, sheet, panels, reticle, marks, tag, rule, land, lines, sheetLines, ix }   // P5
 }
 
 /** The file's own lines for a stop (built once, when it is first asked for): the file eyebrow, the verify line, the numbers. */
@@ -162,6 +163,12 @@ export class PageLayer {
   private barS = spring(0)
   private barTarget = 0
   private ownsLabel = false
+  /** the Index sheet slides down out of a file's way (0 in place, 1 gone), on the same spring as the cover's paper (P5) */
+  private ixS = spring(0)
+  private ixTarget = 0
+  private mqReduced = typeof matchMedia === 'function' ? matchMedia('(prefers-reduced-motion: reduce)') : null
+  /** reduced motion: nothing slides, nothing is scrambled on the way in (P5) */
+  get reduced() { return !!this.mqReduced?.matches }
   private dom: PageDom
   private ids: string[]
   private keyId = ''
@@ -204,6 +211,13 @@ export class PageLayer {
   }
 
   slideTo(t: 0 | 1) { this.slideTarget = t }
+  /** the Index sheet out of the way of a file (1) or back (0); `instant` (reduced motion) puts it there at once (P5) */
+  slideIndex(t: 0 | 1, instant = this.reduced) {
+    this.ixTarget = t; if (instant) { this.ixS.value = t; this.ixS.velocity = 0 }
+    // (a snap area is measured where it is drawn: while the sheet is translated the page must not snap to it)
+    if (t || this.ixS.value > 0.001) this.dom.html.classList.add('ph-nosnap-ix')
+  }
+  get indexSlide() { return this.ixS.value }
   get slide() { return this.slideS.value }
   setFileBar(on: boolean) { this.barTarget = on ? 1 : 0 }
   /** the bar's label (`<ID>`) is this layer's to show while the interior is open; null gives it back to the file page */
@@ -212,6 +226,18 @@ export class PageLayer {
     this.ownsLabel = text !== null
     if (text === null) { d.fileLabel.style.opacity = '0'; d.fileLabel.style.visibility = 'hidden' }
     if (text !== null) { d.fileLabel.textContent = ''; const b = document.createElement('b'); b.textContent = text; d.fileLabel.appendChild(b) }
+  }
+
+  /** the Index sheet's slide (P5): translate, a property of its own, so the sheet's own layout and scroll are untouched */
+  private indexFrame(dt: number): boolean {
+    const d = this.dom.ix.sec
+    damp(this.ixS, this.ixTarget, 16, dt)
+    if (this.reduced) { this.ixS.value = this.ixTarget; this.ixS.velocity = 0 }
+    const k = this.ixS.value
+    if (Math.abs(k - this.ixTarget) <= 0.002) { this.ixS.value = this.ixTarget; this.ixS.velocity = 0 }
+    const v = this.ixS.value
+    if (v > 0.001) d.style.translate = `0 ${(v * (innerHeight + 24)).toFixed(1)}px`; else if (d.style.translate) { d.style.translate = ''; this.dom.html.classList.remove('ph-nosnap-ix') }
+    return Math.abs(v - this.ixTarget) > 0.002
   }
 
   update(f: PageFrame): boolean {
@@ -223,9 +249,9 @@ export class PageLayer {
     this.setKey(f.stop)
     // the paper rises once, at a return visit
     if (f.rise < 1) {
-      const e = smooth(f.rise)
-      for (const p of d.panels.values()) { p.el.style.transform = `translateY(${(1 - e) * 36}px)`; p.el.style.opacity = String(e) }
-      d.sheet.style.transform = `translateY(${(1 - e) * 36}px)`; d.sheet.style.opacity = String(e)
+      const e = smooth(f.rise), lift = this.reduced ? 0 : 36   // P5: reduced motion fades, it does not rise
+      for (const p of d.panels.values()) { p.el.style.transform = `translateY(${(1 - e) * lift}px)`; p.el.style.opacity = String(e) }
+      d.sheet.style.transform = `translateY(${(1 - e) * lift}px)`; d.sheet.style.opacity = String(e)
       moving = true
     } else if (this.lastKey !== 'risen') {
       for (const p of d.panels.values()) { p.el.style.transform = ''; p.el.style.opacity = '' }
@@ -236,7 +262,7 @@ export class PageLayer {
     // per stop: the one that has its drive at rest (or is open) decrypts; the others seal at once (overlay.ts)
     for (const id of this.ids) {
       const target = id === f.stop && (f.settled || opening || closing) ? 1 : 0
-      const rate = target ? 1 / 0.5 : 1 / 0.18
+      const rate = this.reduced ? 1e3 : target ? 1 / 0.5 : 1 / 0.18   // P5: reduced motion: no scramble
       const cur = this.plain[id]
       this.plain[id] = target > cur ? Math.min(target, cur + rate * dt) : Math.max(target, cur - rate * dt)
       if (this.plain[id] !== target) moving = true
@@ -274,6 +300,7 @@ export class PageLayer {
     else if (f.rise >= 1 && d.sheet.style.opacity) d.sheet.style.opacity = ''
     // the cover's paper slides out of the door's way (translate, a property of its own: the rise above uses transform)
     damp(this.slideS, this.slideTarget, 14, f.dt); damp(this.barS, this.barTarget, 18, f.dt)
+    if (this.reduced) { this.slideS.value = this.slideTarget; this.slideS.velocity = 0 }   // P5: nothing slides
     if (Math.abs(this.slideS.value - this.slideTarget) > 0.002 || Math.abs(this.barS.value - this.barTarget) > 0.002) moving = true
     else { this.slideS.value = this.slideTarget; this.slideS.velocity = 0; this.barS.value = this.barTarget; this.barS.velocity = 0 }
     const cp = d.panels.get(this.ids[0])
@@ -289,6 +316,7 @@ export class PageLayer {
     const backK = Math.max(into(1.4, 0.3), this.barS.value)
     if (this.ownsLabel) { d.fileLabel.style.opacity = String(this.barS.value); d.fileLabel.style.visibility = this.barS.value < 0.02 ? 'hidden' : 'visible' }
     d.back.style.opacity = String(backK); d.back.style.visibility = backK < 0.02 ? 'hidden' : 'visible'
+    if (this.indexFrame(f.dt)) moving = true   // P5
     return moving
   }
 }
