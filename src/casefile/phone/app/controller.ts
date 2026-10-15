@@ -426,10 +426,10 @@ export async function startPhone(host: HTMLElement, cancelled: () => boolean = (
     const my = ++flow
     await v?.beginClose(bridge.reduced)
     if (my !== flow || disposed) return false
+    lockScroll(true); layout()   // (the toolbar may have moved while it was read: the stage is fitted to the screen as it is now)
     if (!o.play || !sh) {
       // a back gesture (iOS already animated it) or no close clip: land on the end state at once
       stage.finish(); stage.show(stillKey(id)); phase = 'closing'; tau = 0
-    lockScroll(true); layout()   // (the toolbar may have moved while it was read: the stage is fitted to the screen as it is now)
       v?.update(0, 'closing')
       return true
     }
@@ -459,10 +459,10 @@ export async function startPhone(host: HTMLElement, cancelled: () => boolean = (
     const v = curView; views.delete(id); v?.dispose()
     phase = 'settled'; busy = false; tau = 0; shotIndex = 0; shot = null; panK = 0; openId = null; curView = null
     dropViews([])
+    leaveFileMode(); page.setFileBar(false); page.slideTo(0); page.slideIndex(0)   // P5: (the Index sheet, if the file came from it, slides back in)
     lockScroll(false)
     syncDom(); preload(); kick()
     const back = opener && document.contains(opener) ? opener : dom.panels.get(reel[at])?.open ?? null
-    leaveFileMode(); page.slideIndex(0)   // P5: (the Index sheet, if the file came from it, slides back in)
     goPanelFocus(back)
     pump()
   }
