@@ -54,10 +54,14 @@ const PORT = Number(arg('port', 4196))   // (another agent may hold 4196: pass -
 // ── what a clip is ──
 // pans and closes: rendered 4.0 s on the exact clock, then cut where the drive has come to rest: the first frame (not before 2.4 s) within 1.5% of the
 // destination's still, the last 6 frames blended into it (the entrance's rule). At 40 ms a frame the springs need a little longer than the unpaused clock gave them.
-const PAN_FRAMES = 100
-const SETTLE_CUT = { threshold: 1.5, blend: 6, minFrames: 60 }
+// The assets the owner saw in the prototype film (entrance, pans, opens, closes, and the stills and close starts derived from them) are baked at the film's pace,
+// ~1.25x real time, on an EVEN step: the clock is paused, so every frame is exactly 50 ms of simulation, played at 25 fps. What carries the desktop's own timing and reading
+// pace (the door, the interior, the exit) keeps the exact 40 ms step (phone-bake-space.mjs).
+const STEP_PROTO = 50
+const PAN_FRAMES = 90
+const SETTLE_CUT = { threshold: 1.5, blend: 6, minFrames: 48 }   // (2.4 s of the 40 ms clock = 48 frames of the prototype's 50 ms step)
 const OPEN_FRAMES = 50         // 2.0 s
-const CLOSE_FRAMES = 100       // the closing timeline, then the stop's springs coming to rest (cut as above)
+const CLOSE_FRAMES = 90        // the closing timeline, then the stop's springs coming to rest (cut as above)
 const BLEND = 6                // last frames blended into the destination's canonical still
 const ENTRANCE_FRAMES = 160    // rendered 6.4 s; the clip is cut where the drive has come to rest (see ENTRANCE_CUT)
 const ENTRANCE_CUT = { threshold: 1.5, blend: 8 }   // PM: cut at the first frame within 1.5% of the cover still, blend the last 8 into it
@@ -151,7 +155,7 @@ function stillJob(id) {
         R.win[id] = { inner: winS.inner, quad: winS.quad }
       }
       fs.writeFileSync(meta, JSON.stringify({ stop: R.stop[id], win: R.win[id] ?? null }))
-    }, { label: `still ${id}` })
+    }, { label: `still ${id}`, stepMs: STEP_PROTO })
     log(`still ${id} (${((Date.now() - t) / 1000).toFixed(0)} s)`)
   }
 }
@@ -207,7 +211,7 @@ const clipJob = (name, body, quads = false) => async () => {
   else {
     let res
     for (let attempt = 1; ; attempt++) {
-      try { res = await sess(DPR_CLIP, (s) => body(s), { label: name }); break } catch (e) { if (attempt >= 2) throw e; log(`${name}: ${e.message} (retrying once)`) }
+      try { res = await sess(DPR_CLIP, (s) => body(s), { label: name, stepMs: STEP_PROTO }); break } catch (e) { if (attempt >= 2) throw e; log(`${name}: ${e.message} (retrying once)`) }
     }
     fs.writeFileSync(meta, JSON.stringify(res))
     finishClip(name, res, quads)

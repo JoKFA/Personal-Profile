@@ -65,7 +65,8 @@ export async function assertHardwareGpu(browser) {
  * One frame-exact page. `run(s)` gets: s.step() (one 40 ms frame), s.shot(file), s.settle(id), s.ph(fn, arg), s.sample() …
  * Every job gets its own page (and context), so an asset does not depend on what was rendered before it.
  */
-export async function session(browser, base, dpr, run, { warm = false, label = '', interior = false, exact = true } = {}) {
+export async function session(browser, base, dpr, run, { warm = false, label = '', interior = false, exact = true, stepMs = STEP } = {}) {
+  // stepMs: the simulation time of one frame. 40 = real time at 25 fps (the desktop's own timing: door, interior); 50 = the approved prototype film's pace (1.25x), but even
   const ctx = await browser.newContext({ viewport: { width: MASTER.w, height: MASTER.h }, deviceScaleFactor: dpr, bypassCSP: true })
   await ctx.addInitScript(() => { try { localStorage.setItem('yw.entry', '1'); localStorage.setItem('yw.hint', '1') } catch { /* */ } })
   await ctx.clock.install({ time: new Date('2026-10-10T14:02:00') })
@@ -94,7 +95,7 @@ export async function session(browser, base, dpr, run, { warm = false, label = '
     p, dpr,
     ph: (fn, arg) => p.evaluate(([f, a]) => window.__ph[f](a), [fn, arg]),
     // one 40 ms frame: the clock, then the engine's rAF queue (one drawn frame), then the document's animations
-    step: async () => { await p.clock.runFor(STEP); await p.evaluate((dt) => { window.__filmFlush(); window.__filmAnim(dt) }, STEP) },
+    step: async () => { await p.clock.runFor(stepMs); await p.evaluate((dt) => { window.__filmFlush(); window.__filmAnim(dt) }, stepMs) },
     manual: () => p.evaluate(() => window.__filmManual(true)),
     shot: (file) => p.screenshot({ path: file, type: 'png' }),
     /** the face's corners and the camera's progress for the frame just drawn */
@@ -109,6 +110,9 @@ export async function session(browser, base, dpr, run, { warm = false, label = '
     },
     /** the bake's pixels are the scene's: nothing but the canvases may be visible on the page */
     assertSceneOnly: async () => {
+      // (the page's own pseudo-element overlays count: the desktop's .cf::after vignette must not be in a baked pixel)
+      const pseudo = await p.evaluate(() => [...document.querySelectorAll('.cf')].flatMap((e) => ['::before', '::after'].filter((q) => { const c = getComputedStyle(e, q); return c.content !== 'none' && c.display !== 'none' && c.visibility !== 'hidden' && c.position === 'fixed' }).map((q) => `${e.className}${q}`)))
+      if (pseudo.length) throw new Error(`a page overlay is drawn over the scene: ${pseudo.join(', ')}`)
       const extra = await p.evaluate(() => [...document.querySelectorAll('body *')].filter((e) => { const r = e.getBoundingClientRect(), cs = getComputedStyle(e); return r.width > 0 && r.height > 0 && cs.visibility !== 'hidden' && cs.display !== 'none' && !['SCRIPT', 'CANVAS'].includes(e.tagName) && !e.closest('svg') && !e.querySelector('canvas') }).map((e) => `${e.tagName}.${e.className}`))
       if (extra.length) throw new Error(`DOM is visible over the scene: ${extra.join(', ')}`)
     },
