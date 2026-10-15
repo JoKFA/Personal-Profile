@@ -54,6 +54,8 @@ export async function scrollScreens(page: Page, n = 1) {
     await settled(page)
     // the reel's snap is mandatory: a scroll ends on a whole screen
     await expect.poll(async () => { const at = await page.evaluate(() => scrollY / innerHeight); return Math.abs(at - Math.round(at)) }, { timeout: 5000, message: 'the scroll ends on a snap point' }).toBeLessThan(0.02)
+    // the pan clip between two stops has played out (a tap on Open is not taken while it plays)
+    await page.waitForFunction(() => !document.querySelector('.ph-stage video.on'), null, { timeout: 15_000 })
   }
 }
 

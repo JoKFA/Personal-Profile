@@ -124,6 +124,94 @@ test.describe('phone shell', () => {
     expect(w.errors).toEqual([])
   })
 
+  /** in the page: the first moment after the Esc keydown at which the stop's still is opaque and no clip is showing (the stage's layers are found by their data-key; a clip is showing while it is `on` and not faded out) */
+  const installStillWatch = (page: import('@playwright/test').Page, key: string) => page.evaluate((k) => {
+    const w = window as unknown as { __back?: { t0: number; seen: number | null } }
+    w.__back = { t0: 0, seen: null }
+    addEventListener('keydown', (e) => { if (e.key === 'Escape' && !w.__back!.t0) w.__back!.t0 = e.timeStamp }, true)
+    const tick = () => {
+      const b = w.__back!
+      if (b.t0 && b.seen === null) {
+        const still = document.querySelector(`.ph-stage img[data-key="${k}"]`) as HTMLElement | null
+        const clips = [...document.querySelectorAll('.ph-stage video.on')].filter((v) => Number(getComputedStyle(v).opacity) > 0.02)
+        if (still && Number(getComputedStyle(still).opacity) >= 0.99 && !clips.length) b.seen = performance.now()
+      }
+      requestAnimationFrame(tick)
+    }
+    requestAnimationFrame(tick)
+  }, key)
+  const stillAfterBack = async (page: import('@playwright/test').Page) => {
+    await expect.poll(() => page.evaluate(() => (window as unknown as { __back: { seen: number | null } }).__back.seen), { timeout: 5000 }).not.toBeNull()
+    return page.evaluate(() => { const b = (window as unknown as { __back: { t0: number; seen: number } }).__back; return b.seen - b.t0 })
+  }
+  const closeClipPlayed = (page: import('@playwright/test').Page) => page.evaluate(() => [...document.querySelectorAll('video')].some((v) => /close-/.test(v.getAttribute('src') ?? '') && (!v.paused || v.currentTime > 0)))
+
+  test('Back while a file is opening stops the open at once: the stop is back within 250 ms, no close clip plays, the reel has not moved @short', async ({ page }) => {
+    const w = await watch(page)
+    await returning(page)
+    await page.goto('/')
+    await coverReady(page)
+    await scrollScreens(page, 1)
+    const stopY = await page.evaluate(() => Math.round(scrollY))
+    await installStillWatch(page, 'stop:X-001')
+    await openFile(page, title('X-001'))
+    // the open clip is playing, half a second in
+    await page.waitForFunction(() => [...document.querySelectorAll('.ph-stage video.on')].some((v) => !(v as HTMLVideoElement).paused && (v as HTMLVideoElement).currentTime > 0.5), null, { timeout: 30_000, polling: 16 })
+    expect(await page.evaluate(() => document.documentElement.classList.contains('ph-filemode')), 'the file layer is up').toBe(true)
+    await page.keyboard.press('Escape')
+    await expect(page).toHaveURL(/\/$/, { timeout: 3000 })
+    expect(await stillAfterBack(page), 'Esc to the stop on screen, ms').toBeLessThanOrEqual(250)
+    expect(await closeClipPlayed(page), 'no close clip').toBe(false)
+    await expect.poll(() => page.evaluate(() => document.documentElement.classList.contains('ph-filemode'))).toBe(false)
+    await settled(page)
+    expect(await page.evaluate(() => Math.round(scrollY))).toBe(stopY)
+    await expect(page.getByRole('button', { name: `Open ${title('X-001')}`, exact: true })).toBeVisible()
+    // and the stop opens again, whole, afterwards
+    await openFile(page, title('X-001'))
+    await fileOpen(page, slug('X-001'), title('X-001'))
+    expect(w.errors).toEqual([])
+  })
+
+  test('Back while an Index entry is opening: the sheet is back under the same row, and the browser Back does the same', async ({ page }) => {
+    const w = await watch(page)
+    await returning(page)
+    await page.goto('/')
+    await coverReady(page)
+    await page.getByRole('navigation', { name: 'Sections' }).getByRole('button', { name: 'Index' }).click()
+    const row = page.locator('button.ph-ix[data-id="X-002"]')
+    await row.scrollIntoViewIfNeeded()
+    await settled(page)
+    const before = (await row.boundingBox())!.y
+    await row.click()
+    await expect(page).toHaveURL(/\/projects\//, { timeout: 5000 })
+    await page.waitForTimeout(600)
+    await page.goBack()   // the browser's Back (a swipe-back is this, with the browser's own animation)
+    await expect(page).toHaveURL(/\/$/, { timeout: 3000 })
+    await expect(row).toBeVisible({ timeout: 3000 })
+    await settled(page)
+    expect(Math.abs((await row.boundingBox())!.y - before), 'the row is where it was').toBeLessThan(3)
+    expect(await closeClipPlayed(page), 'no close clip').toBe(false)
+    expect(w.errors).toEqual([])
+  })
+
+  test('Back while a file is opening, under reduced motion: an instant swap', async ({ browser }, info) => {
+    const ctx = await browser.newContext({ ...info.project.use, reducedMotion: 'reduce' })
+    const page = await ctx.newPage()
+    const w = await watch(page)
+    await returning(page)
+    await page.goto('/')
+    await coverReady(page)
+    await scrollScreens(page, 1)
+    await installStillWatch(page, 'stop:X-001')
+    await openFile(page, title('X-001'))
+    await page.waitForTimeout(150)
+    await page.keyboard.press('Escape')
+    await expect(page).toHaveURL(/\/$/, { timeout: 3000 })
+    expect(await stillAfterBack(page), 'Esc to the stop on screen, ms').toBeLessThanOrEqual(120)
+    expect(w.errors).toEqual([])
+    await ctx.close()
+  })
+
   test('the profile: the door, the interior, a pick, then back to the cover', async ({ page }) => {
     test.setTimeout(180_000)
     const w = await watch(page)
