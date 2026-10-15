@@ -26,9 +26,9 @@ export class Line {
   readonly text: string
   /** the 16-character blocks of the text, in order */
   readonly spans: HTMLSpanElement[] = []
-  private covers: HTMLElement[] = []
+  private covers: HTMLCanvasElement[] = []
   private bits: Uint8Array[] = []
-  private painted = new Map<HTMLElement, string>()
+  private painted = new Map<HTMLCanvasElement, string>()
   private last = ''
   /** true once the ciphertext is in hand (until then, or without crypto, the text is shown plain) */
   sealed = false
@@ -48,7 +48,7 @@ export class Line {
     else { this.el = document.createElement(tag); this.el.className = cls; parent!.appendChild(this.el) }
     for (let i = 0; i < text.length; i += BLOCK) {
       const s = document.createElement('span'); s.className = 'ph-cbx'; s.textContent = text.slice(i, i + BLOCK)
-      const c = document.createElement('i'); c.setAttribute('aria-hidden', 'true'); s.appendChild(c)
+      const c = document.createElement('canvas'); c.width = 32; c.height = 4; c.setAttribute('aria-hidden', 'true'); s.appendChild(c)   // P6a: the strip is drawn on the element itself (no PNG encoding per block)
       this.el.appendChild(s); this.spans.push(s); this.covers.push(c)
     }
     this.ready = canSeal()
@@ -56,13 +56,13 @@ export class Line {
       : Promise.resolve(null)
   }
 
-  private paint(c: HTMLElement, bytes: Uint8Array | undefined, col: string) {
+  private paint(c: HTMLCanvasElement, bytes: Uint8Array | undefined, col: string) {
     const key = col + (bytes ? bytes.join(',') : '')
     if (this.painted.get(c) === key) return
-    const cv = document.createElement('canvas'); cv.width = 32; cv.height = 4
-    const g = cv.getContext('2d')!; g.fillStyle = col
+    c.width = 32   // (clears it)
+    const g = c.getContext('2d')!; g.fillStyle = col
     for (let i = 0; i < 128; i++) if (bytes && (bytes[i >> 3] >> (7 - (i & 7))) & 1) g.fillRect(i % 32, i >> 5, 1, 1)
-    c.style.backgroundImage = `url(${cv.toDataURL()})`; this.painted.set(c, key)
+    this.painted.set(c, key)
   }
 
   /** p: 0 sealed … 1 plain, the blocks taking their turns in order; o: the line's opacity */

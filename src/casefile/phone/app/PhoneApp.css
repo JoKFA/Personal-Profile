@@ -80,7 +80,7 @@ body.ph-body { color: var(--ink); font-family: var(--sans); -webkit-font-smoothi
 /* a short viewport: the panel is eyebrow + title + the Open row; the summary and the small line wait for the file */
 .ph-root[data-compact] .ph-sum, .ph-root[data-compact] .ph-small { display: none; }
 .ph-cbx { position: relative; }
-.ph-cbx > i { position: absolute; inset: 1px 0; background-size: 100% 100%; image-rendering: pixelated; }
+.ph-cbx > canvas { position: absolute; left: 0; top: 1px; width: 100%; height: calc(100% - 2px); image-rendering: pixelated; }   /* P6a: the strip is a canvas of its own (32 x 4), stretched */
 
 /* the Index and Contact sheet (P5): one paper sheet over the stage, as tall as its words; the document scrolls through it, and it snaps only at its start (a snap area taller than the screen scrolls freely inside) */
 .ph-index { z-index: 3; display: block; height: auto; min-height: var(--ph-h); background: var(--bg); padding: calc(env(safe-area-inset-top) + 64px + 24px) 20px calc(env(safe-area-inset-bottom) + 48px); }
