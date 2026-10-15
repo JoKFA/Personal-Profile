@@ -1,7 +1,8 @@
 /* The phone shell. Everything is classes in this file; the code only sets properties through element.style (CSSOM), because the
    production CSP is style-src 'self' (no inline <style>, no inline style attributes). No CSS transition drives anything that must stay
    in step with the picture: the only transition here is the 120 ms clip -> still fade, which is the handoff rule itself. */
-html.ph { scroll-snap-type: y mandatory; overscroll-behavior-y: none; -webkit-text-size-adjust: 100%; }
+html.ph { scroll-snap-type: y mandatory; overscroll-behavior: none; -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }   /* P6a: no pull-to-refresh, no inflated text on rotation */
+body.ph-body { overscroll-behavior: none; }   /* P6a */
 html.ph-locked { overflow: hidden; }
 html.ph-entry { overflow: hidden; }   /* the entry page and the entrance (P4): the reel does not scroll until the paper has risen */
 /* a first visit: the page layer (bar, reticle, paper) is not shown until the entrance has played, whatever order the entry page and the shell arrive in */
@@ -46,7 +47,8 @@ body.ph-body { color: var(--ink); font-family: var(--sans); -webkit-font-smoothi
 .ph-thesis.ph-r { font-weight: 300; margin-top: 1px; }
 .ph-facts { font: 500 13px/1.45 var(--sans); color: var(--ink2); margin-top: 6px; }
 
-.ph-panel { position: relative; z-index: 3; background: var(--bg); border-top: 1px solid var(--hair2); padding: 16px 20px env(safe-area-inset-bottom); display: flex; flex-direction: column; }
+.ph-panel { position: relative; z-index: 3; background: var(--bg); border-top: 1px solid var(--hair2); padding: 16px 20px calc(env(safe-area-inset-bottom) + min(4px, env(safe-area-inset-bottom)));   /* P6a: 4 px more above the home indicator, only where there is one */
+  display: flex; flex-direction: column; }
 .ph-pc { min-height: var(--ph-pc); padding-top: 14px; }
 .ph-pc .ph-title { font-size: 20px; margin-top: 4px; }   /* the cover's panel is one line of action: eyebrow, then the title and its arrow */
 .ph-pc .ph-row { display: none; }
@@ -121,6 +123,20 @@ html.ph-nosnap, html.ph-nosnap-ix { scroll-snap-type: none; }   /* (P5) while Co
 .ph-navb { min-height: 44px; min-width: 44px; padding: 0 6px; font: 600 11.5px/1 var(--sans); letter-spacing: .12em; text-transform: uppercase; }
 .ph-back { position: absolute; left: 14px; top: calc(env(safe-area-inset-top) + 10px); min-height: 44px; padding: 0 6px; font: 600 11.5px/1 var(--sans); letter-spacing: .12em; text-transform: uppercase; opacity: 0; visibility: hidden; }
 
-.ph-land { position: fixed; inset: 0; z-index: 20; background: var(--bg); display: none; align-items: center; justify-content: center; padding: 24px; text-align: center; font: 600 16px/1.4 var(--sans); }
+.ph-land { position: fixed; inset: 0; z-index: 20; background: var(--bg); display: none; align-items: center; justify-content: center; padding: max(24px, env(safe-area-inset-top)) max(24px, env(safe-area-inset-right)) max(24px, env(safe-area-inset-bottom)) max(24px, env(safe-area-inset-left)); text-align: center; font: 600 16px/1.4 var(--sans); }
 .ph-root[data-land] .ph-land { display: flex; }
 .ph-fail { padding: 84px 20px; font: 500 15px/1.5 var(--sans); color: var(--ink2); }
+/* browser details (P6a) */
+/* no blue flash on a tap, anywhere in the shell (the gate, the reel, the files, the interior); a press has a crisp mark of its own (an olive inset line and a faint ink wash, no transition), and so has the keyboard's focus */
+html.ph, html.ph * { -webkit-tap-highlight-color: transparent; }
+.ph-root :is(button, a, [role="button"]):active, .ph-gate :is(button):active { outline: 1.5px solid var(--acc); outline-offset: -1.5px; background: color-mix(in srgb, var(--ink) 7%, transparent); }
+.ph-root :is(button, a, [role="button"]):focus-visible, .ph-gate :is(button):focus-visible { outline: 1.5px solid var(--acc); outline-offset: 3px; }
+/* the stop panels' paper goes down to the bottom of the large viewport (the toolbar collapsed), so that nothing of the scene shows under a panel; the layout itself is the small viewport's (svh): it does not move when the toolbar does */
+.ph-sec > .ph-panel::after { content: ""; position: absolute; left: 0; right: 0; top: 100%; height: calc(100lvh - 100svh); background: var(--bg); pointer-events: none; }
+/* the layout's reference height: 100svh, read by the controller (a probe that is never seen) */
+.ph-svh { position: fixed; left: 0; top: 0; width: 0; height: 100svh; visibility: hidden; pointer-events: none; }
+/* a pooled video never shows the browser's own controls, a play button, or a way to full screen */
+.ph-vid { pointer-events: none; }
+.ph-vid::-webkit-media-controls, .ph-vid::-webkit-media-controls-panel, .ph-vid::-webkit-media-controls-start-playback-button, .ph-vid::-webkit-media-controls-overlay-play-button { display: none !important; -webkit-appearance: none; }
+/* a text field is never under 16 px (iOS zooms the page on focus under that) */
+.ph-root input, .ph-root textarea, .ph-root select, .ph-gate input { font-size: max(16px, 1em); }
