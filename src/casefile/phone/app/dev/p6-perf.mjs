@@ -18,7 +18,7 @@ const touch = (cdp, type, x, y) => cdp.send('Input.dispatchTouchEvent', { type, 
 
 // ── A. first screen, bytes ──
 {
-  const { b, ctx, p, cdp } = await launch(W, H, { gate: true })
+  const { b, p, cdp } = await launch(W, H, { gate: true })
   await cdp.send('Emulation.setCPUThrottlingRate', { rate: RATE })
   const reqs = []
   await cdp.send('Network.enable')
