@@ -96,6 +96,11 @@ export function install(opts: InstallOptions = {}) {
   const st = document.createElement('style')
   st.textContent = '.hud, .cf-grain, .file, .door-skip { visibility: hidden !important; }'
   document.head.appendChild(st)
+  // The desktop's page vignette (archive.css .cf::after: the top 30% and the edges dissolve into warm white) is part of the page, not the scene. Over a pale field
+  // it is a quiet falloff; over the sealed black drive it is a large soft glow. That drive's pictures are baked without it (see stop()); every other asset still has it.
+  const vig = document.createElement('style')
+  vig.textContent = '.cf::after { display: none !important; }'; vig.disabled = true
+  document.head.appendChild(vig)
 
   let mode: Mode = 'stop', stopId = ''
   let t0 = 0, now = 0, stopAt = 0
@@ -122,6 +127,7 @@ export function install(opts: InstallOptions = {}) {
       const was = (a as unknown as { sel: { lane: number; row: number } }).sel
       if (stopId && stopId !== id) { letGo.set(`${was.lane}:${was.row}`, { value: clearK.value, velocity: 0 }); clearK.value = 0; clearK.velocity = 0 }
       a.setBrief(false); a.jumpTo(id)
+      vig.disabled = ENTRIES.find((e) => e.id === id)?.kind !== 'restricted'
       // the first stop takes the camera from the engine where it is (after the entrance: the archive's own view)
       if (!framed) {
         const f = frameOf(id), x = a as unknown as { camAim: THREE.Vector3; stage: { camera: THREE.PerspectiveCamera } }
