@@ -162,6 +162,9 @@ export class PageLayer {
   /** the top bar becomes the file bar (0 = the name and the links, 1 = `← All files`), sprung */
   private barS = spring(0)
   private barTarget = 0
+  /** `← All files` at the open: it is there (and takes a tap) within ~100 ms, the name and links having gone just before it */
+  private backS = spring(0)
+  private backTarget = 0
   private ownsLabel = false
   /** the Index sheet slides down out of a file's way (0 in place, 1 gone), on the same spring as the cover's paper (P5) */
   private ixS = spring(0)
@@ -220,6 +223,7 @@ export class PageLayer {
   get indexSlide() { return this.ixS.value }
   get slide() { return this.slideS.value }
   setFileBar(on: boolean) { this.barTarget = on ? 1 : 0 }
+  showBack(on: boolean) { this.backTarget = on ? 1 : 0 }
   /** the bar's label (`<ID>`) is this layer's to show while the interior is open; null gives it back to the file page */
   ownLabel(text: string | null, fadeMs = 0) {
     const d = this.dom
@@ -303,8 +307,10 @@ export class PageLayer {
     if (f.rise >= 1 && (opening || closing)) d.sheet.style.opacity = String(1 - (f.stop === this.ids[0] ? into(0, 0.25) : 0))
     else if (f.rise >= 1 && d.sheet.style.opacity) d.sheet.style.opacity = ''
     // the cover's paper slides out of the door's way (translate, a property of its own: the rise above uses transform)
-    damp(this.slideS, this.slideTarget, 14, f.dt); damp(this.barS, this.barTarget, 18, f.dt)
-    if (this.reduced) { this.slideS.value = this.slideTarget; this.slideS.velocity = 0 }   // P5: nothing slides
+    damp(this.slideS, this.slideTarget, 14, f.dt); damp(this.barS, this.barTarget, 18, f.dt); damp(this.backS, this.backTarget, 60, Math.max(f.dt, 0.03))   // (the first frame of a burst has dt 0: the control still moves on it)
+    if (this.reduced) { this.slideS.value = this.slideTarget; this.slideS.velocity = 0; this.backS.value = this.backTarget; this.backS.velocity = 0 }   // P5: nothing slides
+    if (Math.abs(this.backS.value - this.backTarget) > 0.002) moving = true
+    else { this.backS.value = this.backTarget; this.backS.velocity = 0 }
     if (Math.abs(this.slideS.value - this.slideTarget) > 0.002 || Math.abs(this.barS.value - this.barTarget) > 0.002) moving = true
     else { this.slideS.value = this.slideTarget; this.slideS.velocity = 0; this.barS.value = this.barTarget; this.barS.velocity = 0 }
     const cp = d.panels.get(this.ids[0])
@@ -314,10 +320,11 @@ export class PageLayer {
       if (cp) cp.el.style.translate = `0 ${(sk * (cp.el.offsetHeight + 48)).toFixed(1)}px`
     } else if (d.sheet.style.translate) { d.sheet.style.translate = ''; if (cp) cp.el.style.translate = '' }
     // the bar's name and links make room for the file's own bar
-    const barK = 1 - Math.max(into(0.02, 0.3), this.barS.value)
+    const backIn = Math.min(1, this.backS.value * 2), backOut = Math.max(0, (this.backS.value - 0.5) * 2)   // (the name and links are gone by the time the control starts to come in)
+    const barK = 1 - Math.max(into(0.02, 0.3), this.barS.value, backIn)
     d.brand.style.opacity = d.nav.style.opacity = String(barK)
     d.brand.style.visibility = d.nav.style.visibility = barK < 0.02 ? 'hidden' : 'visible'
-    const backK = Math.max(into(1.4, 0.3), this.barS.value)
+    const backK = Math.max(into(1.4, 0.3), this.barS.value, backOut)
     if (this.ownsLabel) { d.fileLabel.style.opacity = String(this.barS.value); d.fileLabel.style.visibility = this.barS.value < 0.02 ? 'hidden' : 'visible' }
     d.back.style.opacity = String(backK); d.back.style.visibility = backK < 0.02 ? 'hidden' : 'visible'
     if (this.indexFrame(f.dt)) moving = true   // P5

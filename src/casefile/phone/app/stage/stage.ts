@@ -164,7 +164,9 @@ export class Stage {
         if (land && to && to !== from) {
           // stopped by abortTo: the target still (partly in) goes back out over `ms`, and the landing still is the picture from now on
           this.shownKey = land.key; this.pinned.add(land.key)
-          if (land.ms > 0) { to.style.transition = `opacity ${land.ms}ms linear`; to.style.opacity = '0' }
+          // (the landing still is the step's own target: it finishes fading in, over `ms`; otherwise the target goes back out)
+          const finishing = land.key === spec.to
+          if (land.ms > 0) { to.style.transition = `opacity ${land.ms}ms linear`; to.style.opacity = finishing ? '1' : '0' }
           setTimeout(() => { to.style.transition = ''; if (this.shownKey === land.key) this.stills.show(land.key) }, land.ms + 20)
         } else this.show(land ? land.key : spec.to)
         resolve()

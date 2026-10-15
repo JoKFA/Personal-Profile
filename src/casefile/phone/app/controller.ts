@@ -231,18 +231,44 @@ export async function startPhone(host: HTMLElement, cancelled: () => boolean = (
     if (Math.abs(target - at) === 1) void pan(at, target, false)
     else void pan(at, target, true)
   }
+  /** bumped when a tap takes a pan over (takePan): the pan's own landing then does not happen */
+  let panToken = 0, taking = false
   async function pan(a: number, b: number, jump: boolean) {
+    const tok = panToken
     busy = true; phase = 'panning'; to = b; panK = 0
     const key = `${reel[a]}>${reel[b]}`, clip = jump ? undefined : m.pans[key]
     kick()
+    // the stop being panned to: its open clip and its file's view are made in an idle moment of the pan, so that a tap on its Open (taken by takePan) does not wait for them
+    const nb = reel[b]
+    if (m.open[nb] && b > 0) { stage.loadClip(openKey(nb)); const w = () => { if (!disposed) void warm(nb) }; if (typeof requestIdleCallback === 'function') requestIdleCallback(w, { timeout: 300 }); else setTimeout(w, 150) }
     await stage.run({
       clipKey: clip ? panKey(reel[a], reel[b]) : null, clip: clip ?? null,
       from: stillKey(reel[a]), to: stillKey(reel[b]), duration: FADE_PAN, fade: [0, FADE_PAN],
       onTick: (_t, _i, k) => { panK = k; syncDom() },
     })
-    if (disposed) return
+    if (disposed || tok !== panToken) return
     at = b; phase = 'settled'; panK = 0; busy = false
     syncDom(); preload(); kick(); pump()
+  }
+  /**
+   * A tap on the stop a pan is heading for (its Open, the cover's door) is taken at once: the pan's picture cross-fades 120 ms to that stop's still, the page layer lands on the stop in the same 120 ms
+   * (the pan's progress runs to its end: the marks come to the stop's quad), and the stop is settled for the open to begin. A tap that belongs to any other stop is not taken.
+   */
+  async function takePan(id: string): Promise<boolean> {
+    if (phase !== 'panning' || reel[to] !== id || taking) return false
+    taking = true; ++panToken
+    const ms = page.reduced ? 0 : 120, k0 = panK, t0 = performance.now()
+    if (m.open[id]) { stage.loadClip(openKey(id)); void warm(id); void stage.loadStill(windowKey(id)) }   // (the open's own pictures are fetched while the pan's last frames fade)
+    const tween = new Promise<void>((res) => {
+      const f = (now: number) => { const k = ms ? Math.min(1, (now - t0) / ms) : 1; panK = k0 + (1 - k0) * k; syncDom(); if (k < 1 && !disposed) requestAnimationFrame(f); else res() }
+      requestAnimationFrame(f)
+    })
+    await Promise.all([stage.abortTo(stillKey(id), ms), tween])
+    taking = false
+    if (disposed) return false
+    at = to; phase = 'settled'; panK = 0; busy = false
+    syncDom(); preload(); kick()
+    return true
   }
 
   // ── scrolling ──
@@ -385,10 +411,14 @@ export async function startPhone(host: HTMLElement, cancelled: () => boolean = (
     if (!sh) return
     const my = ++flow
     openId = id; busy = true; phase = 'opening'; tau = 0; shotIndex = 0; shot = sh
+    page.showBack(true)   // `← All files` is there, and takes a tap (abortOpen), within ~100 ms
     lockScroll(true)
     if (o.push) pushFile(id); else if (o.replace) history.replaceState({ ph: PUSHED }, '', pathOfId(id))
     stage.pin([stillKey(id), windowKey(id), stillKey(reel[at])]); void stage.loadStill(windowKey(id)); stage.loadClip(closeKey(id))
     kick()
+    // two frames first: building the file's view and taking the page out of the reel are one long task, and `← All files` must already be coming in (and tappable) when it starts
+    await new Promise<void>((res) => { const t = setTimeout(res, 90); requestAnimationFrame(() => requestAnimationFrame(() => { clearTimeout(t); res() })) })
+    if (my !== flow || disposed) return
     const v = await warm(id)
     if (my !== flow || disposed) return
     curView = v; enterFileMode(); v.show()
@@ -400,6 +430,7 @@ export async function startPhone(host: HTMLElement, cancelled: () => boolean = (
     })
     if (my !== flow || disposed) return
     phase = 'file'; tau = Math.max(tau, OPEN_END); shotIndex = sh.quads.length - 1; busy = false
+    page.showBack(false)   // (the open's own timing keeps the control from here)
     v.update(OPEN_END, 'file'); v.settle(); lockScroll(false); syncDom(); kick()   // the file scrolls with the document from here
     v.focusHeading()
   }
@@ -407,6 +438,7 @@ export async function startPhone(host: HTMLElement, cancelled: () => boolean = (
   /** open an entry from where the visitor is (the reel's stop, the Index, a link): its stop picture first when it is not already on screen */
   async function enterFile(id: string, o: { push: boolean; inputAt?: number }) {
     if (id === 'YW-000' && spaceReady()) return enterSpace(o)
+    if (phase === 'panning') await takePan(id)
     if (!m.open[id] || phase !== 'settled' || busy) return
     busy = true
     origin = { sec: scrollY / view.h, opener: document.activeElement instanceof HTMLElement && document.activeElement !== document.body ? document.activeElement : null }
@@ -486,7 +518,7 @@ export async function startPhone(host: HTMLElement, cancelled: () => boolean = (
     const v = curView; views.delete(id); v?.dispose()
     phase = 'settled'; busy = false; tau = 0; shotIndex = 0; shot = null; panK = 0; openId = null; curView = null
     dropViews([])
-    leaveFileMode(); page.setFileBar(false); page.slideTo(0); page.slideIndex(0)   // P5: (the Index sheet, if the file came from it, slides back in)
+    leaveFileMode(); page.showBack(false); page.setFileBar(false); page.slideTo(0); page.slideIndex(0)   // P5: (the Index sheet, if the file came from it, slides back in)
     lockScroll(false)
     syncDom(); preload(); kick()
     const back = opener && document.contains(opener) ? opener : dom.panels.get(reel[at])?.open ?? null
@@ -524,6 +556,7 @@ export async function startPhone(host: HTMLElement, cancelled: () => boolean = (
   /** the interior's data and paper are made while the cover is on screen, so the door does not wait for them */
   async function warmSpace() { try { await (await loadSpace()).init() } catch { /* the door will say so */ } }
   async function enterSpace(o: { push: boolean; inputAt?: number }) {
+    if (phase === 'panning') await takePan('YW-000')
     if (!spaceReady() || phase !== 'settled' || busy) return
     busy = true
     origin = { sec: scrollY / view.h, opener: document.activeElement instanceof HTMLElement && document.activeElement !== document.body ? document.activeElement : null }
@@ -707,7 +740,7 @@ export async function startPhone(host: HTMLElement, cancelled: () => boolean = (
     if (!t) {
       // a tap on the cover's drive (inside its reticle, not on the paper or the bar) opens the profile
       const el = e.target as HTMLElement
-      if (phase === 'settled' && at === 0 && !busy && spaceReady() && !el.closest('a, .ph-sheet, .ph-panel, .ph-bar')) {
+      if (((phase === 'settled' && at === 0 && !busy) || (phase === 'panning' && to === 0)) && spaceReady() && !el.closest('a, .ph-sheet, .ph-panel, .ph-bar')) {
         const r = rest(0)
         if (e.clientX >= r.x0 && e.clientX <= r.x1 && e.clientY >= r.y0 && e.clientY <= r.y1) void enterSpace({ push: true, inputAt: e.timeStamp })
       }
