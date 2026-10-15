@@ -13,6 +13,8 @@ export class VideoPool {
       v.muted = true; v.defaultMuted = true; v.playsInline = true; v.preload = 'auto'; v.disablePictureInPicture = true
       v.setAttribute('muted', ''); v.setAttribute('playsinline', ''); v.setAttribute('webkit-playsinline', ''); v.setAttribute('aria-hidden', 'true'); v.tabIndex = -1
       v.disableRemotePlayback = true
+      // P6a: inline only, no controls, no way to full screen, no AirPlay, nothing to download
+      v.controls = false; v.autoplay = false; v.setAttribute('controlslist', 'nodownload nofullscreen noremoteplayback'); v.setAttribute('x-webkit-airplay', 'deny'); v.setAttribute('disablepictureinpicture', '')
       parent.appendChild(v); this.els.push(v); this.used.set(v, 0)
     }
   }
