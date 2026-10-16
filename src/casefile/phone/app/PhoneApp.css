@@ -1,6 +1,8 @@
 /* The phone shell. Everything is classes in this file; the code only sets properties through element.style (CSSOM), because the
    production CSP is style-src 'self' (no inline <style>, no inline style attributes). No CSS transition drives anything that must stay
    in step with the picture: the only transition here is the 120 ms clip -> still fade, which is the handoff rule itself. */
+/* a part of a page that is put in before it is needed stays unlaid-out until the shell takes the mark off (P6b, P6c) */
+[data-cold] { content-visibility: hidden; }
 html.ph { scroll-snap-type: y mandatory; overscroll-behavior: none; -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }   /* P6a: no pull-to-refresh, no inflated text on rotation */
 body.ph-body { overscroll-behavior: none; }   /* P6a */
 html.ph-locked { overflow: hidden; }

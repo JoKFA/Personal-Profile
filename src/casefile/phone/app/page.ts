@@ -108,7 +108,7 @@ export function buildPage(host: HTMLElement, stops: StopCopy[], canOpen: (id: st
     panels.set(s.id, makePanel(sec, s, i, canOpen, line))
   })
   // Index and Contact: one paper sheet, the last section (indexpage.ts)
-  const ix = buildIndex(main, stops.length); sections.push(ix.sec)   // P5
+  const ix = buildIndex(main, stops.length); sections.push(ix.sec)   // P5 (P6c: its words come later, controller.ensureIndex)
 
   const land = el(root, 'div', 'ph-land'); land.setAttribute('role', 'status'); el(land, 'p', '', COPY.landscape)
   return { root, html: document.documentElement, fileLabel, bar, brand, nav, back, indexBtn, contactBtn, main, sections, sheet, panels, reticle, marks, tag, rule, land, lines, sheetLines, ix }   // P5

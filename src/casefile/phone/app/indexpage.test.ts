@@ -3,7 +3,7 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { CONTACT, ENTRIES, entryById } from '../../data/entries'
 import { SELECTED } from '../../data/story'
-import { buildIndex, contactFacts, contactLinks, indexGroups, rowOf } from './indexpage'
+import { buildIndex, contactFacts, fillIndex, contactLinks, indexGroups, rowOf } from './indexpage'
 
 describe('the phone Index: the desktop IndexPanel\'s groups, order and words', () => {
   const groups = indexGroups()
@@ -44,6 +44,8 @@ describe('the phone Index: the desktop IndexPanel\'s groups, order and words', (
 describe('the phone Index: the built sheet', () => {
   const host = document.createElement('main'); document.body.appendChild(host)
   const ix = buildIndex(host, 5)
+  expect(ix.filled, 'the sheet is empty until it is filled').toBe(false)
+  fillIndex(ix, 5)
   it('is the last section, with a button for each row, each the whole row', () => {
     expect(ix.sec.id).toBe('ph-s5')
     expect(ix.rows.length).toBe(indexGroups().reduce((n, g) => n + g.rows.length, 0))

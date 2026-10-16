@@ -50,22 +50,30 @@ const el = <K extends keyof HTMLElementTagNameMap>(parent: HTMLElement, tag: K, 
 export interface IndexDom {
   /** the sheet: the last section of the reel */
   sec: HTMLElement
-  /** the Contact block (the top bar's Contact scrolls to it) */
+  /** the Contact block (the top bar's Contact scrolls to it); there once the sheet is filled */
   contact: HTMLElement
   /** every row, in order (a button each, the whole row) */
   rows: HTMLButtonElement[]
+  /** the sheet's words are in (P6c: they are put in when the first screen is long done, or at once when somebody asks for the sheet) */
+  filled: boolean
+}
+
+/** The sheet's place in the reel, empty: its section (the last of the reel, a screen tall) is there from the start, its words come with `fillIndex` (P6c). */
+export function buildIndex(main: HTMLElement, n: number): IndexDom {
+  const sec = el(main, 'section', 'ph-sec ph-index'); sec.id = `ph-s${n}`
+  return { sec, contact: null as unknown as HTMLElement, rows: [], filled: false }
 }
 
 /**
- * Build the sheet into `main` as its section number `n`. Headings run in order: the page's h1 is the bar's name, each stop is an h2, then this sheet's h2 (Index)
- * with an h3 per group, and an h2 for Contact.
+ * Put the sheet's words into its section. Headings run in order: the page's h1 is the bar's name, each stop is an h2, then this sheet's h2 (Index)
+ * with an h3 per group, and an h2 for Contact. Returns the parts of the sheet (each group, the Contact block), in order, so that the caller may lay them out one at a time.
  */
-export function buildIndex(main: HTMLElement, n: number): IndexDom {
-  const sec = el(main, 'section', 'ph-sec ph-index'); sec.id = `ph-s${n}`
+export function fillIndex(ix: IndexDom, n: number): HTMLElement[] {
+  const sec = ix.sec, parts: HTMLElement[] = []
   const h = el(sec, 'h2', 'ph-h', 'Index'); h.id = `ph-t${n}`; sec.setAttribute('aria-labelledby', h.id)
-  const rows: HTMLButtonElement[] = []
+  const rows = ix.rows
   for (const g of indexGroups()) {
-    const gs = el(sec, 'div', 'ph-ixg')
+    const gs = el(sec, 'div', 'ph-ixg'); parts.push(gs)
     const gh = el(gs, 'h3', 'ph-lbl ph-ixh', g.name)
     const ul = el(gs, 'ul', 'ph-ixl'); ul.setAttribute('aria-label', g.name); void gh
     for (const r of g.rows) {
@@ -75,7 +83,7 @@ export function buildIndex(main: HTMLElement, n: number): IndexDom {
     }
   }
   // Contact: the profile's facts, then the four links (the address is plain text, so that a long press selects it)
-  const contact = el(sec, 'section', 'ph-contact'); contact.id = 'ph-contact'
+  const contact = el(sec, 'section', 'ph-contact'); contact.id = 'ph-contact'; parts.push(contact)
   const ch = el(contact, 'h2', 'ph-h', 'Contact'); ch.id = 'ph-contact-h'; contact.setAttribute('aria-labelledby', ch.id)
   const dl = el(contact, 'dl', 'ph-dl')
   for (const [k, v] of contactFacts()) { el(dl, 'dt', 'ph-lbl', k); el(dl, 'dd', '', v) }
@@ -89,5 +97,6 @@ export function buildIndex(main: HTMLElement, n: number): IndexDom {
     else el(a, 'span', 't', l.text)
     el(a, 'span', 'ar', l.arrow).setAttribute('aria-hidden', 'true')
   }
-  return { sec, contact, rows }
+  ix.contact = contact; ix.filled = true
+  return parts
 }

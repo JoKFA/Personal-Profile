@@ -8,7 +8,8 @@ import type { OpenShot, Pt as MPt, Rect, Shot } from '../manifest'
 import { closeKey, entranceKey, loadManifest, openKey, panKey, readFlags, stillKey, windowKey } from './assets'
 import type { EnterOptions, EntryBridge } from './gate/entry'
 import { sampleAt } from './clock'
-import { Slicer } from './idle'   // P6b
+import { Slicer, idleSlot, nextTask } from './idle'   // P6b
+import { fillIndex } from './indexpage'   // P6c
 import { stopCopy } from './copy'
 import type { FileView } from './file/fileview'
 import { HOOKS } from '../../scene/lab'
@@ -53,6 +54,7 @@ export async function startPhone(host: HTMLElement, cancelled: () => boolean = (
   const copies = reel.map((id, i) => stopCopy(id, i))
   const dom = buildPage(host, copies, (id) => !!m.open[id])
   const { root } = dom
+  await nextTask()   // P6c: the page is built; the entry page may paint and take input before the shell goes on (a start that was cancelled meanwhile is taken down by its caller)
   // P6a: the layout's height is the small viewport's (svh): it does not change when the browser's toolbar slides, so nothing is laid out again and nothing jumps mid-read; a browser without svh has innerHeight
   const svhProbe = document.createElement('div'); svhProbe.className = 'ph-svh'; svhProbe.setAttribute('aria-hidden', 'true'); root.appendChild(svhProbe)   // P6a
   const svh = () => { const h = svhProbe.offsetHeight; return h > 100 ? h : innerHeight }   // P6a
@@ -201,7 +203,9 @@ export async function startPhone(host: HTMLElement, cancelled: () => boolean = (
   let raf = 0, last = 0, scrolling = false
   /** P6b: runs `fn` once nothing has moved for `ms` (the loop is not running, no pan, no scroll), checked every 150 ms */
   let quietWait = false
+  const quietFns: (() => void)[] = []
   function whenQuiet(fn: () => void, ms = 600) {
+    quietFns.push(fn)   // (P6c: a queue: the interior and the Index both wait for the same quiet)
     if (quietWait) return
     quietWait = true
     let since = 0
@@ -209,10 +213,27 @@ export async function startPhone(host: HTMLElement, cancelled: () => boolean = (
       if (disposed) return
       const q = !raf && !busy && phase === 'settled' && !scrolling && !root.hasAttribute('data-entering'), now = performance.now()
       if (!q) since = 0; else if (!since) since = now
-      if (since && now - since >= ms) { quietWait = false; fn() } else setTimeout(tick, 150)
+      if (since && now - since >= ms) { quietWait = false; const run = quietFns.splice(0); for (const f of run) f() } else setTimeout(tick, 150)
     }
     setTimeout(tick, 150)
   }
+  // ── P6c: the Index's words are put in when the first screen is long done (a part per idle moment), or at once when somebody asks for the sheet ──
+  let ixSlow = false, ixQueued = false
+  function ensureIndex(now = true) {
+    if (dom.ix.filled) {
+      if (now && ixSlow) { ixSlow = false; for (const p of dom.ix.sec.querySelectorAll('[data-cold]')) p.removeAttribute('data-cold') }
+      return
+    }
+    const parts = fillIndex(dom.ix, N)
+    if (now) return
+    ixSlow = true
+    for (const p of parts) p.setAttribute('data-cold', '')
+    void (async () => {
+      for (const p of parts) { await idleSlot(300); if (!ixSlow || disposed) return; p.removeAttribute('data-cold'); p.getBoundingClientRect() }
+      ixSlow = false
+    })()
+  }
+  const indexLater = () => { if (ixQueued || dom.ix.filled) return; ixQueued = true; whenQuiet(() => { ixQueued = false; if (!disposed) ensureIndex(false) }, 800) }
   function frame(now: number) {
     raf = 0
     if (disposed) return
@@ -235,6 +256,7 @@ export async function startPhone(host: HTMLElement, cancelled: () => boolean = (
 
   // ── preloading around the current stop ──
   function preload() {
+    indexLater()   // P6c
     if (at === 0 && spaceReady()) whenQuiet(() => { if (at === 0) void warmSpace() })   // P6b: not while the paper rises or a pan lands
     const near = [at - 1, at, at + 1].filter((i) => i >= 0 && i < N)
     const keep: string[] = near.map((i) => stillKey(reel[i]))
@@ -305,6 +327,7 @@ export async function startPhone(host: HTMLElement, cancelled: () => boolean = (
     prevY = y
     if (fileMode) return   // the file page reads the scroll itself (the sticky label, the text that decrypts)
     scrollP = y / view.h
+    if (!dom.ix.filled && scrollP > N - 1.3) ensureIndex()   // P6c: the Index is close and not there yet: it is put in now
     if (phase === 'settled' || phase === 'panning') {
       if (progTo === null) want = clamp(sectionWant(scrollP, dir, dom.sections.length), 0, N - 1)
       pump()
@@ -329,6 +352,7 @@ export async function startPhone(host: HTMLElement, cancelled: () => boolean = (
   function goTo(section: number, y?: number) {   // P5: `y`: a place inside the section (Contact, in the Index sheet)
     section = clamp(section, 0, dom.sections.length - 1)
     if (phase !== 'settled' && phase !== 'panning') return
+    if (section >= dom.sections.length - 1) ensureIndex()   // P6c
     const from = Math.round(scrollP)
     progTo = Math.abs(section - from) > 1 ? section : null
     if (progTo !== null) want = clamp(at, 0, N - 1)
@@ -336,6 +360,7 @@ export async function startPhone(host: HTMLElement, cancelled: () => boolean = (
   }
   /** the top bar's Contact: the Index sheet's Contact block, under the bar (P5) */
   function goContact() {
+    ensureIndex()   // P6c
     const y = Math.max(0, dom.ix.contact.getBoundingClientRect().top + scrollY - L.barH - 12)
     // (the Index's start is a snap stop that a programmatic scroll from far above would end at: snapping is off until it has arrived)
     html.classList.add('ph-nosnap'); setTimeout(() => html.classList.remove('ph-nosnap'), 2500)
@@ -841,6 +866,7 @@ export async function startPhone(host: HTMLElement, cancelled: () => boolean = (
   const coldSpace = route === 'YW-000' && spaceReady()
   if (route && !coldId && !coldSpace) toBrowse()
   at = to = want = coldIx >= 0 ? coldIx : coldId ? N - 1 : 0
+  await nextTask()   // P6c
   onOrient()
   layout()
   void document.fonts?.ready.then(() => { if (!disposed) { layout(); kick() } })
@@ -850,7 +876,7 @@ export async function startPhone(host: HTMLElement, cancelled: () => boolean = (
   await stage.loadStill(stillKey(first))
   await Promise.all(dom.lines.map((l) => l.ready))
   if (disposed) return { dispose() {} }
-  if (coldId && coldIx < 0) scrollTo({ top: N * view.h, behavior: 'auto' })   // an entry that is not on the reel belongs to the Index
+  if (coldId && coldIx < 0) { ensureIndex(); scrollTo({ top: N * view.h, behavior: 'auto' }) }   // an entry that is not on the reel belongs to the Index
   else if (at > 0) scrollTo({ top: at * view.h, behavior: 'auto' })
   scrollP = scrollY / view.h; prevY = scrollY
   // a return visit: the paper rises over 0.4 s; a cold link to a file: its panel is already there; a first visit: it waits for the entrance
