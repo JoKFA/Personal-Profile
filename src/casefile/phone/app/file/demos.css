@@ -100,6 +100,8 @@
 .ph-fdemo .dfd .bd.sel circle { fill: #b3350f; }
 .ph-fdemo .fixed .dfd .bd text { fill: var(--acc-text); }
 .ph-fdemo .fixed .dfd .bd.sel circle { fill: var(--acc-text); }
+/* the marker's fill changes at once: the text turns white on the spot, and over the 0.2 s fill fade it sat white on paper (E 3.06:1, T 2.76:1 in the sweep); the desktop keeps the fade */
+.ph-fdemo .dfd .bd circle { transition: none; }
 .ph-fdemo .vm-gate.fail span, .ph-fdemo .vm-merge.block, .ph-fdemo .pt pre.leak { color: #a3371a; }
 .ph-fdemo .vm-merge.block { border-color: #a3371a; }
 .ph-fdemo .vv-svc.warn span { color: #8f5410; }
