@@ -68,7 +68,7 @@ describe('the phone Index: the built sheet', () => {
   })
   it('every external link has the rel the desktop gives the same link (Hud.tsx), the résumé included', () => {
     const hud = readFileSync(join(__dirname, '../../ui/Hud.tsx'), 'utf8')
-    const desktopRel = (key: string) => [...hud.matchAll(new RegExp(`href=\{CONTACT\.${key}\}[^>]*rel="([^"]*)"`, 'g'))].map((m) => m[1])
+    const desktopRel = (key: string) => [...hud.matchAll(new RegExp(String.raw`href=\{CONTACT\.${key}\}[^>]*rel="([^"]*)"`, 'g'))].map((m) => m[1])
     const rels = new Map([...ix.contact.querySelectorAll<HTMLAnchorElement>('a')].map((a) => [a.querySelector('.n')!.textContent, a.rel]))
     for (const [label, key] of [['LinkedIn', 'linkedin'], ['GitHub', 'github'], ['Résumé', 'resume']] as const) {
       const d = desktopRel(key)
