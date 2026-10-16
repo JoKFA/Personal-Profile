@@ -2,7 +2,7 @@
    changed: every rule here is scoped under .ph-fdemo or .ph-fgame so it only applies on the phone. The window is 366 x ~472 css px.
    Rule of thumb: the shell's text is never under 11 px; where a drawing is scaled down, its text is sized in drawing units so it lands at 11+. */
 .ph-fdemo .dm, .ph-fgame .dm { width: 100%; height: auto; min-height: var(--ph-demo-h, 470px); font-size: 12px; display: flex; }
-.ph-fdemo .dm-panel, .ph-fgame .dm-panel { flex: 1; height: auto; min-height: var(--ph-demo-h, 470px); backdrop-filter: none; -webkit-backdrop-filter: none; background: color-mix(in srgb, #fbf8f2 95%, transparent); }
+.ph-fdemo .dm-panel, .ph-fgame .dm-panel { flex: 1; height: auto; min-height: var(--ph-demo-h, 470px); backdrop-filter: unset; -webkit-backdrop-filter: unset; background: color-mix(in srgb, #fbf8f2 95%, transparent); }   /* (`unset`, not `none`: the minifier drops `backdrop-filter: none` as the initial value, and the desktop's blur(3px) then wins) */
 .ph-fgame .dm, .ph-fgame .dm-panel { min-height: 0; height: 100%; }
 .ph-fdemo .dm-head, .ph-fgame .dm-head { font-size: 11px; padding: 10px 12px; gap: 4px 10px; flex: none; flex-wrap: wrap; }
 .ph-fdemo .dm-head > span:first-child, .ph-fgame .dm-head > span:first-child { min-width: 0; flex: 1 1 auto; }
@@ -90,6 +90,11 @@
 .ph-fgame .sn-m.bot div:last-child { color: var(--ink); } .ph-fgame .sn-form label { color: #7a5f22; }
 .ph-fdemo .cc-row.na b, .ph-fdemo .cc-treat span { color: var(--label); }
 .ph-fdemo .dfd .tbl text { fill: #b3350f; }
+/* P7f: alert-red text on the cream is 4.15:1; the phone's text tone for it is the deepened red (5.7:1). Red marks and fills keep the site's red. */
+.ph-fdemo .bu-r em.no, .ph-fdemo .pw-row.top .r, .ph-fdemo .cc-art .lab.bad, .ph-fdemo .cc-art .fp.bad, .ph-fdemo .cc-art .eq.bad, .ph-fdemo .cc-art .bang, .ph-fdemo .cc-log li.bad i, .ph-fdemo .cc-log li.bad b,
+.ph-fdemo .is-broken .cc-try, .ph-fdemo .cc-court .stamp.bad, .ph-fdemo .br-n.hot, .ph-fdemo .dm-head .live { color: #b3350f; fill: #b3350f; }
+/* the selected treatment: the page's paper on the ink (the label grey above had won over it: 3.0:1) */
+.ph-fdemo .cc-treat span.on { color: var(--bg); }
 /* the selected threat marker (P6a): white on a deepened red (the red text rule above had beaten the .sel rule: red on red, 1.4:1), and in the fixed state the olive text and the white on deepened olive */
 .ph-fdemo .dfd .bd.sel text, .ph-fdemo .fixed .dfd .bd.sel text { fill: #fff; }
 .ph-fdemo .dfd .bd.sel circle { fill: #b3350f; }
