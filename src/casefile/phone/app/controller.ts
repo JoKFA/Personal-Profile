@@ -644,15 +644,20 @@ export async function startPhone(host: HTMLElement, cancelled: () => boolean = (
   const loadSpace = () => (spaceLoad ??= loadSpaceChunk().then((mod) => (space = new mod.PhoneSpace(spaceHost))))
   /** the interior's data and paper are made while the cover is on screen, so the door does not wait for them */
   async function warmSpace() { try { await (await loadSpace()).init() } catch { /* the door will say so */ } }
+  /** P7f: the door's tap has been taken and the door has not started yet (the chunk, the cover's picture); a Back in that time cancels it */
+  let spaceEntering = false, spaceCancel = false
   async function enterSpace(o: { push: boolean; inputAt?: number }) {
     if (phase === 'panning') await takePan(reel[to])   // (whatever stop the pan is heading for: the door's tap is answered, the cover's picture is cross-faded in below)
     if (!spaceReady() || phase !== 'settled' || busy) return
-    busy = true
+    busy = true; spaceEntering = true; spaceCancel = false
+    page.showBack(true)   // P7f: `← All files` is there, and takes a tap, within ~100 ms of the door's tap (the interior used to keep it away until the picture's cut, 3.4 s)
     origin = { sec: scrollY / view.h, opener: document.activeElement instanceof HTMLElement && document.activeElement !== document.body ? document.activeElement : null }
     lockScroll(true)
     const sp = await loadSpace()
     // the cover's picture first (a cold link, the Index): the door starts from it
-    if (stage.current !== stillKey('YW-000')) await crossTo(stillKey('YW-000'))
+    if (stage.current !== stillKey('YW-000') && !spaceCancel) await crossTo(stillKey('YW-000'))
+    spaceEntering = false
+    if (spaceCancel) { spaceCancel = false; page.showBack(false); lockScroll(false); busy = false; return }   // (P7f: Back before the door had started: the cover is as it was)
     if (disposed) return
     openId = 'YW-000'; phase = 'space'; tau = 0; shot = null
     if (o.push) pushFile('YW-000')
@@ -673,15 +678,41 @@ export async function startPhone(host: HTMLElement, cancelled: () => boolean = (
     if (phase !== 'space' || !space) return
     busy = true; lockScroll(true)
     if (scrollY > 0 && !o.to) scrollTo(0, 0)
+    // P7f: the way out to the cover (not to a file): the bar's Index and Contact are there from the first frame, and a tap takes the way out over (takeExit)
+    const toCover = play && !o.to && !o.keep
+    if (toCover) { exiting = true; exitTaken = false; page.showBack(false); page.setFileBar(false); kick() }
     if (play) await (o.to ? space.leaveToFile(o.to, { rate: o.rate }) : space.leave({ rate: o.rate })); else await space.leaveNow()
-    if (disposed) return
+    exiting = false
+    if (disposed || exitTaken) return
     finishSpace(!!o.keep)
   }
+  /** P7f: a tap while the interior's way out plays: it stops where it stands, the picture cross-fades 120 ms to the cover's still, the paper is gone, the shell is settled; then the tap's own action */
+  let exiting = false, exitTaken = false, exitTake: Promise<void> | null = null
+  function takeExit(): Promise<void> {
+    if (exitTake) return exitTake
+    if (!exiting || !space) return Promise.resolve()
+    exitTake = (async () => {
+      exitTaken = true
+      await space!.takeOver(reducedMotion ? 0 : 120)
+      exiting = false
+      if (!disposed) finishSpace(false)
+      exitTake = null
+    })()
+    return exitTake
+  }
+  const onExitTap = (e: MouseEvent) => {
+    if (!exiting || !e.isTrusted) return
+    e.stopPropagation(); e.preventDefault()
+    const x = e.clientX, y = e.clientY
+    void takeExit().then(() => { if (!disposed) document.elementFromPoint(x, y)?.dispatchEvent(new MouseEvent('click', { bubbles: true, clientX: x, clientY: y, view: window })) })
+  }
+  document.addEventListener('click', onExitTap, true)
   function finishSpace(keep: boolean) {
     const opener = origin.opener
     phase = 'settled'; busy = false; openId = null; tau = 0; shot = null
     page.ownLabel(null)
     if (keep) return   // a jump to a file: the page stays the file's, the cover's paper stays out until that file is closed
+    page.showBack(false)   // P7f
     leaveFileMode(); page.setFileBar(false); page.slideTo(0); page.slideIndex(0)   // P5: (the Index sheet, if the file came from it, slides back in)
     lockScroll(false)
     syncDom(); preload(); kick()
@@ -711,6 +742,7 @@ export async function startPhone(host: HTMLElement, cancelled: () => boolean = (
 
   /** the in-page "← All files": through history when this shell pushed the entry (so Back and the button agree), plain otherwise */
   function backButton() {
+    if (spaceEntering) { spaceCancel = true; page.showBack(false); toBrowse(); return }   // P7f: the door had not started
     if (phase !== 'file' && phase !== 'space' && phase !== 'opening') return
     if (pushedByUs()) {
       buttonClose = true
@@ -938,7 +970,7 @@ export async function startPhone(host: HTMLElement, cancelled: () => boolean = (
       disposed = true
       cancelAnimationFrame(raf); clearTimeout(scrollTimer)
       lockScroll(false); html.classList.remove('ph-filemode'); space?.dispose()
-      root.removeEventListener('click', onClick)
+      root.removeEventListener('click', onClick); document.removeEventListener('click', onExitTap, true)
       for (const t of ['touchend', 'pointerup', 'click']) document.removeEventListener(t, prime)
       removeEventListener('scroll', trackY); removeEventListener('scroll', onScroll); removeEventListener('resize', onResize); visualViewport?.removeEventListener('resize', onResize)   // P5
       removeEventListener('popstate', onPop); removeEventListener('pageshow', onShow); removeEventListener('keydown', onKey)

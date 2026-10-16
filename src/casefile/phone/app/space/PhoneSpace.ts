@@ -477,7 +477,7 @@ export class PhoneSpace {
     if (!this.clipsOk()) { await this.stillsLeave(token); return }
     if (early) {
       // the door was still running: its frame is crossfaded into the cover (there is no way back through a door that has not opened)
-      await this.player.land(this.host.coverStill); this.finishLeave(); return
+      await this.player.land(this.host.coverStill, this.host.reduced() ? 0 : 120); this.finishLeave(); return   // (P7f: 120 ms)
     }
     this.preload(K.exit)
     if (where.i !== null) {
@@ -531,6 +531,21 @@ export class PhoneSpace {
     if (this.player.held) await this.player.land(to, MS); else await this.cross(to, MS)
     if (token !== this.token) return
     this.host.page.placeMarks(ridePoints(this.host.coverRest(), [], 0), this.host.coverRest(), 0)
+    this.finishLeave()
+  }
+  /**
+   * P7f: a tap while the way out plays (the exit clip, out-i, the door when it is still running): it stops where it stands and the picture cross-fades `ms` to the cover's still,
+   * whatever the tap is for is done by the caller afterwards. Resolves when the cover is on screen.
+   */
+  async takeOver(ms: number): Promise<void> {
+    if (this.mode === 'idle') return
+    this.token++
+    this.player.abort(); this.chips.hide(); this.last = null
+    this.setUi({ playing: false, reason: '', tour: false })
+    const { stage } = this.host
+    stage.pin([this.host.coverStill, K.hub])
+    await this.player.land(this.host.coverStill, ms)
+    this.host.page.placeMarks(ridePoints(this.host.coverRest(), [], 0), this.host.coverRest(), 1)
     this.finishLeave()
   }
   /** the browser has already animated the way back (a swipe-back, the Back key): no clip, the cover is simply there */
