@@ -301,6 +301,23 @@
 - 用户在自己的手机上（HTTPS）完整走一遍：最终验收；
 - 合并、部署**等用户点头**。
 
+### 3.5 独立复验与当前状态（10-16）
+- **独立复验**（`evidence/M1-V1/report.txt`）：E1 主路径和门、E2、E3、E4、E5、E7、降级、工具链、文案与事实全部通过。期间修复了以下问题：
+  - 往回滑时退回交叉淡化（`08a89c5`）；
+  - 平移开始时的双重影像（同上）；
+  - 桌面首屏前多出 2 个请求（`7212b5d` 前后）；
+  - 三处对比度不足；
+  - 进门和离开时点按不响应；
+  - 演示卡片残留磨砂（`cd17ee8` `693a528`）。
+- **桌面：** 首屏前的请求和 `main` 完全一致；`shots.mjs` 的 F3–F8 和 `main` 相差 < 0.5%。Gate.js gzip 后大 1.9 KB，是共用 Gate 里的按住模式，**接受**。
+- **预览部署：** 10-16 发到 Vercel 预览（`693a528`），交给用户在 iPhone 上验收，包括低电量模式（H9）。
+- **用户（10-16）：** "细节先别改了，之后跟桌面版一起改下周。" 下面几项留到下周：
+  - SR-01 的 "Mitigate" 在选中渐变时约 0.15 s 对比度掉到约 1:1。改法同 X-005：底色立即变，并扫一遍所有可选中的标签。半成品补丁在 `evidence/M1-P7g/wip-sweep-fades.patch`。
+  - 离开内景时点封面的盘不响应：`.ph-door` 的 `pointer-events: none` 持续约 3.7 s。Index 和 Contact 已经能接管。
+  - 桌面首屏后的前 6 s 多 4 个请求（25 对 21），不在 `/phone/` 下，要确认是不是 FileView 拆分出来的块。
+  - 桌面 fps 测试（`archive.spec.ts:160`）在 CPU 高负载时偶尔失败，单独跑能过。
+  - 合并：`.claude/verify.json` 加上 `phone:check`（见 §3.4）；`main` 合并和正式部署要等用户同意。
+
 ## 5. 端到端验收（全部满足才算完）
 
 | # | 验收 | 怎么证明 |
@@ -349,4 +366,5 @@ P0 探路 ──▶ 真机检查 ──▶ PM 定数值
 | ✅ 已批（10-14） | 开档：`KEY ISSUED · <ID>` |
 | ✅ 已批（10-14） | 眉题：`PROJECT · AI SECURITY · 2025`、`CO-OP · FINANCIAL SERVICES · 2026`、`INTERNSHIP · STARTUP CLOUD · 2025`、`PROJECT · IOT EXPOSURE · 2026`、`PROFILE & EDUCATION` |
 | ✅ 已批（10-12） | 横屏：`Turn your phone upright to open the archive.` |
+| ✅ 已批（10-16） | 加载失败：`The archive could not be loaded. Reload to try again.` |
 | 已有 | 档案页眉题 `FILE <ID> · DRAWER nn · <抽屉名>` 和校验行 `AES-256-GCM · n BLOCKS · TAG VERIFIED`（桌面原有；失败时 `TAG CHECK FAILED`）；`Inside my drive: six areas`、`Enter the archive`、Index 和联系里的全部文字 |
