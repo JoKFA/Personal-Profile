@@ -429,6 +429,111 @@ test.describe('phone shell', () => {
     expect(await w.violations()).toEqual([])
   })
 
+  /** in the page: from the next trusted tap, when the stop's still is opaque with no clip showing (the stage's layers are found by their data-key) */
+  const installTapWatch = (page: import('@playwright/test').Page, key: string) => page.evaluate((k) => {
+    const w = window as unknown as { __tap?: { t0: number; seen: number | null; off?: () => void } }
+    w.__tap?.off?.()
+    const t = { t0: 0, seen: null as number | null, off: undefined as undefined | (() => void) }
+    w.__tap = t
+    const on = (e: MouseEvent) => { if (e.isTrusted && !t.t0) t.t0 = e.timeStamp }
+    addEventListener('click', on, true)
+    let stop = false
+    const tick = () => {
+      if (stop) return
+      if (t.t0 && t.seen === null) {
+        const still = document.querySelector(`.ph-stage img[data-key="${k}"]`) as HTMLElement | null
+        const clips = [...document.querySelectorAll('.ph-stage video.on')].filter((v) => Number(getComputedStyle(v).opacity) > 0.02)
+        if (still && Number(getComputedStyle(still).opacity) >= 0.99 && !clips.length) t.seen = performance.now()
+      }
+      requestAnimationFrame(tick)
+    }
+    requestAnimationFrame(tick)
+    t.off = () => { stop = true; removeEventListener('click', on, true) }
+  }, key)
+  const tapToStill = async (page: import('@playwright/test').Page) => {
+    await expect.poll(() => page.evaluate(() => (window as unknown as { __tap: { seen: number | null } }).__tap.seen), { timeout: 5000 }).not.toBeNull()
+    return page.evaluate(() => { const t = (window as unknown as { __tap: { t0: number; seen: number } }).__tap; return t.seen - t.t0 })
+  }
+  /** the interior is on screen (the door has played) */
+  const interiorUp = async (page: import('@playwright/test').Page) => {
+    await expect(page.locator('.ph-sp[data-area]')).toBeVisible({ timeout: 60_000 })
+    await expect(page.getByRole('button', { name: /Evidence/ })).toBeVisible()
+  }
+  const navBtn = (page: import('@playwright/test').Page, name: string) => page.getByRole('navigation', { name: 'Sections' }).getByRole('button', { name })
+
+  test('the door: `← All files` is there within 120 ms of the tap, and Back while the door plays cross-fades to the cover within 250 ms', async ({ page }) => {
+    test.setTimeout(120_000)
+    const w = await watch(page)
+    await returning(page)
+    await page.goto('/')
+    await coverReady(page)
+    await page.waitForFunction(() => !document.querySelector('.ph-stage video.on'), null, { timeout: 15_000 })
+    await page.evaluate(() => {
+      const t = { tap: 0, seen: null as number | null }
+      ;(window as unknown as { __bk: typeof t }).__bk = t
+      addEventListener('click', (e) => { if (!t.tap && e.isTrusted) t.tap = e.timeStamp }, true)
+      const tick = () => {
+        if (t.tap && t.seen === null) { const cs = getComputedStyle(document.querySelector('.ph-back') as HTMLElement); if (cs.visibility === 'visible' && Number(cs.opacity) > 0.02) t.seen = performance.now() }
+        requestAnimationFrame(tick)
+      }
+      requestAnimationFrame(tick)
+    })
+    await installTapWatch(page, 'stop:YW-000')
+    await page.getByRole('button', { name: /Open the profile/ }).click()
+    await expect.poll(() => page.evaluate(() => (window as unknown as { __bk: { seen: number | null } }).__bk.seen), { timeout: 3000 }).not.toBeNull()
+    const ms = await page.evaluate(() => { const t = (window as unknown as { __bk: { tap: number; seen: number } }).__bk; return t.seen - t.tap })
+    test.info().annotations.push({ type: 'ms', description: `door tap to Back there: ${Math.round(ms)}` })
+    expect(ms, 'the door tap to `← All files` there, ms').toBeLessThanOrEqual(120)
+    await expect(page).toHaveURL(/\/projects\/profile$/, { timeout: 3000 })
+    await page.waitForFunction(() => !!document.querySelector('.ph-stage video.on'), null, { timeout: 10_000 })   // the door is playing
+    await installTapWatch(page, 'stop:YW-000')
+    await page.getByRole('button', { name: '← All files' }).click()
+    await expect(page).toHaveURL(/\/$/, { timeout: 3000 })
+    const dBack = await tapToStill(page)
+    test.info().annotations.push({ type: 'ms', description: `Back during the door to the cover still: ${Math.round(dBack)}` })
+    expect(dBack, 'Back to the cover on screen, ms').toBeLessThanOrEqual(250)
+    await expect.poll(() => page.evaluate(() => document.documentElement.classList.contains('ph-filemode'))).toBe(false)
+    await settled(page)
+    // the cover's paper and sheet are where they were, and the door opens again
+    await expect(page.getByRole('button', { name: /Open the profile/ })).toBeVisible()
+    expect(await page.evaluate(() => (document.querySelector('.ph-sheet') as HTMLElement).style.translate), 'the cover sheet is back').toBe('')
+    await expect(page.locator('.ph-space')).toBeHidden()
+    await enterThroughDoor(page)
+    await interiorUp(page)
+    expect(w.errors).toEqual([])
+  })
+
+  for (const [what, act] of [
+    ['Index', async (page: import('@playwright/test').Page) => { await navBtn(page, 'Index').click() }],
+    ['Contact', async (page: import('@playwright/test').Page) => { await navBtn(page, 'Contact').click() }],
+    ['the cover\'s drive', async (page: import('@playwright/test').Page) => { const v = page.viewportSize()!; await page.touchscreen.tap(v.width / 2, v.height * 0.46) }],
+  ] as const) {
+    test(`the interior's way out: ${what} is taken from the exit's first frame, the exit stops and the cover is back within 250 ms`, async ({ page }) => {
+      test.setTimeout(180_000)
+      const w = await watch(page)
+      await returning(page)
+      await page.goto('/')
+      await coverReady(page)
+      await enterThroughDoor(page)
+      await interiorUp(page)
+      await page.getByRole('button', { name: '← All files' }).click()
+      await page.waitForTimeout(250)   // the exit clip is playing
+      expect(await page.evaluate(() => !!document.querySelector('.ph-stage video.on')), 'the exit is playing').toBe(true)
+      const nav = await page.evaluate(() => { const n = document.querySelector('.ph-nav') as HTMLElement, c = getComputedStyle(n); return { vis: c.visibility, op: Number(c.opacity) } })
+      expect(nav.vis === 'visible' && nav.op > 0.9, `the bar's Index and Contact are there (${JSON.stringify(nav)})`).toBe(true)
+      await installTapWatch(page, 'stop:YW-000')
+      await act(page)
+      const tms = await tapToStill(page)
+      test.info().annotations.push({ type: 'ms', description: `${what} tap during the exit to the cover still: ${Math.round(tms)}` })
+      expect(tms, `the tap to the cover on screen, ms`).toBeLessThanOrEqual(250)
+      if (what === 'Index') await expect.poll(() => screens(page), { timeout: 8000 }).toBeGreaterThan(4.5)
+      else if (what === 'Contact') await expect(page.getByRole('region', { name: 'Contact' })).toBeInViewport({ timeout: 8000 })
+      else await expect(page).toHaveURL(/\/projects\/profile$/, { timeout: 5000 })   // the drive opens the profile again
+      expect(await page.evaluate(() => document.documentElement.classList.contains('ph-filemode')) && what !== 'the cover\'s drive', 'the file layer is down').toBe(false)
+      expect(w.errors).toEqual([])
+    })
+  }
+
   test('a cold link to a file: no entry page, the file opens, back goes to the reel @short', async ({ page }) => {
     const w = await watch(page)
     await page.goto(`/projects/${slug('X-001')}`)
