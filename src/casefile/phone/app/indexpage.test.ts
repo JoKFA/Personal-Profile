@@ -66,6 +66,16 @@ describe('the phone Index: the built sheet', () => {
     expect(ix.contact.querySelector('.ph-mail')!.closest('a')).toBeNull()
     expect(contactLinks().filter((l) => l.external).every((l) => as.find((a) => a.href.endsWith(l.href.replace(/^https?:\/\/[^/]+/, '')))?.rel.includes('noopener'))).toBe(true)
   })
+  it('every external link has the rel the desktop gives the same link (Hud.tsx), the résumé included', () => {
+    const hud = readFileSync(join(__dirname, '../../ui/Hud.tsx'), 'utf8')
+    const desktopRel = (key: string) => [...hud.matchAll(new RegExp(`href=\{CONTACT\.${key}\}[^>]*rel="([^"]*)"`, 'g'))].map((m) => m[1])
+    const rels = new Map([...ix.contact.querySelectorAll<HTMLAnchorElement>('a')].map((a) => [a.querySelector('.n')!.textContent, a.rel]))
+    for (const [label, key] of [['LinkedIn', 'linkedin'], ['GitHub', 'github'], ['Résumé', 'resume']] as const) {
+      const d = desktopRel(key)
+      expect(d.length, `the desktop has a ${label} link`).toBeGreaterThan(0)
+      for (const r of d) expect(rels.get(label), `${label}'s rel`).toBe(r)
+    }
+  })
   it('Contact has its own anchor and name', () => {
     expect(ix.contact.id).toBe('ph-contact'); expect(ix.contact.getAttribute('aria-labelledby')).toBe('ph-contact-h')
   })
