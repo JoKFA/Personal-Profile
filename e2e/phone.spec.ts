@@ -56,6 +56,48 @@ test.describe('phone shell', () => {
     expect(w.errors).toEqual([])
   })
 
+  test('every pan of the reel plays as a clip, down and up, and none falls back to the cross-fade (its ghost double exposure) @short', async ({ page }) => {
+    test.setTimeout(180_000)
+    const w = await watch(page)
+    await returning(page)
+    await page.goto('/')
+    await coverReady(page)
+    await page.mouse.move(100, 300)
+    const stops = ['YW-000', 'X-001', 'SR-01', 'SR-02', 'X-009']
+    const hops = [...stops.slice(0, -1).map((a, i) => [a, stops[i + 1], 1] as const), ...stops.slice(1).reverse().map((a, i) => [a, stops[stops.length - 2 - i], -1] as const)]
+    for (const [a, b, dir] of hops) {
+      await page.mouse.wheel(0, dir * 500)
+      // the pan's own clip is playing within a second (a fall-back to the cross-fade plays none, and shows the two stops through each other for 1.15 s)
+      await page.waitForFunction((name) => [...document.querySelectorAll('.ph-stage video')].some((v) => (v.getAttribute('src') ?? '').includes(name) && !(v as HTMLVideoElement).paused && (v as HTMLVideoElement).currentTime > 0.05), `pan-${a}-${b}`, { timeout: 1500, polling: 16 })
+      await page.waitForFunction(() => !document.querySelector('.ph-stage video.on'), null, { timeout: 15_000 })
+      await settled(page)
+    }
+    expect(w.errors).toEqual([])
+  })
+
+  test('swipes back and forth at once: every hop that is one stop plays its clip @short', async ({ page }) => {
+    test.setTimeout(120_000)
+    const w = await watch(page)
+    await returning(page)
+    await page.goto('/')
+    await coverReady(page)
+    await page.mouse.move(100, 300)
+    // a hop to the next stop, then straight back, while the first pan is still playing, three times over: the pan back is a pan clip too (the hops that merge into a two-stop jump cross-fade by design)
+    await scrollScreens(page, 3)   // to SR-02, the pans waited out
+    const played = new Set<string>()
+    await page.exposeFunction('seenPan', (n: string) => played.add(n))
+    await page.evaluate(() => { setInterval(() => { for (const v of document.querySelectorAll('.ph-stage video')) { const src = v.getAttribute('src') ?? ''; if (/pan-/.test(src) && !(v as HTMLVideoElement).paused && (v as HTMLVideoElement).currentTime > 0.05) (window as unknown as { seenPan(n: string): void }).seenPan(/pan-([A-Z0-9-]+?)\./.exec(src)?.[1] ?? src) } }, 16) })
+    for (let i = 0; i < 3; i++) {
+      await page.mouse.wheel(0, -500); await page.waitForTimeout(700)
+      await page.mouse.wheel(0, 500); await page.waitForTimeout(1600)
+      await page.mouse.wheel(0, -500); await page.waitForTimeout(1600)
+      await page.mouse.wheel(0, 500); await page.waitForTimeout(1600)
+    }
+    await page.waitForFunction(() => !document.querySelector('.ph-stage video.on'), null, { timeout: 15_000 })
+    for (const n of ['SR-02-SR-01', 'SR-01-SR-02']) expect([...played].some((x) => x.startsWith(n)), `the pan ${n} played as a clip`).toBe(true)
+    expect(w.errors).toEqual([])
+  })
+
   test('open X-001: the window and the body, then back to the same stop @short', async ({ page }) => {
     const w = await watch(page)
     await returning(page)

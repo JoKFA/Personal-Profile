@@ -3,7 +3,7 @@
 import { expect, test } from '@playwright/test'
 import { readFileSync } from 'node:fs'
 import { CONTACT, entryById } from '../src/casefile/data/entries'
-import { back, coverReady, enterThroughDoor, fileOpen, holdToVerify, openFile, scrollScreens, watch } from './phone-helpers'
+import { back, closed, coverReady, enterThroughDoor, fileOpen, holdToVerify, openFile, scrollScreens, watch } from './phone-helpers'
 
 const PROD = `http://127.0.0.1:${process.env.E2E_PROD_PORT ?? 4173}`
 test.use({ baseURL: PROD })
@@ -43,6 +43,7 @@ test('phone path: the entry, the reel, a file, the Index, Contact and the profil
   await openFile(page, title('X-001'))
   await fileOpen(page, entryById.get('X-001')!.slug, title('X-001'))
   await back(page)
+  await closed(page)
   await page.evaluate(() => scrollTo(0, 0))
   await page.getByRole('navigation', { name: 'Sections' }).getByRole('button', { name: 'Index' }).click()
   const row = page.locator('button.ph-ix[data-id="X-002"]')
@@ -50,6 +51,7 @@ test('phone path: the entry, the reel, a file, the Index, Contact and the profil
   await row.click()
   await fileOpen(page, entryById.get('X-002')!.slug, title('X-002'))
   await back(page)
+  await closed(page)
   await page.getByRole('navigation', { name: 'Sections' }).getByRole('button', { name: 'Contact' }).click()
   await expect(page.getByRole('region', { name: 'Contact' }).getByRole('link', { name: /GitHub/ })).toHaveAttribute('href', CONTACT.github)
   await page.evaluate(() => scrollTo(0, 0))

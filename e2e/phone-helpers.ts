@@ -92,6 +92,9 @@ export async function back(page: Page) {
   await expect(page).toHaveURL(/\/$/, { timeout: 20_000 })
 }
 
+/** the close has played out and the file layer is down: a test that scrolls the page by script (a visitor's finger cannot, while the close plays) waits for this first, or its scroll lands in the close */
+export const closed = (page: Page) => expect.poll(() => page.evaluate(() => document.documentElement.classList.contains('ph-filemode')), { timeout: 20_000 }).toBe(false)
+
 export async function enterThroughDoor(page: Page) {
   // one tap on the door, wherever the reel is (a pan to the cover is taken over)
   await page.getByRole('button', { name: /Open the profile/ }).click()
