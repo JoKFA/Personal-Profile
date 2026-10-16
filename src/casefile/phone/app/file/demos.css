@@ -2,7 +2,7 @@
    changed: every rule here is scoped under .ph-fdemo or .ph-fgame so it only applies on the phone. The window is 366 x ~472 css px.
    Rule of thumb: the shell's text is never under 11 px; where a drawing is scaled down, its text is sized in drawing units so it lands at 11+. */
 .ph-fdemo .dm, .ph-fgame .dm { width: 100%; height: auto; min-height: var(--ph-demo-h, 470px); font-size: 12px; display: flex; }
-.ph-fdemo .dm-panel, .ph-fgame .dm-panel { flex: 1; height: auto; min-height: var(--ph-demo-h, 470px); backdrop-filter: unset; -webkit-backdrop-filter: unset; background: color-mix(in srgb, #fbf8f2 95%, transparent); }   /* (`unset`, not `none`: the minifier drops `backdrop-filter: none` as the initial value, and the desktop's blur(3px) then wins) */
+.ph-fdemo .dm-panel, .ph-fgame .dm-panel { flex: 1; height: auto; min-height: var(--ph-demo-h, 470px); -webkit-backdrop-filter: unset; backdrop-filter: unset; background: color-mix(in srgb, #fbf8f2 95%, transparent); }   /* (`unset`, not `none`: the minifier drops `backdrop-filter: none` as the initial value, and the desktop's blur(3px) then wins; the prefixed line first, else the minifier keeps only the prefixed one and Chrome ignores it) */
 .ph-fgame .dm, .ph-fgame .dm-panel { min-height: 0; height: 100%; }
 .ph-fdemo .dm-head, .ph-fgame .dm-head { font-size: 11px; padding: 10px 12px; gap: 4px 10px; flex: none; flex-wrap: wrap; }
 .ph-fdemo .dm-head > span:first-child, .ph-fgame .dm-head > span:first-child { min-width: 0; flex: 1 1 auto; }

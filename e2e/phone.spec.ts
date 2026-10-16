@@ -534,6 +534,18 @@ test.describe('phone shell', () => {
     })
   }
 
+  test('a demo panel carries no backdrop blur on the phone (the desktop blur is overridden in the built CSS, after the minifier) @short', async ({ page }) => {
+    const w = await watch(page)
+    await page.goto(`/projects/${slug('X-001')}`)
+    await fileOpen(page, slug('X-001'), title('X-001'))
+    const panels = page.locator('.ph-file.on .dm-panel')
+    await expect(panels.first()).toBeAttached({ timeout: 30_000 })
+    const blur = await panels.evaluateAll((els) => els.map((e) => getComputedStyle(e).backdropFilter))
+    expect(blur.length, 'the file has a demo panel').toBeGreaterThan(0)
+    expect(blur.every((b) => b === 'none')).toBe(true)
+    expect(w.errors).toEqual([])
+  })
+
   test('a cold link to a file: no entry page, the file opens, back goes to the reel @short', async ({ page }) => {
     const w = await watch(page)
     await page.goto(`/projects/${slug('X-001')}`)
