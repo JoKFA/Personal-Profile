@@ -4,9 +4,10 @@ import './PhoneApp.css'
 import { startPhone, type PhoneHandle } from './controller'
 import { EntryBridge, isFirstVisit } from './gate/entry'
 import PhoneName from './PhoneName'
+import { loadPhoneGate } from './early'   // P7f
 
 // The entry page (a first visit only) is its own chunk's worth of code: a return visit never loads it.
-const PhoneGate = lazy(() => import('./gate/PhoneGate'))
+const PhoneGate = lazy(loadPhoneGate)
 
 /**
  * The phone shell (plan M1, P2): baked stills and clips on a fixed stage, a native-scroll reel over it. A separate chunk:

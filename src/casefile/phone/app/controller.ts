@@ -10,6 +10,7 @@ import type { EnterOptions, EntryBridge } from './gate/entry'
 import { sampleAt } from './clock'
 import { Slicer, idleSlot, nextTask } from './idle'   // P6b
 import { fillIndex } from './indexpage'   // P6c
+import { loadFileChunks, loadSpaceChunk } from './early'   // P7f
 import { stopCopy } from './copy'
 import type { FileView } from './file/fileview'
 import { HOOKS } from '../../scene/lab'
@@ -412,7 +413,7 @@ export async function startPhone(host: HTMLElement, cancelled: () => boolean = (
 
   // ── the file page (P3b): any of the 19 stops opens; the view is built (and its text sealed) before the tap ──
   let fileMods: Promise<{ fv: typeof import('./file/fileview'); mount: typeof import('./file/mount') }> | null = null
-  const loadFile = () => (fileMods ??= Promise.all([import('./file/fileview'), import('./file/mount')]).then(([fv, mount]) => ({ fv, mount })))
+  const loadFile = () => (fileMods ??= loadFileChunks().then(([fv, mount]) => ({ fv, mount })))
   let visitor: Visitor | null = null
   const audit: [string, string][] = []
   const record = (line: string) => { audit.push([new Date().toLocaleTimeString('en-GB'), line]); if (audit.length > 40) audit.shift() }
@@ -640,7 +641,7 @@ export async function startPhone(host: HTMLElement, cancelled: () => boolean = (
   }
   // (one instance, however many callers ask before the chunk has arrived: the cover's warm-up and the door's entry may overlap)
   let spaceLoad: Promise<PhoneSpace> | null = null
-  const loadSpace = () => (spaceLoad ??= import('./space/PhoneSpace').then((mod) => (space = new mod.PhoneSpace(spaceHost))))
+  const loadSpace = () => (spaceLoad ??= loadSpaceChunk().then((mod) => (space = new mod.PhoneSpace(spaceHost))))
   /** the interior's data and paper are made while the cover is on screen, so the door does not wait for them */
   async function warmSpace() { try { await (await loadSpace()).init() } catch { /* the door will say so */ } }
   async function enterSpace(o: { push: boolean; inputAt?: number }) {

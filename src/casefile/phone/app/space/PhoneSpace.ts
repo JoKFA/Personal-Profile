@@ -7,6 +7,7 @@ import type { Pt, Rect, SpaceExit, SpaceManifest, Shot } from '../../manifest'
 import { damp, spring } from '../../../motion/spring'
 import { lerpFit, toScreen, type Fit } from '../fit'
 import { Slicer, idleSlot, nextTask } from '../idle'   // P6b
+import { loadSpaceMount } from '../early'   // P7f
 import type { PageDom, PageLayer } from '../page'
 import type { PhoneManifest } from '../../manifest'
 import type { Stage } from '../stage/stage'
@@ -118,7 +119,7 @@ export class PhoneSpace {
       this.player = new ClipPlayer(stage, (key) => this.urls.get(key))
       this.chips = new ChipLayer(this.host.dom.root)
       this.layout()
-      const { mountSheetAsync } = await import('./mount')
+      const { mountSheetAsync } = await loadSpaceMount()
       const sl = new Slicer(6, () => true)   // P6b: the paper is built in steps
       const thumbs: Record<number, string> = {}
       S.stations.forEach((st, i) => { thumbs[i] = this.host.url(st.thumb.file) })
