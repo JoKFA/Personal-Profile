@@ -537,6 +537,35 @@ export async function startPhone(host: HTMLElement, cancelled: () => boolean = (
     if (disposed) return
     await finishFile(id)
   }
+  /**
+   * A tap while the close clip is playing (the stop's Open, the cover's door, a tick, the Index, Contact, an Index row) is taken at once: the close stops where it stands, the picture
+   * cross-fades 120 ms to the stop's still, the page layer lands on the stop in the same 120 ms (the close's animation run to its end), the shell is settled, and then the tapped action
+   * starts. Taps that arrive while this is going on wait for it. Resolves when the shell is settled.
+   */
+  let closeTake: Promise<void> | null = null
+  function takeClose(): Promise<void> {
+    if (closeTake) return closeTake
+    const id = openId
+    if (phase !== 'closing' || !id) return Promise.resolve()
+    closeTake = (async () => {
+      ++flow   // the close's own continuation is void from here
+      const ms = reducedMotion ? 0 : 120
+      const tau0 = tau, i0 = shotIndex, iEnd = shot ? shot.quads.length - 1 : i0, v = curView, t0 = performance.now()
+      const pageDown = new Promise<void>((res) => {
+        const f = (now: number) => {
+          const k = ms ? Math.min(1, (now - t0) / ms) : 1
+          tau = tau0 * (1 - k); shotIndex = i0 + (iEnd - i0) * k
+          syncDom(); v?.update(tau, 'closing')
+          if (k < 1 && !disposed) requestAnimationFrame(f); else res()
+        }
+        requestAnimationFrame(f)
+      })
+      await Promise.all([stage.abortTo(stillKey(id), ms), pageDown])
+      if (!disposed) await finishFile(id)
+      closeTake = null
+    })()
+    return closeTake
+  }
   /** back on the reel: the stop the visitor came from is under the page again, the focus is where it was */
   async function finishFile(id: string) {
     const home = stillKey(reel[at])
@@ -766,6 +795,13 @@ export async function startPhone(host: HTMLElement, cancelled: () => boolean = (
     }
   }
   const onClick = (e: MouseEvent) => {
+    // a tap during a close lands on the file layer's shield (it is over everything until the close is done): the close is taken over first (takeClose), and then the tap goes to what is under that
+    // point now, as if it had been made there
+    if (phase === 'closing') {
+      const x = e.clientX, y = e.clientY
+      void takeClose().then(() => { if (!disposed) document.elementFromPoint(x, y)?.dispatchEvent(new MouseEvent('click', { bubbles: true, clientX: x, clientY: y, view: window })) })
+      return
+    }
     const t = (e.target as HTMLElement).closest('button')
     if (!t) {
       // a tap on the cover's drive (inside its reticle, not on the paper or the bar) opens the profile
