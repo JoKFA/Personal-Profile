@@ -90,6 +90,9 @@ export async function back(page: Page) {
   // one tap on `← All files`: while the file is still opening it stops the open, once it is open it is the normal close
   await page.getByRole('button', { name: '← All files' }).click()
   await expect(page).toHaveURL(/\/$/, { timeout: 20_000 })
+  // the URL changes when the tap is taken; the close plays on for a second or two, and a tap on the door or Open in that time finds the shell closing (it is taken once the close is over):
+  // back means the file layer is down
+  await expect.poll(() => page.evaluate(() => document.documentElement.classList.contains('ph-filemode')), { timeout: 20_000 }).toBe(false)
 }
 
 export async function enterThroughDoor(page: Page) {
