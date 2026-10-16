@@ -285,14 +285,16 @@ export async function startPhone(host: HTMLElement, cancelled: () => boolean = (
     busy = true; phase = 'panning'; to = b; panK = 0
     const key = `${reel[a]}>${reel[b]}`, clip = jump ? undefined : m.pans[key]
     kick()
+    // (the pan's clip is reserved by run() as it is called: it is called first, so that nothing asked for below can take that clip's place in the pool)
+    const running = stage.run({
+      clipKey: clip ? panKey(reel[a], reel[b]) : null, clip: clip ?? null,
+      from: stillKey(reel[a]), to: stillKey(reel[b]), duration: FADE_PAN, fade: [0, FADE_PAN], grace: 800, hold: true,
+      onTick: (_t, _i, k) => { panK = k; syncDom() },
+    })
     // the stop being panned to: its open clip and its file's view are made in an idle moment of the pan, so that a tap on its Open (taken by takePan) does not wait for them
     const nb = reel[b]
     if (m.open[nb] && b > 0) { stage.loadClip(openKey(nb)); const w = () => { if (!disposed) void warm(nb) }; if (typeof requestIdleCallback === 'function') requestIdleCallback(w, { timeout: 300 }); else setTimeout(w, 150) }
-    await stage.run({
-      clipKey: clip ? panKey(reel[a], reel[b]) : null, clip: clip ?? null,
-      from: stillKey(reel[a]), to: stillKey(reel[b]), duration: FADE_PAN, fade: [0, FADE_PAN],
-      onTick: (_t, _i, k) => { panK = k; syncDom() },
-    })
+    await running
     if (disposed || tok !== panToken) return
     at = b; phase = 'settled'; panK = 0; busy = false
     syncDom(); preload(); kick(); pump()
@@ -369,7 +371,10 @@ export async function startPhone(host: HTMLElement, cancelled: () => boolean = (
   /** a row of the Index: the sheet slides down out of the way on the page's spring (~0.3 s), the entry's stop picture is shown (120 ms), its open clip plays (enterFile); the profile goes through the door (P5) */
   function openFromIndex(btn: HTMLButtonElement, e: MouseEvent) {
     const id = btn.dataset.id!
-    // a tap while the stage is still finishing a step (a pan that was cut short by the scroll) waits for it, up to 1.5 s, rather than being lost
+    // a tap while a pan is running takes that pan over at once (the picture lands on the pan's stop in 120 ms, as for a tap on that stop's Open): the row's open does not wait out a pan, or a chain of them
+    // (the scroll that brought the Index into view may have queued more than one), and is not lost when they last longer than the wait below
+    if (phase === 'panning' && !taking) { void takePan(reel[to]).then((ok) => { if (ok) openFromIndex(btn, e) }); return }
+    // a tap while the stage is still finishing a step (a close, a take-over in progress) waits for it, up to 1.5 s, rather than being lost
     if (phase !== 'settled' || busy) { const t0 = performance.now(); const again = () => { if (disposed || performance.now() - t0 > 1500) return; if (phase === 'settled' && !busy) openFromIndex(btn, e); else requestAnimationFrame(again) }; if (phase === 'settled' || phase === 'panning' || phase === 'opening') requestAnimationFrame(again); return }
     if (id === 'YW-000' ? !spaceReady() : !m.open[id]) return
     btn.focus({ preventScroll: true })   // (iOS does not focus a tapped button: the close hands the focus back to this row)
@@ -465,7 +470,7 @@ export async function startPhone(host: HTMLElement, cancelled: () => boolean = (
     page.showBack(true)   // `← All files` is there, and takes a tap (abortOpen), within ~100 ms
     lockScroll(true)
     if (o.push) pushFile(id); else if (o.replace) history.replaceState({ ph: PUSHED }, '', pathOfId(id))
-    stage.pin([stillKey(id), windowKey(id), stillKey(reel[at])]); void stage.loadStill(windowKey(id)); stage.loadClip(closeKey(id))
+    stage.pin([stillKey(id), windowKey(id), stillKey(reel[at])]); void stage.loadStill(windowKey(id)); stage.reserve(openKey(id), 2500); stage.loadClip(closeKey(id))   // (the close clip must not take the open clip's place in the pool)
     kick()
     // two frames first: building the file's view and taking the page out of the reel are one long task, and `← All files` must already be coming in (and tappable) when it starts
     await new Promise<void>((res) => { const t = setTimeout(res, 90); requestAnimationFrame(() => requestAnimationFrame(() => { clearTimeout(t); res() })) })
@@ -639,7 +644,7 @@ export async function startPhone(host: HTMLElement, cancelled: () => boolean = (
   /** the interior's data and paper are made while the cover is on screen, so the door does not wait for them */
   async function warmSpace() { try { await (await loadSpace()).init() } catch { /* the door will say so */ } }
   async function enterSpace(o: { push: boolean; inputAt?: number }) {
-    if (phase === 'panning') await takePan('YW-000')
+    if (phase === 'panning') await takePan(reel[to])   // (whatever stop the pan is heading for: the door's tap is answered, the cover's picture is cross-faded in below)
     if (!spaceReady() || phase !== 'settled' || busy) return
     busy = true
     origin = { sec: scrollY / view.h, opener: document.activeElement instanceof HTMLElement && document.activeElement !== document.body ? document.activeElement : null }

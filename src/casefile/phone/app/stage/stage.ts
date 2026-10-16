@@ -25,6 +25,10 @@ export interface StepSpec {
   duration: number
   /** the crossfade's window inside `duration`: [start, length] seconds */
   fade: [number, number]
+  /** the clip starts moving the instant it plays (a pan): hold its first frame paused under the still while the still goes out, then play, so that nothing moves under a still that is leaving. Opens and closes start still: they do not need it (and answer sooner without). */
+  hold?: boolean
+  /** how long to wait for the clip to be playable before the step cross-fades instead (default BUFFER_GRACE_MS: a pan asks for more: a ghost double exposure for a second is worse than a late start) */
+  grace?: number
   /** playback speed of the clip (a close that hands over to another file runs 1.5x); the page layer follows the clip's own media time, so it needs nothing else */
   rate?: number
   /** when the input that caused the step arrived (performance.now), for the latency record */
@@ -41,6 +45,8 @@ export interface HandoffRecord { clip: string; via: 'clip' | 'fade'; inputAt: nu
 const FADE_OUT_MS = 120
 /** still -> clip: the start still fades out over this long once the clip's first frame is presented (4 frames at 25 fps) */
 const STILL_FADE_MS = 100
+/** a clip taking over from a still: the still goes out over this long on the clip's held first frame, then the clip plays */
+const HOLD_FADE_MS = 90
 /** a clip not ready this long after the step is asked for is replaced by a crossfade */
 const BUFFER_GRACE_MS = 150
 /** no first frame this long after play(): crossfade instead */
@@ -69,6 +75,9 @@ export class Stage {
   private shownKey: string | null = null
   private pinned = new Set<string>()
   private active = new Set<HTMLVideoElement>()
+  /** clips that a running step is about to play or is playing (from the moment run() is called): the pool never gives their element to another clip */
+  private reserved = new Set<string>()
+  private running = new Set<string>()
   private abortStep: (() => void) | null = null
   /** a step stopped by abortTo lands here instead of on its own target */
   private land: { key: string; ms: number } | null = null
@@ -94,10 +103,14 @@ export class Stage {
 
   loadStill(key: string) { const u = this.urls.get(key); return u ? this.stills.load(key, u, this.pinned) : Promise.resolve() }
   /** attach a clip to a pool element so it is buffered before it is needed (not in "stills" mode: then no clip is ever played) */
+  /** keep this clip's element out of the pool's reach for `ms` (a step that will call run() with it a moment from now) */
+  reserve(key: string, ms: number) { this.reserved.add(key); setTimeout(() => { if (!this.running.has(key)) this.reserved.delete(key) }, ms) }
   loadClip(key: string) {
     if (this.mode !== 'clips') return
     const u = this.urls.get(key); if (!u) return
-    this.pool.assign(key, u, this.active)
+    const busy = new Set(this.active)
+    for (const k of this.reserved) { const v = this.pool.holding(k); if (v) busy.add(v) }   // (a step's clip that has not started yet is as safe as one that is playing)
+    this.pool.assign(key, u, busy)
   }
   /** resolves when the clip on its element can play through (or after `ms`: then the step that wants it cross-fades) */
   async buffered(key: string, ms: number) {
@@ -123,15 +136,21 @@ export class Stage {
 
   /** run one step: a clip when there is one buffered and playable, otherwise a crossfade */
   async run(spec: StepSpec): Promise<'clip' | 'fade'> {
+    // the clip is reserved the moment run() is called, before its first await: whatever is asked for next (a prefetch) cannot take its element
+    const key = spec.clipKey
+    if (key) { this.reserved.add(key); this.running.add(key) }
+    try { return await this.runStep(spec) } finally { if (key) { this.reserved.delete(key); this.running.delete(key) } }
+  }
+  private async runStep(spec: StepSpec): Promise<'clip' | 'fade'> {
     const inputAt = spec.inputAt ?? performance.now(), epoch = this.epoch
     await Promise.race([Promise.all([this.stills.ready(spec.from), this.stills.ready(spec.to)]), new Promise((r) => setTimeout(r, 1500))])
     if (epoch !== this.epoch) return 'fade'   // (stopped by abortTo before it began)
     let v: HTMLVideoElement | undefined
     if (this.mode === 'clips' && spec.clipKey && spec.clip) {
       v = this.pool.holding(spec.clipKey)
-      if (!v) this.loadClip(spec.clipKey)   // not attached: this step cross-fades, the next one can play
-      else {
-        if (v.readyState < 3) await once(v, 'canplay', BUFFER_GRACE_MS)
+      if (!v) { this.loadClip(spec.clipKey); v = this.pool.holding(spec.clipKey) }   // not attached (evicted, or never asked for): attach it now and give it the same grace; without a slot this step cross-fades
+      if (v) {
+        if (v.readyState < 3) await once(v, 'canplay', spec.grace ?? BUFFER_GRACE_MS)
         if (v.currentTime > 0.001) { v.currentTime = 0; await once(v, 'seeked', 300) }
         if (v.readyState < 3) v = undefined
         if (epoch !== this.epoch) return 'fade'
@@ -142,6 +161,7 @@ export class Stage {
       const ok = await this.playClip(spec, v, inputAt)
       this.active.delete(v)
       if (ok) return 'clip'
+      if (epoch !== this.epoch) return 'fade'   // (stopped by abortTo before the clip had shown a frame: the caller lands the picture itself, no cross-fade of ours may follow)
     }
     this.fades++
     const t0 = performance.now()
@@ -188,6 +208,11 @@ export class Stage {
     const rec: HandoffRecord = { clip: name, via: 'clip', inputAt, playAt: 0, firstFrameAt: 0, latencyMs: 0, endAt: 0, stillShownAt: 0 }
     return new Promise<boolean>((resolve) => {
       let first = true, ended = false, started = false, handle = 0, polled = 0
+      // a clip that takes over from a still: its first frame is held under the still, the still goes out over HOLD_FADE_MS on that static frame, and only then does the clip play (a clip that
+      // is already moving under a still that is still leaving shows the moving parts twice)
+      const fromEl = this.stills.get(spec.from)
+      const hold = spec.hold === true && !!fromEl && fromEl !== this.stills.get(spec.to)
+      let holding = false
       const wd: { start?: ReturnType<typeof setTimeout>; frame?: ReturnType<typeof setTimeout>; flip?: ReturnType<typeof setTimeout> } = {}
       const hasRvfc = typeof v.requestVideoFrameCallback === 'function'
       let seen = v.currentTime
@@ -195,6 +220,7 @@ export class Stage {
       /** could not start: nothing was shown of the clip, the start still is untouched */
       const bail = () => {
         if (ended) return; ended = true; clear(); this.abortStep = null; this.playing = null
+        if (holding && fromEl) { fromEl.classList.remove('fadeout'); fromEl.style.opacity = '1' }   // (the still comes back: nothing of the clip was shown)
         v.pause(); v.playbackRate = 1; try { v.currentTime = 0 } catch { /* */ }
         resolve(false)
       }
@@ -222,11 +248,12 @@ export class Stage {
         if (first) {
           first = false; started = true; rec.firstFrameAt = now; rec.latencyMs = now - inputAt
           spec.onFirstFrame?.()
-          // the clip's first frame is on the compositor (the clip sits below the still, playing): the start still fades out over it for 100 ms,
-          // then the clip goes above the stills (where the end of the step needs it)
-          const from = this.stills.get(spec.from)
-          if (from) { from.classList.add('fadeout'); from.style.opacity = '0' }
-          wd.flip = setTimeout(() => { v.classList.add('on'); from?.classList.remove('fadeout') }, STILL_FADE_MS + 20)
+          if (!hold) {
+            // (no still under it) the clip's first frame is on the compositor: the clip goes above the stills (where the end of the step needs it) once any still has gone
+            const from = this.stills.get(spec.from)
+            if (from) { from.classList.add('fadeout'); from.style.opacity = '0' }
+            wd.flip = setTimeout(() => { v.classList.add('on'); from?.classList.remove('fadeout') }, STILL_FADE_MS + 20)
+          }
         }
         const index = Math.round(meta.mediaTime * fps), domIndex = pageIndex(meta.mediaTime, fps, last)
         const pt = pageTime(meta.mediaTime, fps, dur); spec.onTick(pt, domIndex, pt / dur)
@@ -245,12 +272,31 @@ export class Stage {
       this.playing = v
       v.playbackRate = spec.rate ?? 1
       v.addEventListener('ended', onEnded, { once: true })
-      next()
-      rec.playAt = performance.now()
-      wd.start = setTimeout(bail, START_WATCHDOG_MS)
-      let p: Promise<void>
-      try { p = this.pool.play(v) } catch (e) { p = Promise.reject(e) }
-      p.catch((e: unknown) => { if ((e as { name?: string })?.name === 'NotAllowedError') this.refused(); if (!started) bail() })
+      const begin = () => {
+        next()
+        rec.playAt = performance.now()
+        wd.start = setTimeout(bail, START_WATCHDOG_MS)
+        let p: Promise<void>
+        try { p = this.pool.play(v) } catch (e) { p = Promise.reject(e) }
+        p.catch((e: unknown) => { if ((e as { name?: string })?.name === 'NotAllowedError') this.refused(); if (!started) bail() })
+      }
+      if (!hold) begin()
+      else {
+        holding = true
+        wd.start = setTimeout(bail, START_WATCHDOG_MS + 400)
+        void (async () => {
+          v.pause()
+          if (v.readyState < 2) await new Promise<void>((r) => { v.addEventListener('loadeddata', () => r(), { once: true }); setTimeout(r, 150) })
+          await new Promise<void>((r) => requestAnimationFrame(() => r()))   // (the paused first frame is on the compositor)
+          if (ended) return
+          fromEl!.classList.add('fadeout'); fromEl!.style.opacity = '0'
+          await new Promise<void>((r) => setTimeout(r, HOLD_FADE_MS))
+          if (ended) return
+          clearTimeout(wd.start)
+          v.classList.add('on'); fromEl!.classList.remove('fadeout'); holding = false
+          begin()
+        })()
+      }
     })
   }
 
