@@ -202,6 +202,83 @@ test.describe('phone shell', () => {
     expect(w.errors).toEqual([])
   })
 
+  /** open X-001 from its stop and let the open play to its window, then tap Back: the close is playing when this returns, and the stop's Open (and its ticks) are on screen to be tapped */
+  const closeUnderway = async (page: import('@playwright/test').Page) => {
+    await scrollScreens(page, 1)
+    await openFile(page, title('X-001'))
+    await page.waitForFunction(() => [...document.querySelectorAll('.ph-stage video')].some((v) => /open-/.test(v.getAttribute('src') ?? '') && !(v as HTMLVideoElement).paused && (v as HTMLVideoElement).currentTime > 0.5), null, { timeout: 30_000 })
+    await page.waitForFunction(() => ![...document.querySelectorAll('.ph-stage video.on')].length, null, { timeout: 15_000 })   // the open has reached its window
+    await page.getByRole('button', { name: '← All files' }).click()
+    await expect(page).toHaveURL(/\/$/, { timeout: 5000 })
+    // the close is playing, and the stop's row is back in (the file layer's shield is still over it: a tap there is the case)
+    return page.waitForFunction(() => {
+      const g = [...document.querySelectorAll('button.ph-go')].find((x) => x.getAttribute('aria-label') === 'Open MCP Security Framework'); if (!g) return false
+      const r = g.getBoundingClientRect(), t = g.parentElement!.querySelector('.ph-tick[data-stop="0"]')!.getBoundingClientRect()
+      if (!(r.width > 0 && Number(getComputedStyle(g.parentElement!).opacity) > 0.5 && document.querySelector('.ph-fshield') && [...document.querySelectorAll('.ph-stage video')].some((v) => /close-/.test(v.getAttribute('src') ?? '') && !(v as HTMLVideoElement).paused))) return false
+      return { open: [r.left + r.width / 2, r.top + r.height / 2], tick: [t.left + t.width / 2, t.top + t.height / 2] }
+    }, null, { timeout: 20_000, polling: 8 }).then((h) => h.jsonValue() as Promise<{ open: number[]; tick: number[] }>)
+  }
+
+  test('Open tapped while the close is still playing is taken at once: its open clip starts within 300 ms @short', async ({ page }) => {
+    test.setTimeout(120_000)
+    const w = await watch(page)
+    await returning(page)
+    await page.goto('/')
+    await coverReady(page)
+    const at = await closeUnderway(page)
+    await page.evaluate(() => {
+      const t = { tap: 0, frame: null as number | null, armed: true }
+      ;(window as unknown as { __cl: typeof t }).__cl = t
+      addEventListener('click', (e) => { if (!t.tap && t.armed && e.isTrusted) t.tap = e.timeStamp }, true)   // (the touch's own click)
+      const tick = () => {
+        if (t.tap && t.frame === null && location.pathname.startsWith('/projects/') && [...document.querySelectorAll('.ph-stage video')].some((v) => /open-/.test(v.getAttribute('src') ?? '') && !(v as HTMLVideoElement).paused && (v as HTMLVideoElement).currentTime > 0.001)) t.frame = performance.now()
+        requestAnimationFrame(tick)
+      }
+      requestAnimationFrame(tick)
+    })
+    await page.touchscreen.tap(at.open[0], at.open[1])   // a real touch on the Open that is on screen (a click by actionability would wait for the close)
+    await expect(page).toHaveURL(/\/projects\//, { timeout: 5000 })
+    await expect.poll(() => page.evaluate(() => (window as unknown as { __cl: { frame: number | null } }).__cl.frame), { timeout: 5000 }).not.toBeNull()
+    const ms = await page.evaluate(() => { const t = (window as unknown as { __cl: { tap: number; frame: number } }).__cl; return t.frame - t.tap })
+    expect(ms, 'tap to the open clip playing, ms').toBeLessThanOrEqual(300)
+    await fileOpen(page, slug('X-001'), title('X-001'))
+    expect(w.errors).toEqual([])
+  })
+
+  test('a tick tapped while the close is still playing is taken: the reel goes to the profile @short', async ({ page }) => {
+    test.setTimeout(120_000)
+    const w = await watch(page)
+    await returning(page)
+    await page.goto('/')
+    await coverReady(page)
+    const at = await closeUnderway(page)
+    await page.touchscreen.tap(at.tick[0], at.tick[1])
+    await expect.poll(() => page.evaluate(() => !document.documentElement.classList.contains('ph-filemode') && Math.round(scrollY)), { timeout: 8000 }).toBe(0)
+    await expect(page.getByRole('button', { name: /Open the profile/ })).toBeVisible()
+    expect(w.errors).toEqual([])
+  })
+
+  test('an Index row tapped at the moment its file closes is taken, with the sheet still sliding back', async ({ page }) => {
+    test.setTimeout(120_000)
+    const w = await watch(page)
+    await returning(page)
+    await page.goto('/')
+    await coverReady(page)
+    await page.getByRole('navigation', { name: 'Sections' }).getByRole('button', { name: 'Index' }).click()
+    const row = page.locator('button.ph-ix[data-id="X-002"]')
+    await row.scrollIntoViewIfNeeded()
+    await settled(page)
+    await row.click()
+    await expect(page).toHaveURL(/\/projects\//, { timeout: 5000 })
+    await page.waitForFunction(() => [...document.querySelectorAll('.ph-stage video')].some((v) => /open-/.test(v.getAttribute('src') ?? '') && !(v as HTMLVideoElement).paused && (v as HTMLVideoElement).currentTime > 0.5), null, { timeout: 30_000 })
+    await page.waitForFunction(() => ![...document.querySelectorAll('.ph-stage video.on')].length, null, { timeout: 15_000 })
+    await back(page)
+    await page.waitForFunction(() => !document.documentElement.classList.contains('ph-filemode'), null, { timeout: 15_000, polling: 8 })   // the close is over, the sheet is on its way back
+    await page.evaluate(() => (document.querySelector('button.ph-ix[data-id="X-002"]') as HTMLElement).click())   // wherever the sliding sheet has the row
+    await expect(page).toHaveURL(/\/projects\/ai-enhanced-edr-triage$/, { timeout: 5000 })
+    expect(w.errors).toEqual([])
+  })
+
   test('the bar Back is there within 120 ms of the Open tap, clear of everything else, and takes the mid-open path @short', async ({ page }) => {
     const w = await watch(page)
     await returning(page)
