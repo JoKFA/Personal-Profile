@@ -14,15 +14,16 @@ fs.mkdirSync(OUT, { recursive: true })
 const { b, p, cdp, errs } = await launch(W, H, { gate: true })
 const touch = (type, x, y) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints: type === 'touchEnd' ? [] : [{ x, y, id: 1 }] })
 const rows = []
+const DEMO_MS = Number(flag('demo-ms', 14000)), ONLY_LOOPLESS = flag('loops', '1') === '0'
 
 /** what is on screen now: every visible text, its size, its contrast, and whether a paper plate is under it */
-const scan = async (state) => {
+const scan = async (state, root = '.ph-root *, .ph-gate *, .ph-land *') => {
   await p.evaluate(() => { const sh = new CSSStyleSheet(); sh.replaceSync('.ph-root *, .ph-gate *, .ph-land * { pointer-events: auto !important }'); document.adoptedStyleSheets = [...document.adoptedStyleSheets, sh]; window.__scanSheet = sh })
-  const r = await scan0(state)
+  const r = await scan0(state, root)
   await p.evaluate(() => { document.adoptedStyleSheets = document.adoptedStyleSheets.filter((x) => x !== window.__scanSheet) })
   return r
 }
-const scan0 = (state) => p.evaluate((state) => {
+const scan0 = (state, root) => p.evaluate(([state, root]) => {
   const lum = (c) => { const f = (v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4 }; return 0.2126 * f(c[0]) + 0.7152 * f(c[1]) + 0.0722 * f(c[2]) }
   const rgba = (s) => {
     const c = s.match(/color\(srgb ([^)]+)\)/)
@@ -34,7 +35,8 @@ const scan0 = (state) => p.evaluate((state) => {
   const mix = (fg, bg) => [fg[0] * fg[3] + bg[0] * (1 - fg[3]), fg[1] * fg[3] + bg[1] * (1 - fg[3]), fg[2] * fg[3] + bg[2] * (1 - fg[3]), 1]
   // the paper plate under an element: the nearest ancestor (inside the shell) with a background that is at least 85% opaque; none = the scene shows through
   const plateOf = (e) => { for (let n = e; n && !n.classList?.contains('ph-root') && n !== document.body; n = n.parentElement) { const c = rgba(getComputedStyle(n).backgroundColor); if (c[3] >= 0.85) return mix(c, paper) } return null }
-  const paints = (x) => { if (x.matches('img, canvas, video')) return true; if (rgba(getComputedStyle(x).backgroundColor)[3] >= 0.5) return true; return [...x.childNodes].some((c) => c.nodeType === 3 && c.textContent.trim()) && getComputedStyle(x).color !== 'rgba(0, 0, 0, 0)' }
+  const faint = (x) => { let o = 1; for (let a = x; a; a = a.parentElement) o *= Number(getComputedStyle(a).opacity); return o < 0.2 || getComputedStyle(x).visibility === 'hidden' }   // (a layer that is not drawn does not cover: P7f)
+  const paints = (x) => { if (faint(x)) return false; if (x.matches('img, canvas, video')) return true; if (rgba(getComputedStyle(x).backgroundColor)[3] >= 0.5) return true; return [...x.childNodes].some((c) => c.nodeType === 3 && c.textContent.trim()) && getComputedStyle(x).color !== 'rgba(0, 0, 0, 0)' }
   const seen = (e, r) => {
     const stack = document.elementsFromPoint(Math.min(innerWidth - 1, Math.max(0, r.left + r.width / 2)), Math.min(innerHeight - 1, Math.max(0, r.top + r.height / 2)))
     for (const x of stack) { if (x === e || e.contains(x) || x.contains(e)) return true; if (x.closest('.ph-root, .ph-gate, .ph-land') && paints(x)) return false }
@@ -42,7 +44,7 @@ const scan0 = (state) => p.evaluate((state) => {
   }
   const small = new Set(), low = new Set(), scene = new Set(), sizes = []; let n = 0, worst = 99, sealed = 0
   const fields = []
-  for (const e of document.querySelectorAll('.ph-root *, .ph-gate *, .ph-land *')) {
+  for (const e of document.querySelectorAll(root)) {
     if (e.matches('input, textarea, select')) { const cs = getComputedStyle(e), r = e.getBoundingClientRect(); if (r.width > 0) fields.push(`${e.tagName.toLowerCase()} ${cs.fontSize}`) }
     if (![...e.childNodes].some((c) => c.nodeType === 3 && c.textContent.trim())) continue
     const cs = getComputedStyle(e), r = e.getBoundingClientRect()
@@ -65,13 +67,28 @@ const scan0 = (state) => p.evaluate((state) => {
     }
     const f2 = fg[3] < 1 ? mix(fg, bg) : fg
     const L1 = lum(f2), L2 = lum(bg), ratio = (Math.max(L1, L2) + 0.05) / (Math.min(L1, L2) + 0.05)
+    const moving = e.getAnimations().some((a) => a instanceof CSSTransition && a.playState === 'running')   // (a colour in the middle of its 0.3 s transition is not a state the page rests in: P7f)
+    if (moving) continue
     const big = fs >= 24 || (fs >= 18.66 && Number(cs.fontWeight) >= 700), need = big ? 3 : 4.5   // (WCAG large text: 3:1)
     if (!big) worst = Math.min(worst, ratio); if (ratio < need) low.add(`${label} ${ratio.toFixed(2)} (needs ${need})`)
     if (!plate && !e.closest('.ph-gate, .ph-land')) scene.add(label)
   }
   return { state, texts: n, minPx: n ? Math.round(Math.min(...sizes) * 100) / 100 : null, worstContrast: Math.round(worst * 100) / 100, under11: [...small].slice(0, 8), lowContrast: [...low].slice(0, 8), overScene: [...scene].slice(0, 8), sealedBlocks: sealed, fields }
-}, state)
-const add = async (state) => { const r = await scan(state); rows.push(r); return r }
+}, [state, root])
+const add = async (state, root) => { const r = await scan(state, root); rows.push(r); return r }
+/** P7f: a demo plays a loop (its stages, its selected rows, its tabs): the demo is scanned every ~0.6 s over `ms`, the findings of all the samples are one row (the animated and selected states that a single frame misses) */
+async function loop(state, ms) {
+  const agg = { state, texts: 0, samples: 0, minPx: 99, worstContrast: 99, under11: new Set(), lowContrast: new Set(), overScene: new Set(), sealedBlocks: 0, fields: [] }
+  const t0 = Date.now()
+  while (Date.now() - t0 < ms) {
+    const r = await scan(state, '.ph-fdemo *, .ph-fgame *')
+    agg.samples++; agg.texts = Math.max(agg.texts, r.texts); if (r.minPx != null) agg.minPx = Math.min(agg.minPx, r.minPx); agg.worstContrast = Math.min(agg.worstContrast, r.worstContrast)
+    for (const k of ['under11', 'lowContrast', 'overScene']) for (const x of r[k]) agg[k].add(x)
+    await p.waitForTimeout(450)
+  }
+  const out = { ...agg, under11: [...agg.under11], lowContrast: [...agg.lowContrast], overScene: [...agg.overScene] }
+  rows.push(out); return out
+}
 
 await p.goto(`${BASE}/?phone-app&phone-expose`, { waitUntil: 'load' })
 await p.waitForSelector('.ph-gate .fp-hold'); await p.waitForTimeout(1500)
@@ -100,8 +117,9 @@ for (const id of ids) {
   await p.waitForTimeout(2800)
   await add(`file ${id} · window`)
   // the demo's other states (a Before / After, Flat / Segmented switch): scanned too, then back
+  if (!ONLY_LOOPLESS) await loop(`file ${id} · demo loop`, DEMO_MS)
   const alts = await p.evaluate(() => [...document.querySelectorAll('.ph-fdemo .seg button')].map((b, i) => [i, b.textContent.trim(), b.getAttribute('aria-pressed') === 'false']).filter((x) => x[2]))
-  for (const [i, name] of alts) { await p.evaluate((i) => document.querySelectorAll('.ph-fdemo .seg button')[i].click(), i); await p.waitForTimeout(1600); await add(`file ${id} · window (${name})`) }
+  for (const [i, name] of alts) { await p.evaluate((i) => document.querySelectorAll('.ph-fdemo .seg button')[i].click(), i); await p.waitForTimeout(1600); await add(`file ${id} · window (${name})`); if (!ONLY_LOOPLESS) await loop(`file ${id} · demo loop (${name})`, 6000) }
   if (alts.length) { await p.evaluate(() => document.querySelectorAll('.ph-fdemo .seg button')[0].click()); await p.waitForTimeout(600) }
   const total = await p.evaluate(() => document.documentElement.scrollHeight)
   let y = 0, k = 0
