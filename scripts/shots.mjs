@@ -5,6 +5,8 @@
 //   node scripts/shots.mjs --quality high       → real quality on a GPU machine (ANGLE d3d11, as in e2e)
 //   node scripts/shots.mjs --only F3,F7          → a subset
 //   node scripts/shots.mjs --query entry=c --out shots/entry-c   → extra URL parameters (prototypes)
+//   node scripts/shots.mjs --freeze --desk       → a build with the lab hooks (`vite build --mode bake`, then generate-prerender): the scene's idle breathing is held at 0
+//                                                  (window.__lab.idle0, the bake's own hook), so two runs of one build give the same pixels; --desk: the desktop frames only
 //   SHOTS_CHROMIUM=/path/to/chrome node scripts/shots.mjs
 //
 // Low quality uses SwiftShader with `?quality=low` and reduced motion: the layout and the copy are
@@ -22,6 +24,7 @@ const commit = (() => { try { return execSync('git rev-parse --short HEAD').toSt
 const out = path.resolve(arg('out', `shots/${commit}`))
 const only = arg('only', '')?.split(',').filter(Boolean)
 const query = new URLSearchParams(arg('query', ''))
+const freeze = process.argv.includes('--freeze'), deskOnly = process.argv.includes('--desk')
 const LONG = 15 * 60_000   // SwiftShader can take minutes per frame
 
 const dist = path.resolve('dist')
@@ -65,6 +68,16 @@ const fileUp = async (page) => {
   await page.waitForTimeout(2500)
 }
 
+// --freeze: the camera eases toward its place for seconds (an exponential approach), so a frame taken a moment later is a hair off; wait until it has stopped (three looks, 0.5 s apart, the same to 1e-4)
+const steady = async (page) => {
+  let last = '', same = 0
+  for (let i = 0; i < 60 && same < 3; i++) {
+    const now = await page.evaluate(() => { const c = window.__cf?.stage?.camera, a = window.__cf?.camAim; return c ? [c.position.x, c.position.y, c.position.z, c.fov, a?.x, a?.y, a?.z].map((v) => Math.round((v ?? 0) * 1e4)).join(',') : '' })
+    same = now && now === last ? same + 1 : 0; last = now
+    await page.waitForTimeout(500)
+  }
+}
+
 // Frames in one group share a page (the scene is built once). `first` = a first visit; otherwise a
 // returning visitor who has seen the entry and the key hint.
 const GROUPS = [
@@ -77,7 +90,7 @@ const GROUPS = [
   { vp: DESK, path: '/projects/mcp-security-framework', frames: [['F7-desk', fileUp]] },
   { vp: PHONE, path: '/projects/mcp-security-framework', frames: [['F7-phone', fileUp]] },
   { vp: DESK, path: '/projects/coast-capital', frames: [['F8-desk', fileUp]] },
-].map((g) => ({ ...g, frames: g.frames.filter(([id]) => !only?.length || only.includes(id.split('-')[0])) })).filter((g) => g.frames.length)
+].filter((g) => !deskOnly || g.vp === DESK).map((g) => ({ ...g, frames: g.frames.filter(([id]) => !only?.length || only.includes(id.split('-')[0])) })).filter((g) => g.frames.length)
 
 // what crawlers, link previews and AI summaries read: the home page without JavaScript
 function homeText() {
@@ -109,6 +122,7 @@ async function shoot(g) {
     viewport: g.vp, deviceScaleFactor: phone && !low ? 3 : 1, hasTouch: phone,
     reducedMotion: low && !g.motion ? 'reduce' : 'no-preference',
   })
+  if (freeze) await ctx.addInitScript(() => { window.__lab = { idle0: true } })
   if (!g.first) await ctx.addInitScript(() => { try { localStorage.setItem('yw.entry', '1'); localStorage.setItem('yw.hint', '1') } catch { /* */ } })
   const page = await ctx.newPage()
   const errors = []
@@ -121,6 +135,7 @@ async function shoot(g) {
     t0 = Date.now()
     for (const [id, wait] of g.frames) {
       await wait(page, t0)
+      if (freeze) await steady(page)
       await page.screenshot({ path: path.join(out, `${id}.png`), timeout: LONG })
       console.log(`shots: ${id} (${Math.round((Date.now() - t0) / 1000)} s)`)
       done++
